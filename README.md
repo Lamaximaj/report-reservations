@@ -38,7 +38,11 @@ Ou ouvrir `index.html` dans un navigateur, ou le servir depuis un NAS.
 ## Raccourcis
 
 `V` sélection · `R` rectangle · `C` ronde · `M` mesure · `E` échelle · `P` repère ·
-`H` main · flèches : décalage 1 cm (Maj : 10 cm) · `Suppr` supprimer · `Échap` annuler
+`H` main · flèches : décalage 1 cm (Maj : 10 cm) · `Ctrl+D` / `Cmd+D` dupliquer ·
+`Suppr` supprimer · `Échap` annuler
+
+Une réservation dupliquée reprend le nom de l'original suivi du numéro libre suivant
+(« Gaine VMC » → « Gaine VMC 2 », « Gaine VMC 3 »…).
 
 ## Technique
 

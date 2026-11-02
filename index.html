@@ -111,7 +111,10 @@ button{cursor:pointer}
 .empty{padding:14px 12px;color:var(--muted);font-size:12.5px;line-height:1.5}
 
 /* ---------- inspecteur ---------- */
+#rsList{flex:1 1 auto;min-height:84px}
+#insp{flex:0 1 auto;min-height:0;overflow:auto}
 .insp{padding:10px 11px;display:flex;flex-direction:column;gap:9px}
+.insp .acts{display:flex;gap:6px;position:sticky;top:0;margin:-10px -11px 0;padding:8px 11px;background:var(--panel);z-index:1;border-bottom:1px solid var(--line-soft)}
 .insp .row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
 .fld{display:flex;flex-direction:column;gap:3px;min-width:0}
 .fld label{font-size:10px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
@@ -699,6 +702,7 @@ function setTool(t){
 document.addEventListener("keydown",function(e){
   if(/input|select|textarea/i.test(e.target.tagName)) return;
   var k=e.key.toLowerCase();
+  if(e.ctrlKey||e.metaKey){ if(k==="d"&&sel()){ e.preventDefault(); dupShape(sel()); } return; }
   if(k==="v") setTool("select"); else if(k==="r") setTool("rect");
   else if(k==="c") setTool("circle"); else if(k==="e") setTool("scale");
   else if(k==="p") setTool("org");
@@ -1049,6 +1053,8 @@ function renderInsp(){
   if(!s){ box.innerHTML=""; return; }
   var isR=s.t==="rect";
   box.innerHTML='<div class="insp" style="border-top:1px solid var(--line)">'+
+    '<div class="acts"><button class="btn sm" id="i_dup" title="Dupliquer (Ctrl+D)">Dupliquer</button>'+
+    '<button class="btn sm" id="i_del" style="margin-left:auto;color:var(--accent)">Supprimer</button></div>'+
     '<div class="fld"><label>Désignation</label><input id="i_n" type="text" value="'+esc(s.n)+'"></div>'+
     '<div class="row">'+
       '<div class="fld"><label>X / repère (m)</label><input id="i_x" type="number" step="0.01" value="'+fmt(isR?s.x+s.w/2:s.x,2)+'"></div>'+
@@ -1065,9 +1071,7 @@ function renderInsp(){
       S.levels.map(function(l){ return '<button class="chip'+(onLevel(s,l.id)?" on":"")+'" data-id="'+l.id+'">'+
         (l.id===s.origin?"● ":"")+esc(l.name)+'</button>'; }).join("")+
     '</div></div>'+
-    stateBlock(s)+
-    '<div style="display:flex;gap:6px"><button class="btn sm" id="i_dup">Dupliquer</button>'+
-    '<button class="btn sm" id="i_del" style="margin-left:auto;color:var(--accent)">Supprimer</button></div></div>';
+    stateBlock(s)+'</div>';
 
   bindState(box,s);
   function num(id){ var e=box.querySelector(id); return e?parseFloat(e.value):NaN; }
@@ -1099,11 +1103,21 @@ function renderInsp(){
     if(s.levels.length===S.levels.length) s.levels=null;
     renderAll(); save();
   });
-  box.querySelector("#i_dup").onclick=function(){
-    var c=JSON.parse(JSON.stringify(s)); c.id=uid(); c.n="RÉS "+(S.seq++); c.x+=.2; c.y+=.2;
-    S.shapes.push(c); S.selId=c.id; renderAll(); save();
-  };
+  box.querySelector("#i_dup").onclick=function(){ dupShape(s); };
   box.querySelector("#i_del").onclick=function(){ delShape(s.id); };
+}
+/* « Gaine VMC » → « Gaine VMC 2 », « Gaine VMC 2 » → numéro libre suivant */
+function nextName(n){
+  var base=n.replace(/\s*\d+$/,"").trim()||n.trim();
+  var re=new RegExp("^"+base.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")+"(?:\\s+(\\d+))?$","i"), max=1;
+  S.shapes.forEach(function(x){ var m=x.n.trim().match(re); if(m) max=Math.max(max,m[1]?parseInt(m[1],10):1); });
+  if(/^RÉS$/i.test(base)) S.seq=Math.max(S.seq,max+2);
+  return base+" "+(max+1);
+}
+function dupShape(s){
+  var c=JSON.parse(JSON.stringify(s)); c.id=uid(); c.n=nextName(s.n); c.x+=.2; c.y+=.2;
+  S.shapes.push(c); S.selId=c.id; renderAll(); save();
+  note("Copie créée : "+c.n+".");
 }
 function stateBlock(s){
   var lv=active(); if(!lv) return "";
