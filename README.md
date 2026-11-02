@@ -35,8 +35,15 @@ Ou ouvrir `index.html` dans un navigateur, ou le servir depuis un NAS.
    en rouge ; ses poignées rouges (ou les champs « Largeur / Hauteur / Diamètre réels »
    des Propriétés) reprennent ses dimensions réelles, et cliquer-glisser dans le contour
    rouge la replace sans changer ses dimensions. Le rapport indique « prévu → réel ».
-7. **Rapport PDF** : page de synthèse des anomalies, puis une page A4 paysage par niveau
-   avec plan de repérage numéroté et tableau des cotes.
+7. **Exporter** (panneau Calques) : deux PDF.
+   - *Plans de tous les niveaux* (A3 ou A4 paysage) : une page par niveau, plan entier,
+     réservations nommées, anomalies numérotées A1, A2… avec l'écart coté (flèches ΔX / ΔY,
+     écart total, dimensions réelles), corrections reprises d'un niveau inférieur, légende
+     et barre d'échelle. Option : n'afficher que les réservations en anomalie.
+   - *Rapport des anomalies* : tableau de synthèse (niveau, réservation, objet, prévu, réel,
+     écart X / Y, écart, observation), puis une fiche par anomalie avec un extrait zoomé et
+     coté du plan (re-rendu net depuis le PDF source) et le détail des positions.
+   Les calques masqués et les niveaux non calés ne sont pas exportés.
 
 ## Panneaux et calques
 
