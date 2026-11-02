@@ -35,9 +35,13 @@ Ou ouvrir `index.html` dans un navigateur, ou le servir depuis un NAS.
    en rouge ; ses poignées rouges (ou les champs « Largeur / Hauteur / Diamètre réels »
    des Propriétés) reprennent ses dimensions réelles, et cliquer-glisser dans le contour
    rouge la replace sans changer ses dimensions. Le rapport indique « prévu → réel ».
-7. **Exporter** (panneau Calques) : un PDF des plans de tous les niveaux, une page par
-   niveau. Chaque page reprend **le plan d'origine tel quel, en vectoriel** (net à tout
-   zoom, à son format A1, A0…, rotation du PDF source gérée), avec par-dessus, en
+7. **Exporter** (barre d'outils en haut) : un PDF des plans de tous les niveaux, une page
+   par niveau, au **format d'origine** (impression à 100 %, à l'échelle du plan) ou mis à
+   l'échelle sur **A0, A1, A2, A3 ou A4**, en portrait, paysage ou orientation
+   automatique. La fenêtre affiche l'échelle imprimée de chaque niveau, reprise dans le
+   cartouche ; les étiquettes s'impriment à ≈ 9 pt quel que soit le format.
+   Chaque page reprend **le plan d'origine tel quel, en vectoriel** (net à tout
+   zoom, rotation du PDF source gérée), avec par-dessus, en
    vectoriel aussi : positions attendues, positions réelles en pointillé rouge, flèches
    d'écart X / Y et une étiquette par anomalie (nom, écart, cotes réelles, observation),
    placées sans se chevaucher. Le cartouche est dans un bandeau ajouté au-dessus du plan,

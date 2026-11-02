@@ -245,7 +245,6 @@ canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-acti
         <div class="seg" id="lstSeg"><button data-v="ly" class="on">Calques</button><button data-v="ob">Objets</button></div>
         <span class="sp"></span>
         <button class="btn sm" id="addLy" title="Nouveau calque">+</button>
-        <button class="btn sm" id="repBtn" title="Exporter les plans de tous les niveaux (PDF)">Exporter</button>
         <button class="btn ghost sm" id="jsonBtn" title="Sauvegarde / restauration">⇄</button>
         <button class="btn ghost sm" data-hide="ly" title="Masquer le panneau">–</button>
       </header>
@@ -278,6 +277,7 @@ canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-acti
       </label>
       <label class="pill"><input type="checkbox" id="gridChk"> Trame 1 m</label>
       <button class="btn sm" id="fitBtn" style="background:rgba(255,255,255,.07);border-color:rgba(255,255,255,.12);color:#cfd6e0">Recadrer</button>
+      <button class="btn sm primary" id="repBtn" title="Exporter les plans de tous les niveaux (PDF)">Exporter</button>
     </div>
     <div class="status" id="status"></div>
   </section>
@@ -311,7 +311,7 @@ try{ if(window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.c
 var S={ levels:[], shapes:[], activeId:null, selId:null, tool:"select",
         view:{s:1,tx:0,ty:0}, under:"", underOp:.45, grid:false, seq:1,
         asc:true,            /* true : le 1er de la liste est le niveau le plus bas */
-        title:"", layers:[], activeLayer:null, types:undefined, ui:{lv:true,ly:true,pr:true,lst:"ly"} };
+        title:"", layers:[], activeLayer:null, types:undefined, ui:{lv:true,ly:true,pr:true,lst:"ly",exp:{fmt:"orig",ori:"auto"}} };
 var PAL=["#c8492a","#1f6f8b","#2d7a4f","#8a5bbf","#9d7312","#1f8b7e"];
 var cv=document.getElementById("cv"), ctx=cv.getContext("2d"), dpr=1;
 var stage=document.getElementById("stage");
@@ -1602,7 +1602,7 @@ function exportRows(l){
 /* les polices standard des PDF ne couvrent que le jeu WinAnsi : on remplace le reste */
 var WIN_EXTRA="€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ";
 function win(s){
-  s=String(s).replace(/Δ/g,"d").replace(/−/g,"-").replace(/↳/g,">").replace(/→/g,"->").replace(/[  ]/g," ");
+  s=String(s).replace(/Δ/g,"d").replace(/−/g,"-").replace(/↳/g,">").replace(/→/g,"->").replace(/≈ ?/g,"env. ").replace(/[  ]/g," ");
   return Array.from(s).map(function(ch){ var c=ch.charCodeAt(0);
     return (c>=32&&c<127)||(c>=160&&c<=255)||WIN_EXTRA.indexOf(ch)>=0? ch : "?"; }).join("");
 }
@@ -1638,9 +1638,13 @@ function levelPage(out,l,cache){
 }
 
 /* annotations vectorielles d'un niveau */
-function annotate(info,l,rows,F,title){
+/* tailles des lignes du cartouche, en multiples de Tz ; sert aussi à calculer la hauteur du bandeau */
+var HEAD_S=[1.3,.8,.8,.85,.72,.72];
+function bandH(Tz){ return HEAD_S.reduce(function(h,s){ return h+Tz*s*1.22; },0)+Tz*.35*1.4+Tz*1.2; }
+/* Tz : taille du texte en points sur la page d'origine, choisie pour qu'il s'imprime à ≈ 9 pt */
+function annotate(info,l,rows,F,title,Tz,scaleLine){
   var L=window.PDFLib, page=info.page, Wd=info.Wd, Hd=info.Hd, k=info.k, ppm=cal(l).s*k;
-  var Tz=Math.max(7,Math.min(16,Math.min(Wd,Hd)/90)), lw=Math.max(.6,Tz/10), pad=Tz*.35, lh=Tz*1.22;
+  var lw=Math.max(.15,Tz/10), pad=Tz*.35;
   var RED=L.rgb(.78,.16,.12), WHITE=L.rgb(1,1,1), GREY=L.rgb(.45,.45,.45), boxes=[];
   function col(hex){ var c=hexRGB(hex); return L.rgb(c[0]/255,c[1]/255,c[2]/255); }
   function td(X,Y){ var p=w2p(l,X,Y); return {x:p.x*k, y:p.y*k}; }         /* haut → bas */
@@ -1700,13 +1704,14 @@ function annotate(info,l,rows,F,title){
 
   /* cartouche */
   var kos=rows.filter(function(r){ return r.ko; }).length;
-  var head=[{t:win(l.name+" — contrôle des réservations"),b:1,s:Tz*1.3},
-    {t:win([title,today()].filter(Boolean).join("  ·  ")),s:Tz*.8,c:GREY},
-    {t:win(rows.length+" réservation(s)  ·  "+kos+" anomalie(s)"),b:1,s:Tz*.85,c:kos?RED:L.rgb(0,0,0)},
-    {t:win("Trait plein : position attendue  ·  Pointillé rouge : position réelle"),s:Tz*.72,c:GREY},
-    {t:win("Écart X + vers la droite, Y + vers le bas du plan"),s:Tz*.72,c:GREY}];
+  var head=[{t:win(l.name+" — contrôle des réservations"),b:1,s:Tz*HEAD_S[0]},
+    {t:win([title,today()].filter(Boolean).join("  ·  ")),s:Tz*HEAD_S[1],c:GREY},
+    {t:win(scaleLine),b:1,s:Tz*HEAD_S[2]},
+    {t:win(rows.length+" réservation(s)  ·  "+kos+" anomalie(s)"),b:1,s:Tz*HEAD_S[3],c:kos?RED:L.rgb(0,0,0)},
+    {t:win("Trait plein : position attendue  ·  Pointillé rouge : position réelle"),s:Tz*HEAD_S[4],c:GREY},
+    {t:win("Écart X + vers la droite, Y + vers le bas du plan"),s:Tz*HEAD_S[5],c:GREY}];
   /* le cartouche va dans un bandeau ajouté au-dessus du plan : rien du plan n'est masqué */
-  var hm=measure(head), band=hm.h+Tz*1.2;
+  var hm=measure(head), band=bandH(Tz);
   page.setSize(Wd,Hd+band);
   var hb={x:Tz*.6,y:Hd+Tz*.6,w:hm.w,h:hm.h};
   page.drawLine({start:{x:0,y:Hd},end:{x:Wd,y:Hd},thickness:lw*.6,color:GREY});
@@ -1755,20 +1760,64 @@ function annotate(info,l,rows,F,title){
   drawBox(hb,head,null);
 }
 
-function exportPlans(prog){
+/* formats ISO portrait, en points */
+var PAPER_PT={a0:[2384,3370],a1:[1684,2384],a2:[1191,1684],a3:[842,1191],a4:[595,842]};
+var EXP_MARGIN=8*72/25.4, PRINT_PT=9;
+function paperFor(fmt,ori,W,H){
+  if(fmt==="orig"||!PAPER_PT[fmt]) return null;
+  var p=PAPER_PT[fmt], land= ori==="l" || (ori!=="p" && W>H);
+  return {w:land?p[1]:p[0], h:land?p[0]:p[1], name:fmt.toUpperCase()+(land?" paysage":" portrait")};
+}
+function fitIn(t,W,H){ return Math.min((t.w-2*EXP_MARGIN)/W,(t.h-2*EXP_MARGIN)/H); }
+/* taille de la page d'un niveau en points, avant export (le PDF garde sa rotation dans l'image de travail) */
+function levelPt(l){ var k=l.pdf? 1/l.pdf.base : 72/150; return {W:l.w*k, H:l.h*k, k:k}; }
+/* mise en page d'un niveau : échelle f de la page annotée sur la feuille, taille de texte, échelle imprimée */
+function layoutFor(l,W,H,k,fmt,ori){
+  var t0=paperFor(fmt,ori,W,H), f0=t0? fitIn(t0,W,H) : 1, Tz=PRINT_PT/f0, Ha=H+bandH(Tz);
+  var t=paperFor(fmt,ori,W,Ha), f=t? fitIn(t,W,Ha) : 1;
+  var N=1000/(cal(l).s*k*f*25.4/72);
+  return {paper:t, f:f, Tz:Tz, Ha:Ha, N:N};
+}
+function ratioTxt(N){
+  var std=[10,20,25,50,75,100,125,150,200,250,500,1000];
+  for(var i=0;i<std.length;i++) if(Math.abs(N-std[i])/std[i]<.02) return "1/"+std[i];
+  return "≈ 1/"+Math.round(N);
+}
+function exportPlans(fmt,ori,prog){
   var L=window.PDFLib;
   if(!L) return Promise.reject(new Error("module PDF non chargé"));
   var lvs=levelsUp(); if(!lvs.length) return Promise.reject(new Error("aucun niveau calé (échelle + repère)"));
-  var out, F={}, cache=new Map(), title=S.title||"";
-  var chain=L.PDFDocument.create().then(function(d){ out=d;
-    return Promise.all([out.embedFont(L.StandardFonts.Helvetica),out.embedFont(L.StandardFonts.HelveticaBold)]); })
+  var tmp, F={}, cache=new Map(), title=S.title||"", lays=[];
+  var chain=L.PDFDocument.create().then(function(d){ tmp=d;
+    return Promise.all([tmp.embedFont(L.StandardFonts.Helvetica),tmp.embedFont(L.StandardFonts.HelveticaBold)]); })
     .then(function(f){ F.r=f[0]; F.b=f[1]; });
   lvs.forEach(function(l,i){ chain=chain.then(function(){
     prog("Plan "+(i+1)+" / "+lvs.length+" — "+l.name+"…");
-    return levelPage(out,l,cache).then(function(info){ annotate(info,l,exportRows(l),F,title); });
+    return levelPage(tmp,l,cache).then(function(info){
+      var ly=layoutFor(l,info.Wd,info.Hd,info.k,fmt,ori);
+      annotate(info,l,exportRows(l),F,title,ly.Tz,
+        "Échelle à l'impression : "+ratioTxt(ly.N)+" — "+(ly.paper?ly.paper.name:"format d'origine")+", imprimer à 100 % (taille réelle)");
+      lays.push({ly:ly, W:info.Wd});
+    });
   }); });
-  return chain.then(function(){ prog("Écriture du PDF…"); return out.save(); }).then(function(bytes){
-    var f=fname("Plans"), a=document.createElement("a");
+  /* format choisi : chaque page annotée est posée, toujours en vectoriel, à l'échelle de la feuille */
+  chain=chain.then(function(){
+    if(fmt==="orig") return tmp;
+    /* pdf-lib n'écrit les pages incorporées qu'à l'enregistrement : on finalise avant de les reposer */
+    var done;
+    return tmp.save().then(function(b){ return L.PDFDocument.load(b); }).then(function(d){ done=d; return L.PDFDocument.create(); }).then(function(out){
+      var c=Promise.resolve();
+      lays.forEach(function(p,i){ c=c.then(function(){
+        return out.embedPage(done.getPage(i)).then(function(emb){
+          var t=p.ly.paper, w=p.W*p.ly.f, h=p.ly.Ha*p.ly.f, pg=out.addPage([t.w,t.h]);
+          pg.drawPage(emb,{x:(t.w-w)/2, y:(t.h-h)/2, width:w, height:h});
+        });
+      }); });
+      return c.then(function(){ return out; });
+    });
+  });
+  return chain.then(function(doc){ prog("Écriture du PDF…"); return doc.save(); }).then(function(bytes){
+    var f=fname("Plans_"+(fmt==="orig"?"format-origine":fmt.toUpperCase())), a=document.createElement("a");
     a.href=URL.createObjectURL(new Blob([bytes],{type:"application/pdf"})); a.download=f;
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(function(){ URL.revokeObjectURL(a.href); },60000);
@@ -1780,9 +1829,17 @@ document.getElementById("repBtn").onclick=function(){
   var old=document.getElementById("expSheet"); if(old) old.remove();
   var lvs=levelsUp(), skip=S.levels.length-lvs.length, h=hiddenLayers(), imgs=lvs.filter(function(l){ return !l.pdf; }).length;
   var d=document.createElement("div"); d.className="sheet"; d.id="expSheet";
+  var ex=S.ui.exp||{fmt:"orig",ori:"auto"};
+  var fmts=[["orig","Format d'origine du plan (100 %)"],["a0","A0 — 841 × 1189 mm"],["a1","A1 — 594 × 841 mm"],["a2","A2 — 420 × 594 mm"],["a3","A3 — 297 × 420 mm"],["a4","A4 — 210 × 297 mm"]];
   d.innerHTML='<h3>Exporter les plans</h3>'+
-    '<p>Un PDF, une page par niveau : le plan d\'origine tel quel (vectoriel, net à tout zoom, à son format) avec les réservations et les écarts annotés par-dessus.</p>'+
+    '<p>Un PDF, une page par niveau : le plan d\'origine en vectoriel (net à tout zoom) avec les réservations et les écarts annotés par-dessus.</p>'+
     '<div class="fld"><label>Chantier</label><input id="r_t" type="text" value="'+esc(S.title||"")+'" placeholder="ex. Résidence Les Tilleuls — lot gros œuvre"></div>'+
+    '<div style="display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:7px;margin-top:9px">'+
+      '<div class="fld"><label>Format de sortie</label><select id="r_fmt">'+fmts.map(function(f){ return '<option value="'+f[0]+'"'+(f[0]===ex.fmt?" selected":"")+'>'+f[1]+'</option>'; }).join("")+'</select></div>'+
+      '<div class="fld"><label>Orientation</label><select id="r_ori">'+
+        [["auto","Automatique"],["p","Portrait"],["l","Paysage"]].map(function(o){ return '<option value="'+o[0]+'"'+(o[0]===ex.ori?" selected":"")+'>'+o[1]+'</option>'; }).join("")+'</select></div>'+
+    '</div>'+
+    '<p id="r_sc" style="margin:7px 0 0;font-size:11.5px;color:var(--muted);line-height:1.5"></p>'+
     '<p style="margin:9px 0 0;font-size:12px">'+lvs.length+' niveau'+(lvs.length>1?"x":"")+
       (skip?' · <b>'+skip+' niveau'+(skip>1?"x":"")+' non calé'+(skip>1?"s":"")+'</b>, ignoré'+(skip>1?"s":""):'')+
       (h.length?' · calque'+(h.length>1?"s":"")+' masqué'+(h.length>1?"s":"")+' non inclus : <b>'+h.map(function(l){ return esc(l.name); }).join(", ")+'</b>':'')+'</p>'+
@@ -1790,11 +1847,22 @@ document.getElementById("repBtn").onclick=function(){
     '<p id="r_p" style="margin:6px 0 0;font-size:12px;color:var(--blue);min-height:16px"></p>'+
     '<div class="acts"><button class="btn" id="ko">Fermer</button><button class="btn primary" id="goP">Exporter les plans</button></div>';
   stage.appendChild(d);
+  var sf=d.querySelector("#r_fmt"), so=d.querySelector("#r_ori");
+  /* aperçu : échelle à laquelle chaque niveau sortira sur la feuille choisie */
+  function preview(){
+    so.disabled=sf.value==="orig";
+    S.ui.exp={fmt:sf.value,ori:so.value}; save();
+    d.querySelector("#r_sc").innerHTML=lvs.length? "Échelle imprimée : "+lvs.map(function(l){
+      var p=levelPt(l), ly=layoutFor(l,p.W,p.H,p.k,sf.value,so.value);
+      return esc(l.name)+" <b>"+esc(ratioTxt(ly.N))+"</b>"+(ly.paper?" ("+esc(ly.paper.name)+")":"");
+    }).join(" · ")+(sf.value==="orig"?"":"<br>Étiquettes imprimées à 9 pt quel que soit le format.") : "";
+  }
+  sf.onchange=preview; so.onchange=preview; preview();
   d.querySelector("#ko").onclick=function(){ d.remove(); };
   d.querySelector("#goP").onclick=function(){
     var b=this, p=d.querySelector("#r_p");
     S.title=d.querySelector("#r_t").value; save(); b.disabled=true;
-    var pr; try{ pr=exportPlans(function(t){ p.textContent=t; }); }catch(err){ pr=Promise.reject(err); }
+    var pr; try{ pr=exportPlans(sf.value,so.value,function(t){ p.textContent=t; }); }catch(err){ pr=Promise.reject(err); }
     pr.then(function(f){ p.textContent="Fichier généré : "+f; b.disabled=false; })
       .catch(function(err){ p.textContent=""; b.disabled=false; note("Export impossible : "+(err&&err.message||err)); });
   };
@@ -1891,6 +1959,7 @@ load().then(function(p){
     S.layers=p.layers||[]; S.activeLayer=p.activeLayer||null; S.types=p.types; fixLayers();
     if(p.ui) ["lv","ly","pr"].forEach(function(k){ if(typeof p.ui[k]==="boolean") S.ui[k]=p.ui[k]; });
     if(p.ui&&p.ui.lst) setListView(p.ui.lst);
+    if(p.ui&&p.ui.exp&&PAPER_PT[p.ui.exp.fmt]||p.ui&&p.ui.exp&&p.ui.exp.fmt==="orig") S.ui.exp={fmt:p.ui.exp.fmt,ori:/^(auto|p|l)$/.test(p.ui.exp.ori)?p.ui.exp.ori:"auto"};
     layout();
     return Promise.all(S.levels.map(loadImg)).then(function(){ fit(); });
   }
