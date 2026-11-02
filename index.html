@@ -245,7 +245,7 @@ canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-acti
         <div class="seg" id="lstSeg"><button data-v="ly" class="on">Calques</button><button data-v="ob">Objets</button></div>
         <span class="sp"></span>
         <button class="btn sm" id="addLy" title="Nouveau calque">+</button>
-        <button class="btn sm" id="repBtn" title="Exporter les plans et le rapport des anomalies (PDF)">Exporter</button>
+        <button class="btn sm" id="repBtn" title="Exporter les plans de tous les niveaux (PDF)">Exporter</button>
         <button class="btn ghost sm" id="jsonBtn" title="Sauvegarde / restauration">⇄</button>
         <button class="btn ghost sm" data-hide="ly" title="Masquer le panneau">–</button>
       </header>
@@ -1584,37 +1584,28 @@ document.getElementById("jsonBtn").onclick=function(){
   };
 };
 
-/* ============ export : plans avec écarts cotés, rapport des anomalies ============ */
-var PPMM=9;   /* résolution des images exportées : px par mm de papier (≈ 230 dpi) */
+/* ============ export des plans de tous les niveaux, écarts cotés ============ */
+var PPMM=12;   /* résolution des pages exportées : px par mm de papier (≈ 300 dpi) */
 function pdfTxt(s){ return String(s).replace(/→/g,"->").replace(/↳/g,">").replace(/Δ/g,"d").replace(/−/g,"-").replace(/[  ]/g," "); }
 function T(doc,s,x,y,opt){ doc.text(pdfTxt(s),x,y,opt); }
-function hexRGB(c){ var m=/^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(c||""); return m? [parseInt(m[1],16),parseInt(m[2],16),parseInt(m[3],16)] : [120,120,120]; }
 function levelsUp(){ var a=S.levels.filter(ready); return S.asc? a : a.slice().reverse(); }
 function hiddenLayers(){ return S.layers.filter(function(l){ return l.vis===false; }); }
 function cm(v){ var n=Math.round(v*100); return (n>0?"+":n<0?"−":"±")+Math.abs(n)+" cm"; }
 function today(){ return new Date().toLocaleDateString("fr-FR"); }
 function fname(kind){ return ((S.title||"Reservations").replace(/[^\w\-À-ÿ]+/g,"_").slice(0,40))+"_"+kind+"_"+new Date().toISOString().slice(0,10)+".pdf"; }
-
-/* réservations d'un niveau pour l'export : position attendue (corrections reportées comprises) et n° d'anomalie */
-function exportRows(l,no){
+/* réservations d'un niveau : position attendue (corrections reportées comprises) et état */
+function exportRows(l){
   return S.shapes.filter(shown).filter(function(sh){ return onLevel(sh,l.id); }).map(function(sh){
-    var o=obsOf(sh,l.id), ko=!!(o&&o.st==="ko");
-    return {orig:sh, sh:at(sh,l.id), o:o, ko:ko, k:ko?no[sh.id+"|"+l.id]:null, l:l};
+    var o=obsOf(sh,l.id);
+    return {orig:sh, sh:at(sh,l.id), o:o, ko:!!(o&&o.st==="ko")};
   });
-}
-/* anomalies numérotées A1, A2… du niveau le plus bas au plus haut */
-function anomalyList(){
-  var out=[], no={};
-  levelsUp().forEach(function(l){ exportRows(l,{}).forEach(function(r){
-    if(!r.ko) return; r.k=out.length+1; no[r.orig.id+"|"+l.id]=r.k; out.push(r); }); });
-  return {list:out, no:no};
 }
 function planBounds(lv){
   var ws=[[0,0],[lv.w,0],[lv.w,lv.h],[0,lv.h]].map(function(q){ return p2w(lv,q[0],q[1]); });
   var xs=ws.map(function(q){return q.X;}), ys=ws.map(function(q){return q.Y;});
   return {x0:Math.min.apply(null,xs),x1:Math.max.apply(null,xs),y0:Math.min.apply(null,ys),y1:Math.max.apply(null,ys)};
 }
-/* morceau du PDF source re-rastérisé à la résolution d'export, pour des extraits zoomés nets */
+/* la page du PDF source est re-rastérisée à la résolution d'export, au lieu de l'image de travail */
 function pdfTile(lv,view,k){
   if(!lv.pdf||!window.pdfjsLib) return Promise.resolve(null);
   var ps=[[view.x0,view.y0],[view.x1,view.y0],[view.x1,view.y1],[view.x0,view.y1]].map(function(q){ return w2p(lv,q[0],q[1]); });
@@ -1622,7 +1613,7 @@ function pdfTile(lv,view,k){
   var x0=Math.max(0,Math.floor(Math.min.apply(null,xs))), x1=Math.min(lv.w,Math.ceil(Math.max.apply(null,xs)));
   var y0=Math.max(0,Math.floor(Math.min.apply(null,ys))), y1=Math.min(lv.h,Math.ceil(Math.max.apply(null,ys)));
   var tw=x1-x0, th=y1-y0; if(tw<4||th<4) return Promise.resolve(null);
-  var f=Math.min(k,4200/tw,4200/th,8); if(f<=1.05) return Promise.resolve(null);
+  var f=Math.min(k,9000/tw,9000/th);
   return pdfPage(lv).then(function(pg){
     var cs=document.createElement("canvas"); cs.width=Math.round(tw*f); cs.height=Math.round(th*f);
     var g=cs.getContext("2d"); g.fillStyle="#fff"; g.fillRect(0,0,cs.width,cs.height);
@@ -1683,9 +1674,9 @@ function drawEcart(g,P,C,R,u,label,extra){
   lines.forEach(function(s,i){ haloText(g,s,tx,ty+u*2.8*(i+1),red,u,500); });
   g.restore(); g.textAlign="left";
 }
-function drawMarks(g,P,vs,rows,u,focusId){
+function drawMarks(g,P,vs,rows,u){
   rows.forEach(function(r){
-    var sh=r.sh, col=colOf(r.orig), A=(focusId&&r.orig.id!==focusId)?.4:1, rs=null;
+    var sh=r.sh, col=colOf(r.orig), A=1, rs=null;
     g.save();
     if(sh.from){ g.globalAlpha=A*.8; shapePath(g,r.orig,P,vs); g.setLineDash([u*.8,u*.8]); g.strokeStyle="#7a7a7a"; g.lineWidth=u*.22; g.stroke(); g.setLineDash([]); }
     shapePath(g,sh,P,vs); g.globalAlpha=A*.16; g.fillStyle=col; g.fill(); g.globalAlpha=A; g.strokeStyle=col; g.lineWidth=u*.42; g.stroke();
@@ -1696,9 +1687,9 @@ function drawMarks(g,P,vs,rows,u,focusId){
     var tl=P(sh.t==="rect"?sh.x:sh.x-sh.r, sh.t==="rect"?sh.y:sh.y-sh.r);
     g.textAlign="left";
     haloText(g,sh.n+(sh.from?"  ↳ "+lvName(sh.from):""),tl.x,tl.y-u*.9,r.ko?"#c62a1f":col,u,600);
-    if(rs) drawEcart(g,P,centerOf(sh),centerOf(rs),u,"A"+r.k+" · écart "+Math.round(ecart(sh,r.o).d*100)+" cm",
+    if(rs) drawEcart(g,P,centerOf(sh),centerOf(rs),u,"écart "+Math.round(ecart(sh,r.o).d*100)+" cm",
       dimsChanged(sh,r.o)?["réel "+dimTxt(rs)+" (prévu "+dimTxt(sh)+")"]:[]);
-    else if(r.ko) haloText(g,"A"+r.k+" (position non pointée)",tl.x,tl.y-u*3.8,"#c62a1f",u,700);
+    else if(r.ko) haloText(g,"anomalie (position non pointée)",tl.x,tl.y-u*3.8,"#c62a1f",u,700);
     g.restore();
   });
 }
@@ -1712,7 +1703,7 @@ function scaleBar(g,vs,H,u){
   g.restore();
 }
 /* rendu d'une zone du plan (coordonnées monde, m) en image W×H px ; u = px par mm de papier */
-function viewCanvas(lv,view,W,H,rows,u,focusId){
+function viewCanvas(lv,view,W,H,rows,u){
   var c=document.createElement("canvas"); c.width=W; c.height=H;
   var g=c.getContext("2d"); g.fillStyle="#fff"; g.fillRect(0,0,W,H);
   var vs=Math.min(W/(view.x1-view.x0),H/(view.y1-view.y0));
@@ -1723,193 +1714,65 @@ function viewCanvas(lv,view,W,H,rows,u,focusId){
     g.save();
     g.setTransform(k*cc.co,-k*cc.si,k*cc.si,k*cc.co, tx-k*(cc.co*cc.ax+cc.si*cc.ay), ty-k*(-cc.si*cc.ax+cc.co*cc.ay));
     g.imageSmoothingQuality="high";
-    try{ if(lv.img) g.drawImage(lv.img,0,0); if(tile) g.drawImage(tile.cv,tile.x0,tile.y0,tile.w,tile.h); }catch(e){}
+    try{ if(tile) g.drawImage(tile.cv,tile.x0,tile.y0,tile.w,tile.h); else if(lv.img) g.drawImage(lv.img,0,0); }catch(e){}
     g.restore();
-    drawMarks(g,P,vs,rows,u,focusId);
+    drawMarks(g,P,vs,rows,u);
     scaleBar(g,vs,H,u);
     return c;
   });
 }
 function pad(v,m){ return {x0:v.x0-m,y0:v.y0-m,x1:v.x1+m,y1:v.y1+m}; }
-/* cadrage d'une fiche : position attendue + position réelle, marge, 3 m mini, au format de l'image */
-function ficheView(a,aspect){
-  var shs=[a.sh]; if(a.o.real) shs.push(realShape(a.sh,a.o));
-  var X=[],Y=[]; shs.forEach(function(s){ corners(s).forEach(function(q){ X.push(q[0]); Y.push(q[1]); }); });
-  var v={x0:Math.min.apply(null,X),x1:Math.max.apply(null,X),y0:Math.min.apply(null,Y),y1:Math.max.apply(null,Y)};
-  var ext=Math.max(v.x1-v.x0,v.y1-v.y0); v=pad(v,Math.max(.8,ext*.45));
-  var cx=(v.x0+v.x1)/2, cy=(v.y0+v.y1)/2, w=Math.max(3,v.x1-v.x0), h=Math.max(3/aspect,v.y1-v.y0);
-  if(w/h<aspect) w=h*aspect; else h=w/aspect;
-  return {x0:cx-w/2,x1:cx+w/2,y0:cy-h/2,y1:cy+h/2};
-}
-function legendPdf(doc,rows,x,y,w,anos){
-  doc.setFont("helvetica","normal"); doc.setFontSize(7.5); doc.setTextColor(60);
-  var cx=x, cy=y;
-  function item(draw,label){
-    var lw=7+doc.getTextWidth(pdfTxt(label))+5;
-    if(cx+lw>x+w){ cx=x; cy+=4.2; }
-    draw(cx,cy); T(doc,label,cx+7,cy+.9); cx+=lw;
-  }
-  var seen={};
-  rows.forEach(function(r){
-    var t=r.orig.ty&&typeOf(r.orig.ty), L=layerOf(r.orig), key=t?"t"+t.id:"l"+(L?L.id:"");
-    if(seen[key]) return; seen[key]=1;
-    var c=hexRGB(colOf(r.orig));
-    item(function(px,py){ doc.setFillColor(c[0],c[1],c[2]); doc.rect(px,py-1.6,5,2.6,"F"); }, t? t.code+(t.name?" "+t.name:"") : (L?L.name:"Réservations"));
-  });
-  cx=x; cy+=4.6;
-  item(function(px,py){ doc.setDrawColor(40); doc.setLineWidth(.4); doc.line(px,py-.4,px+5,py-.4); },"position attendue");
-  item(function(px,py){ doc.setDrawColor(216,53,42); doc.setLineDashPattern([1.2,.8],0); doc.line(px,py-.4,px+5,py-.4); doc.setLineDashPattern([],0); },"position réelle (anomalie)");
-  item(function(px,py){ doc.setDrawColor(120); doc.setLineWidth(.2); doc.setLineDashPattern([.7,.7],0); doc.line(px,py-.4,px+5,py-.4); doc.setLineDashPattern([],0); },"projet d'origine, correction d'un niveau inférieur reprise (↳)");
-  item(function(px,py){ doc.setDrawColor(198,42,31); doc.setFillColor(198,42,31); doc.setLineWidth(.3); doc.line(px,py-.4,px+4,py-.4); doc.triangle(px+5,py-.4,px+3.8,py-1.1,px+3.8,py+.3,"F"); },"écart coté : ΔX + vers la droite, ΔY + vers le bas du plan");
-  doc.setLineWidth(.2); doc.setDrawColor(0);
-  if(anos.length){
-    cx=x; cy+=4.6; doc.setTextColor(198,42,31);
-    var s="Anomalies : "+anos.map(function(a){ return "A"+a.k+" "+a.sh.n+(a.o.real?" ("+Math.round(ecart(a.sh,a.o).d*100)+" cm)":""); }).join("  ·  ");
-    T(doc,doc.splitTextToSize(pdfTxt(s),w)[0],x,cy+.9);
-  }
-  doc.setTextColor(0);
-}
-function newDoc(fmt){
+var EXPORT_FMT="png";   /* PNG : traits nets sans artefacts de compression */
+function exportPlans(fmt,prog){
   var J=window.jspdf&&window.jspdf.jsPDF;
-  if(!J) throw new Error("module PDF non chargé");
-  return new J({orientation:"landscape",unit:"mm",format:fmt||"a4"});
-}
-
-/* ---- plans de tous les niveaux : une page par niveau, écarts cotés ---- */
-function exportPlans(fmt,only,prog){
+  if(!J) return Promise.reject(new Error("module PDF non chargé"));
   var lvs=levelsUp(); if(!lvs.length) return Promise.reject(new Error("aucun niveau calé (échelle + repère)"));
-  var A=anomalyList(), doc=newDoc(fmt);
-  var Wp=doc.internal.pageSize.getWidth(), Hp=doc.internal.pageSize.getHeight(), M=10, title=S.title||"Report de réservations";
+  var doc=new J({orientation:"landscape",unit:"mm",format:fmt,compress:true});
+  var Wp=doc.internal.pageSize.getWidth(), Hp=doc.internal.pageSize.getHeight(), M=8, title=S.title||"";
   var chain=Promise.resolve();
   lvs.forEach(function(l,i){ chain=chain.then(function(){
     prog("Plan "+(i+1)+" / "+lvs.length+" — "+l.name+"…");
-    var rows=exportRows(l,A.no); if(only) rows=rows.filter(function(r){ return r.ko; });
-    var anos=A.list.filter(function(a){ return a.l===l; });
+    var rows=exportRows(l), kos=rows.filter(function(r){ return r.ko; }).length;
     if(i>0) doc.addPage();
-    doc.setFont("helvetica","bold"); doc.setFontSize(15); doc.setTextColor(0); T(doc,l.name,M,M+5);
-    doc.setFont("helvetica","normal"); doc.setFontSize(9); doc.setTextColor(90); T(doc,title,M,M+10);
-    T(doc,"Échelle "+scaleTxt(l)+"  ·  "+rows.length+" réservation(s)  ·  "+anos.length+" anomalie(s)  ·  édité le "+today(),Wp-M,M+5,{align:"right"});
-    doc.setTextColor(0); doc.setDrawColor(200); doc.line(M,M+12,Wp-M,M+12);
-    var top=M+14, legH=anos.length?17:13, iw=Wp-2*M, ih=Hp-top-M-legH;
-    return viewCanvas(l,pad(planBounds(l),.2),Math.round(iw*PPMM),Math.round(ih*PPMM),rows,PPMM).then(function(cv){
-      doc.addImage(cv.toDataURL("image/jpeg",.88),"JPEG",M,top,iw,ih);
+    doc.setFont("helvetica","bold"); doc.setFontSize(12); doc.setTextColor(0); T(doc,l.name,M,M+3.5);
+    doc.setFont("helvetica","normal"); doc.setFontSize(8.5); doc.setTextColor(90);
+    T(doc,[title,"Échelle "+scaleTxt(l),rows.length+" réservation(s)",kos+" anomalie(s)",today()].filter(Boolean).join("  ·  "),Wp-M,M+3.5,{align:"right"});
+    doc.setTextColor(0);
+    var top=M+6, iw=Wp-2*M, ih=Hp-top-M;
+    return viewCanvas(l,pad(planBounds(l),.1),Math.round(iw*PPMM),Math.round(ih*PPMM),rows,PPMM).then(function(cv){
+      var data=EXPORT_FMT==="png"? cv.toDataURL("image/png") : cv.toDataURL("image/jpeg",.95);
+      doc.addImage(data,EXPORT_FMT==="png"?"PNG":"JPEG",M,top,iw,ih,undefined,"FAST");
       doc.setDrawColor(210); doc.rect(M,top,iw,ih);
-      legendPdf(doc,rows,M,top+ih+4.5,iw,anos);
     });
   }); });
   return chain.then(function(){ var f=fname("Plans"); doc.save(f); return f; });
 }
 
-/* ---- rapport des anomalies : tableau de synthèse puis une fiche zoomée par anomalie ---- */
-function exportAnomalies(prog){
-  var lvs=levelsUp(); if(!lvs.length) return Promise.reject(new Error("aucun niveau calé (échelle + repère)"));
-  var A=anomalyList(), doc=newDoc("a4"), Wp=297, Hp=210, M=12, title=S.title||"Report de réservations";
-  var nRes=S.shapes.filter(shown).length;
-  doc.setFont("helvetica","bold"); doc.setFontSize(18); T(doc,"Rapport des anomalies de réservations",M,24);
-  doc.setFont("helvetica","normal"); doc.setFontSize(11); T(doc,title,M,32);
-  doc.setFontSize(9); doc.setTextColor(110);
-  T(doc,"Édité le "+today()+"  ·  "+lvs.length+" niveau(x)  ·  "+nRes+" réservation(s)  ·  "+A.list.length+" anomalie(s)",M,38.5);
-  T(doc,lvs.map(function(l){ return l.name+" : "+A.list.filter(function(a){ return a.l===l; }).length; }).join("   ·   "),M,43.5);
-  doc.setTextColor(0); doc.setDrawColor(200); doc.line(M,47,Wp-M,47);
-  var cols=[M,M+11,M+33,M+78,M+100,M+130,M+160,M+177,M+194,M+210], y=55;
-  function head(){
-    doc.setFont("helvetica","bold"); doc.setFontSize(8);
-    ["N°","Niveau","Réservation","Objet","Prévu","Réel","Écart X","Écart Y","Écart","Observation"].forEach(function(t,i){ T(doc,t,cols[i],y); });
-    doc.setDrawColor(210); doc.line(M,y+1.6,Wp-M,y+1.6); y+=6.2; doc.setFont("helvetica","normal");
-  }
-  function obsLine(a){
-    var up=heirs(a.orig,a.l.id);
-    return [a.sh.from?"attendue d'après "+lvName(a.sh.from):"", a.o.c||"",
-      a.o.real&&a.o.prop===false?"correction non reportée":"", a.o.real&&a.o.prop!==false&&up.length?"reportée sur "+up.join(", "):""]
-      .filter(Boolean).join(" — ")||"—";
-  }
-  if(!A.list.length){ doc.setFontSize(10); T(doc,"Aucune anomalie signalée.",M,y); }
-  else{
-    head();
-    A.list.forEach(function(a){
-      if(y>Hp-M){ doc.addPage(); y=M+8; head(); }
-      var ec=ecart(a.sh,a.o), t=a.orig.ty&&typeOf(a.orig.ty);
-      doc.setTextColor(198,42,31); T(doc,"A"+a.k,cols[0],y); doc.setTextColor(0);
-      T(doc,a.l.name.slice(0,14),cols[1],y);
-      T(doc,a.sh.n.slice(0,30),cols[2],y);
-      T(doc,t?t.code:"—",cols[3],y);
-      T(doc,dimTxt(a.sh),cols[4],y);
-      T(doc,a.o.real?dimTxt(realShape(a.sh,a.o)):"non pointé",cols[5],y);
-      T(doc,ec?cm(ec.dx):"—",cols[6],y);
-      T(doc,ec?cm(ec.dy):"—",cols[7],y);
-      doc.setFont("helvetica","bold"); T(doc,ec?Math.round(ec.d*100)+" cm":"—",cols[8],y); doc.setFont("helvetica","normal");
-      var ol=doc.splitTextToSize(pdfTxt(obsLine(a)),Wp-M-cols[9]).slice(0,2);
-      ol.forEach(function(s,j){ doc.text(s,cols[9],y+j*3.6); });
-      y+=5.6+(ol.length-1)*3.6;
-    });
-  }
-  /* fiches : deux par page */
-  var bw=(Wp-2*M-8)/2, ih=106, chain=Promise.resolve();
-  A.list.forEach(function(a,i){ chain=chain.then(function(){
-    prog("Fiche "+(i+1)+" / "+A.list.length+" — A"+a.k+" "+a.sh.n+"…");
-    if(i%2===0){ doc.addPage(); doc.setFontSize(8.5); doc.setTextColor(110); T(doc,"Fiches anomalies — "+title,M,M); T(doc,today(),Wp-M,M,{align:"right"}); doc.setTextColor(0); }
-    var x=M+(i%2)*(bw+8), y0=M+5;
-    var rows=exportRows(a.l,A.no);
-    return viewCanvas(a.l,ficheView(a,bw/ih),Math.round(bw*PPMM),Math.round(ih*PPMM),rows,PPMM,a.orig.id).then(function(cv){
-      doc.setFont("helvetica","bold"); doc.setFontSize(12); doc.setTextColor(198,42,31); T(doc,"A"+a.k,x,y0+5);
-      doc.setTextColor(0); T(doc,a.sh.n,x+12,y0+5);
-      doc.setFont("helvetica","normal"); doc.setFontSize(10); T(doc,a.l.name,x+bw,y0+5,{align:"right"});
-      doc.addImage(cv.toDataURL("image/jpeg",.9),"JPEG",x,y0+8,bw,ih);
-      doc.setDrawColor(200); doc.rect(x,y0+8,bw,ih);
-      var ec=ecart(a.sh,a.o), rs=a.o.real?realShape(a.sh,a.o):null, t=a.orig.ty&&typeOf(a.orig.ty), L=layerOf(a.orig);
-      var c0=centerOf(a.sh), up=heirs(a.orig,a.l.id);
-      var lines=[
-        ["Objet / calque", (t?t.code+(t.name?" — "+t.name:""):"—")+"  ·  "+(L?L.name:"—")],
-        ["Position attendue", "X "+fmt(c0.X,2)+" · Y "+fmt(c0.Y,2)+" m  ("+(a.sh.from?"correction reprise de "+lvName(a.sh.from):"position du projet")+")"],
-        ["Position réelle", rs? "X "+fmt(centerOf(rs).X,2)+" · Y "+fmt(centerOf(rs).Y,2)+" m" : "non pointée"],
-        ["Écart", ec? Math.round(ec.d*100)+" cm  (écart X "+cm(ec.dx)+", écart Y "+cm(ec.dy)+")" : "—"],
-        ["Dimensions", "prévu "+dimTxt(a.sh)+(rs? "  ·  réel "+dimTxt(rs)+(dimsChanged(a.sh,a.o)?"  (modifiées)":"  (identiques)") : "")],
-        ["Observation", a.o.c||"—"],
-        ["Niveaux du dessus", !rs? "—" : a.o.prop===false? "correction non reportée (position du projet conservée)" : (up.length? "correction reportée sur "+up.join(", ") : "aucun niveau concerné")]
-      ];
-      var ly=y0+8+ih+6; doc.setFontSize(8.5);
-      lines.forEach(function(p){
-        doc.setFont("helvetica","bold"); T(doc,p[0],x,ly);
-        doc.setFont("helvetica","normal"); T(doc,doc.splitTextToSize(pdfTxt(p[1]),bw-32)[0],x+32,ly);
-        ly+=4.8;
-      });
-    });
-  }); });
-  return chain.then(function(){ var f=fname("Anomalies"); doc.save(f); return f; });
-}
-
 document.getElementById("repBtn").onclick=function(){
   var old=document.getElementById("expSheet"); if(old) old.remove();
-  var A=anomalyList(), lvs=levelsUp(), skip=S.levels.length-lvs.length, h=hiddenLayers(), fmtSel="a3";
+  var lvs=levelsUp(), skip=S.levels.length-lvs.length, h=hiddenLayers(), fmtSel="a3";
   var d=document.createElement("div"); d.className="sheet"; d.id="expSheet";
-  d.innerHTML='<h3>Exporter</h3>'+
-    '<p>PDF prêts à imprimer ou à envoyer. Les écarts sont cotés sur les plans (ΔX, ΔY, écart total) et numérotés A1, A2… comme dans le rapport.</p>'+
+  d.innerHTML='<h3>Exporter les plans</h3>'+
+    '<p>Un PDF, une page par niveau, avec les réservations et les écarts cotés (ΔX, ΔY, écart total).</p>'+
     '<div class="fld"><label>Chantier</label><input id="r_t" type="text" value="'+esc(S.title||"")+'" placeholder="ex. Résidence Les Tilleuls — lot gros œuvre"></div>'+
-    '<div class="fld" style="margin-top:9px"><label>Format des plans</label><div class="seg" id="r_f"><button data-f="a3" class="on">A3 paysage</button><button data-f="a4">A4 paysage</button></div></div>'+
-    '<label class="ck" style="display:flex;gap:7px;align-items:center;margin-top:9px;font-size:12.5px"><input type="checkbox" id="r_k"> Plans : n\'afficher que les réservations en anomalie</label>'+
-    '<p style="margin:9px 0 0;font-size:12px">'+lvs.length+' niveau'+(lvs.length>1?"x":"")+' · '+A.list.length+' anomalie'+(A.list.length>1?"s":"")+
+    '<div class="fld" style="margin-top:9px"><label>Format</label><div class="seg" id="r_f"><button data-f="a3" class="on">A3 paysage</button><button data-f="a4">A4 paysage</button></div></div>'+
+    '<p style="margin:9px 0 0;font-size:12px">'+lvs.length+' niveau'+(lvs.length>1?"x":"")+
       (skip?' · <b>'+skip+' niveau'+(skip>1?"x":"")+' non calé'+(skip>1?"s":"")+'</b>, ignoré'+(skip>1?"s":""):'')+
       (h.length?' · calque'+(h.length>1?"s":"")+' masqué'+(h.length>1?"s":"")+' non inclus : <b>'+h.map(function(l){ return esc(l.name); }).join(", ")+'</b>':'')+'</p>'+
     '<p id="r_p" style="margin:6px 0 0;font-size:12px;color:var(--blue);min-height:16px"></p>'+
-    '<div class="acts" style="flex-wrap:wrap"><button class="btn" id="ko">Fermer</button>'+
-    '<button class="btn primary" id="goP">Plans de tous les niveaux</button>'+
-    '<button class="btn primary" id="goA">Rapport des anomalies</button></div>';
+    '<div class="acts"><button class="btn" id="ko">Fermer</button><button class="btn primary" id="goP">Exporter les plans</button></div>';
   stage.appendChild(d);
   d.querySelector("#ko").onclick=function(){ d.remove(); };
   d.querySelector("#r_f").addEventListener("click",function(e){
     var b=e.target.closest("button"); if(!b) return; fmtSel=b.dataset.f;
     Array.prototype.forEach.call(this.children,function(x){ x.classList.toggle("on",x===b); }); });
-  function run(job){
-    S.title=d.querySelector("#r_t").value; save();
-    var bs=d.querySelectorAll("#goP,#goA"), p=d.querySelector("#r_p");
-    Array.prototype.forEach.call(bs,function(b){ b.disabled=true; });
-    var done=function(){ Array.prototype.forEach.call(bs,function(b){ b.disabled=false; }); };
-    var pr; try{ pr=job(function(t){ p.textContent=t; }); }catch(err){ pr=Promise.reject(err); }
-    pr.then(function(f){ p.textContent="Fichier généré : "+f; done(); })
-      .catch(function(err){ p.textContent=""; done(); note("Export impossible : "+(err&&err.message||err)); });
-  }
-  d.querySelector("#goP").onclick=function(){ var only=d.querySelector("#r_k").checked; run(function(pg){ return exportPlans(fmtSel,only,pg); }); };
-  d.querySelector("#goA").onclick=function(){ run(function(pg){ return exportAnomalies(pg); }); };
+  d.querySelector("#goP").onclick=function(){
+    var b=this, p=d.querySelector("#r_p");
+    S.title=d.querySelector("#r_t").value; save(); b.disabled=true;
+    var pr; try{ pr=exportPlans(fmtSel,function(t){ p.textContent=t; }); }catch(err){ pr=Promise.reject(err); }
+    pr.then(function(f){ p.textContent="Fichier généré : "+f; b.disabled=false; })
+      .catch(function(err){ p.textContent=""; b.disabled=false; note("Export impossible : "+(err&&err.message||err)); });
+  };
 };
 
 /* ============ exemple ============ */
