@@ -904,6 +904,7 @@ function openDock(){
       (isPdf?'<p class="dp">Échelle déduite du format réel de la page PDF.</p>'
             :'<p class="dp">Valable si l\'image couvre la feuille entière, sans recadrage.</p>')+
     '</div>'+
+    (S.levels.length>1?'<label class="ck"><input type="checkbox" id="all"> Appliquer à tous les niveaux ('+S.levels.length+')</label>':'')+
     '<div class="row2" style="margin-top:9px"><div class="fld"><label>Orientation (°)</label>'+
       '<input id="rot" type="number" step="0.1" value="'+fmt(lv.rot||0,1)+'"></div>'+
       '<div style="display:flex;align-items:flex-end"><button class="btn primary" id="ok" style="width:100%">Appliquer</button></div></div>'+
@@ -946,9 +947,23 @@ function openDock(){
     }
     var anchor=lv.org||w2p(lv,s2w(stage.clientWidth/2,stage.clientHeight/2).X,s2w(stage.clientWidth/2,stage.clientHeight/2).Y);
     keepView(lv,anchor,function(){ lv.scale=ns; lv.rot=rot; });
+    var allChk=d.querySelector("#all"), nAll=0;
+    if(allChk&&allChk.checked){
+      /* même rapport 1/N partout, converti selon la résolution de chaque plan ; l'orientation reste propre à chaque plan */
+      var pmSrc=pxPerMm(lv,mode==="r"&&pv?pv.value:(lv.scale.paper||null));
+      var R=ns.ratio||(pmSrc?pmSrc*1000/ns.s:null);
+      S.levels.forEach(function(o){
+        if(o===lv) return;
+        var paper=o.pdf?null:(mode==="r"&&pv?pv.value:(o.scale&&o.scale.paper)||null);
+        var pm=pxPerMm(o,paper);
+        o.scale=(R&&pm)? {s:pm*1000/R, ratio:ns.ratio, paper:paper} : {s:ns.s, ratio:null, paper:null};
+        nAll++;
+      });
+    }
     closeDock();
-    if(!lv.org){ setTool("org"); note("Échelle réglée ("+scaleTxt(lv)+"). Cliquez maintenant le point de repère."); }
-    else { setTool("select"); note(lv.name+" : "+scaleTxt(lv)); }
+    var tous=nAll?" (appliquée à "+(nAll+1)+" niveaux)":"";
+    if(!lv.org){ setTool("org"); note("Échelle réglée ("+scaleTxt(lv)+")"+tous+". Cliquez maintenant le point de repère."); }
+    else { setTool("select"); note(lv.name+" : "+scaleTxt(lv)+tous); }
     renderAll(); save();
   }
 }

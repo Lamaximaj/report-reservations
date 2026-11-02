@@ -18,7 +18,10 @@ Ou ouvrir `index.html` dans un navigateur, ou le servir depuis un NAS.
 2. **Échelle** (E) : soit en traçant une cote connue sur le plan, soit en saisissant
    le rapport (1/50, 1/100…). Sur un PDF l'échelle réelle est déduite du format de page ;
    sur une image il faut préciser le format papier. Champ d'orientation pour un plan
-   scanné de travers.
+   scanné de travers. « Appliquer à tous les niveaux » reporte la même échelle 1/N sur
+   tous les plans, recalculée selon le format de chacun (avec une cote tracée sur une
+   image, c'est la valeur en px/m qui est recopiée). L'orientation et le repère restent
+   propres à chaque plan.
 3. **Repère** (P) : un clic pose l'origine (0,0) du niveau. Prendre le même repère
    physique sur tous les plans (nu de voile, file de poteaux, angle de trémie).
 4. **Dessiner** une réservation rectangulaire (R) ou ronde (C). Elle est stockée en
