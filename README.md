@@ -35,12 +35,14 @@ Ou ouvrir `index.html` dans un navigateur, ou le servir depuis un NAS.
    en rouge ; ses poignées rouges (ou les champs « Largeur / Hauteur / Diamètre réels »
    des Propriétés) reprennent ses dimensions réelles, et cliquer-glisser dans le contour
    rouge la replace sans changer ses dimensions. Le rapport indique « prévu → réel ».
-7. **Exporter** (panneau Calques) : un PDF des plans de tous les niveaux, A3 ou A4
-   paysage, une page par niveau, avec les réservations et les écarts cotés (flèches ΔX / ΔY,
-   écart total, dimensions réelles) et les corrections reprises d'un niveau inférieur.
-   Les plans importés en PDF sont re-rendus depuis le fichier source à ≈ 300 dpi ; un plan
-   importé en image garde la résolution de l'image. Les calques masqués et les niveaux non
-   calés ne sont pas exportés.
+7. **Exporter** (panneau Calques) : un PDF des plans de tous les niveaux, une page par
+   niveau. Chaque page reprend **le plan d'origine tel quel, en vectoriel** (net à tout
+   zoom, à son format A1, A0…, rotation du PDF source gérée), avec par-dessus, en
+   vectoriel aussi : positions attendues, positions réelles en pointillé rouge, flèches
+   d'écart X / Y et une étiquette par anomalie (nom, écart, cotes réelles, observation),
+   placées sans se chevaucher. Le cartouche est dans un bandeau ajouté au-dessus du plan,
+   qui reste entièrement visible. Un plan importé en image est repris à sa résolution
+   native. Les calques masqués et les niveaux non calés ne sont pas exportés.
 
 ## Panneaux et calques
 

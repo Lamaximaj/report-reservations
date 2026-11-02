@@ -10,7 +10,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
 <style>
 /* Layout : chrome sombre type CAO autour d'une scène fixe, panneaux latéraux en colonnes, inspecteur en pied de panneau */
 :root{
@@ -1584,192 +1584,217 @@ document.getElementById("jsonBtn").onclick=function(){
   };
 };
 
-/* ============ export des plans de tous les niveaux, écarts cotés ============ */
-var PPMM=12;   /* résolution des pages exportées : px par mm de papier (≈ 300 dpi) */
-function pdfTxt(s){ return String(s).replace(/→/g,"->").replace(/↳/g,">").replace(/Δ/g,"d").replace(/−/g,"-").replace(/[  ]/g," "); }
-function T(doc,s,x,y,opt){ doc.text(pdfTxt(s),x,y,opt); }
+/* ============ export des plans : PDF d'origine en vectoriel, écarts annotés par-dessus ============ */
+/* chaque niveau reprend la page du PDF source telle quelle (nette à tout zoom, au format du plan) ;
+   un plan importé en image est repris à sa résolution native */
 function levelsUp(){ var a=S.levels.filter(ready); return S.asc? a : a.slice().reverse(); }
 function hiddenLayers(){ return S.layers.filter(function(l){ return l.vis===false; }); }
-function cm(v){ var n=Math.round(v*100); return (n>0?"+":n<0?"−":"±")+Math.abs(n)+" cm"; }
+function cm(v){ var n=Math.round(v*100); return (n>0?"+":n<0?"-":"±")+Math.abs(n)+" cm"; }
 function today(){ return new Date().toLocaleDateString("fr-FR"); }
 function fname(kind){ return ((S.title||"Reservations").replace(/[^\w\-À-ÿ]+/g,"_").slice(0,40))+"_"+kind+"_"+new Date().toISOString().slice(0,10)+".pdf"; }
-/* réservations d'un niveau : position attendue (corrections reportées comprises) et état */
+function hexRGB(c){ var m=/^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(c||""); return m? [parseInt(m[1],16),parseInt(m[2],16),parseInt(m[3],16)] : [120,120,120]; }
 function exportRows(l){
   return S.shapes.filter(shown).filter(function(sh){ return onLevel(sh,l.id); }).map(function(sh){
     var o=obsOf(sh,l.id);
     return {orig:sh, sh:at(sh,l.id), o:o, ko:!!(o&&o.st==="ko")};
   });
 }
-function planBounds(lv){
-  var ws=[[0,0],[lv.w,0],[lv.w,lv.h],[0,lv.h]].map(function(q){ return p2w(lv,q[0],q[1]); });
-  var xs=ws.map(function(q){return q.X;}), ys=ws.map(function(q){return q.Y;});
-  return {x0:Math.min.apply(null,xs),x1:Math.max.apply(null,xs),y0:Math.min.apply(null,ys),y1:Math.max.apply(null,ys)};
+/* les polices standard des PDF ne couvrent que le jeu WinAnsi : on remplace le reste */
+var WIN_EXTRA="€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ";
+function win(s){
+  s=String(s).replace(/Δ/g,"d").replace(/−/g,"-").replace(/↳/g,">").replace(/→/g,"->").replace(/[  ]/g," ");
+  return Array.from(s).map(function(ch){ var c=ch.charCodeAt(0);
+    return (c>=32&&c<127)||(c>=160&&c<=255)||WIN_EXTRA.indexOf(ch)>=0? ch : "?"; }).join("");
 }
-/* la page du PDF source est re-rastérisée à la résolution d'export, au lieu de l'image de travail */
-function pdfTile(lv,view,k){
-  if(!lv.pdf||!window.pdfjsLib) return Promise.resolve(null);
-  var ps=[[view.x0,view.y0],[view.x1,view.y0],[view.x1,view.y1],[view.x0,view.y1]].map(function(q){ return w2p(lv,q[0],q[1]); });
-  var xs=ps.map(function(q){return q.x;}), ys=ps.map(function(q){return q.y;});
-  var x0=Math.max(0,Math.floor(Math.min.apply(null,xs))), x1=Math.min(lv.w,Math.ceil(Math.max.apply(null,xs)));
-  var y0=Math.max(0,Math.floor(Math.min.apply(null,ys))), y1=Math.min(lv.h,Math.ceil(Math.max.apply(null,ys)));
-  var tw=x1-x0, th=y1-y0; if(tw<4||th<4) return Promise.resolve(null);
-  var f=Math.min(k,9000/tw,9000/th);
-  return pdfPage(lv).then(function(pg){
-    var cs=document.createElement("canvas"); cs.width=Math.round(tw*f); cs.height=Math.round(th*f);
-    var g=cs.getContext("2d"); g.fillStyle="#fff"; g.fillRect(0,0,cs.width,cs.height);
-    return pg.render({canvasContext:g, viewport:pg.getViewport({scale:lv.pdf.base*f}), transform:[1,0,0,1,-x0*f,-y0*f]}).promise
-      .then(function(){ return {cv:cs,x0:x0,y0:y0,w:tw,h:th}; });
-  }).catch(function(){ return null; });
+
+/* page de sortie d'un niveau ; k = points PDF par pixel de l'image de travail */
+function levelPage(out,l,cache){
+  var L=window.PDFLib;
+  if(l.pdf){
+    return pdfPage(l).then(function(pg){
+      var view=pg.view, rot=((pg.rotate||0)%360+360)%360, W=view[2]-view[0], H=view[3]-view[1];
+      var src=cache.get(l.pdf.bytes);
+      if(!src){ src=L.PDFDocument.load(l.pdf.bytes.slice(),{ignoreEncryption:true}); cache.set(l.pdf.bytes,src); }
+      return src.then(function(doc){
+        return out.embedPage(doc.getPage(l.pdf.page-1),{left:view[0],bottom:view[1],right:view[2],top:view[3]});
+      }).then(function(emb){
+        var Wd=rot%180===0?W:H, Hd=rot%180===0?H:W, page=out.addPage([Wd,Hd]);
+        /* /Rotate du PDF source : la page est redressée pour que les annotations restent droites */
+        var o= rot===90? {x:0,y:W,rotate:L.degrees(-90)} : rot===180? {x:W,y:H,rotate:L.degrees(180)} : rot===270? {x:H,y:0,rotate:L.degrees(90)} : {x:0,y:0};
+        page.drawPage(emb,o);
+        return {page:page,Wd:Wd,Hd:Hd,k:1/l.pdf.base};
+      });
+    });
+  }
+  var k=72/150, jpg=/^data:image\/jpe?g/i.test(l.src||""), data=l.src;
+  if(!jpg&&!/^data:image\/png/i.test(l.src||"")){
+    var c=document.createElement("canvas"); c.width=l.w; c.height=l.h; c.getContext("2d").drawImage(l.img,0,0); data=c.toDataURL("image/png");
+  }
+  return (jpg? out.embedJpg(data) : out.embedPng(data)).then(function(im){
+    var Wd=l.w*k, Hd=l.h*k, page=out.addPage([Wd,Hd]);
+    page.drawImage(im,{x:0,y:0,width:Wd,height:Hd});
+    return {page:page,Wd:Wd,Hd:Hd,k:k};
+  });
 }
-function shapePath(g,s,P,vs){
-  g.beginPath();
-  if(s.t==="rect"){ var q=corners(s).map(function(z){ return P(z[0],z[1]); });
-    g.moveTo(q[0].x,q[0].y); for(var i=1;i<4;i++) g.lineTo(q[i].x,q[i].y); g.closePath(); }
-  else{ var c=P(s.x,s.y); g.arc(c.x,c.y,Math.max(s.r*vs,1.5),0,6.2832); }
-}
-function haloText(g,t,x,y,col,u,wt){
-  g.font=(wt||600)+" "+(u*2.3)+"px Arial, sans-serif";
-  g.lineJoin="round"; g.lineWidth=u*.75; g.strokeStyle="rgba(255,255,255,.92)"; g.strokeText(t,x,y);
-  g.fillStyle=col; g.fillText(t,x,y);
-}
-function arrow(g,a,b,u,col){
-  var L=Math.hypot(b.x-a.x,b.y-a.y); if(L<u*.8) return;
-  g.strokeStyle=col; g.fillStyle=col;
-  g.beginPath(); g.moveTo(a.x,a.y); g.lineTo(b.x,b.y); g.stroke();
-  var an=Math.atan2(b.y-a.y,b.x-a.x), s=Math.min(u*1.4,L/2.5);
-  g.beginPath(); g.moveTo(b.x,b.y); g.lineTo(b.x-s*Math.cos(an-.42),b.y-s*Math.sin(an-.42));
-  g.lineTo(b.x-s*Math.cos(an+.42),b.y-s*Math.sin(an+.42)); g.closePath(); g.fill();
-}
-/* écart coté : ΔX horizontal puis ΔY vertical, du centre attendu au centre réel */
-/* les valeurs ΔX / ΔY s'écrivent le long des flèches quand elles sont assez longues,
-   sinon dans l'étiquette, posée en retrait avec une ligne de rappel */
-function drawEcart(g,P,C,R,u,label,extra){
-  var a=P(C.X,C.Y), b=P(R.X,R.Y), m={x:b.x,y:a.y}, dx=R.X-C.X, dy=R.Y-C.Y, red="#c62a1f";
-  var hasX=Math.abs(dx)>=.005, hasY=Math.abs(dy)>=.005;
-  var inX=hasX&&Math.abs(m.x-a.x)>u*16, inY=hasY&&Math.abs(b.y-m.y)>u*7, rest=[];
-  g.save(); g.lineWidth=u*.32;
-  g.setLineDash([u*.6,u*.6]); g.strokeStyle=red; g.beginPath(); g.moveTo(a.x,a.y); g.lineTo(b.x,b.y); g.stroke(); g.setLineDash([]);
-  if(hasX){ arrow(g,a,m,u,red); if(inX){ g.textAlign="center"; haloText(g,"ΔX "+cm(dx),(a.x+m.x)/2,a.y+(dy>0?-u*1.3:u*3.1),red,u); } else rest.push("ΔX "+cm(dx)); }
-  if(hasY){ arrow(g,m,b,u,red); if(inY){ g.textAlign=dx>=0?"left":"right"; haloText(g,"ΔY "+cm(dy),m.x+(dx>=0?u*1.3:-u*1.3),(m.y+b.y)/2+u*.8,red,u); } else rest.push("ΔY "+cm(dy)); }
-  g.fillStyle=red; g.beginPath(); g.arc(a.x,a.y,u*.55,0,6.2832); g.fill();
-  /* l'étiquette va du côté où elle tient ; sinon ses détails passent sur plusieurs lignes */
-  var parts=rest.concat(extra||[]), W=g.canvas.width, H=g.canvas.height;
-  g.font="700 "+(u*2.3)+"px Arial, sans-serif"; var wl=g.measureText(label).width;
-  g.font="500 "+(u*2.3)+"px Arial, sans-serif";
-  var wj=parts.length? g.measureText(parts.join(" · ")).width : 0;
-  var wp=Math.max.apply(null,[0].concat(parts.map(function(p){ return g.measureText(p).width; })));
-  var roomR=W-u*2-(b.x+u*11.2), roomL=b.x-u*11.2-u*2, n1=Math.max(wl,wj), n2=Math.max(wl,wp);
-  var sx=dx>=0?1:-1, multi=false, R=function(s){ return s>0?roomR:roomL; };
-  /* ordre de préférence : une ligne côté naturel, une ligne de l'autre côté, puis plusieurs lignes là où il y a le plus de place */
-  if(n1<=R(sx)){} else if(n1<=R(-sx)) sx=-sx;
-  else{ multi=true; if(n2>R(sx)&&(n2<=R(-sx)||R(-sx)>R(sx))) sx=-sx; }
-  var lines=!parts.length? [] : multi? parts : [parts.join(" · ")];
-  var hh=u*(3+2.8*lines.length), sy=dy>=0?1:-1;
-  if(sy>0&&b.y+u*7+hh>H-u*8) sy=-1; else if(sy<0&&b.y-u*7-u*2.5<u*2) sy=1;
-  var q={x:b.x+sx*u*9, y:b.y+sy*u*7};
-  g.strokeStyle=red; g.lineWidth=u*.22; g.beginPath(); g.moveTo(b.x,b.y); g.lineTo(q.x,q.y); g.lineTo(q.x+sx*u*1.5,q.y); g.stroke();
-  g.textAlign=sx>0?"left":"right";
-  var tx=q.x+sx*u*2.2, ty=q.y+u*.9;
-  haloText(g,label,tx,ty,red,u,700);
-  lines.forEach(function(s,i){ haloText(g,s,tx,ty+u*2.8*(i+1),red,u,500); });
-  g.restore(); g.textAlign="left";
-}
-function drawMarks(g,P,vs,rows,u){
-  rows.forEach(function(r){
-    var sh=r.sh, col=colOf(r.orig), A=1, rs=null;
-    g.save();
-    if(sh.from){ g.globalAlpha=A*.8; shapePath(g,r.orig,P,vs); g.setLineDash([u*.8,u*.8]); g.strokeStyle="#7a7a7a"; g.lineWidth=u*.22; g.stroke(); g.setLineDash([]); }
-    shapePath(g,sh,P,vs); g.globalAlpha=A*.16; g.fillStyle=col; g.fill(); g.globalAlpha=A; g.strokeStyle=col; g.lineWidth=u*.42; g.stroke();
-    if(r.ko&&r.o.real){
-      rs=realShape(sh,r.o); shapePath(g,rs,P,vs); g.globalAlpha=A*.12; g.fillStyle="#d8352a"; g.fill(); g.globalAlpha=A;
-      g.setLineDash([u*1.3,u*.8]); g.strokeStyle="#d8352a"; g.lineWidth=u*.42; g.stroke(); g.setLineDash([]);
+
+/* annotations vectorielles d'un niveau */
+function annotate(info,l,rows,F,title){
+  var L=window.PDFLib, page=info.page, Wd=info.Wd, Hd=info.Hd, k=info.k, ppm=cal(l).s*k;
+  var Tz=Math.max(7,Math.min(16,Math.min(Wd,Hd)/90)), lw=Math.max(.6,Tz/10), pad=Tz*.35, lh=Tz*1.22;
+  var RED=L.rgb(.78,.16,.12), WHITE=L.rgb(1,1,1), GREY=L.rgb(.45,.45,.45), boxes=[];
+  function col(hex){ var c=hexRGB(hex); return L.rgb(c[0]/255,c[1]/255,c[2]/255); }
+  function td(X,Y){ var p=w2p(l,X,Y); return {x:p.x*k, y:p.y*k}; }         /* haut → bas */
+  function bu(X,Y){ var p=td(X,Y); return {x:p.x, y:Hd-p.y}; }             /* bas → haut (pdf-lib) */
+  function shape(s,o){
+    if(s.t==="rect"){
+      var p=corners(s).map(function(q){ return td(q[0],q[1]); });
+      page.drawSvgPath("M "+p.map(function(q){ return q.x.toFixed(2)+" "+q.y.toFixed(2); }).join(" L ")+" Z",
+        {x:0,y:Hd,color:o.fill,opacity:o.op,borderColor:o.color,borderWidth:o.width,borderOpacity:1,borderDashArray:o.dash});
+    }else{
+      var c=bu(s.x,s.y);
+      page.drawCircle({x:c.x,y:c.y,size:Math.max(s.r*ppm,.8),color:o.fill,opacity:o.op,borderColor:o.color,borderWidth:o.width,borderOpacity:1,borderDashArray:o.dash});
     }
-    var tl=P(sh.t==="rect"?sh.x:sh.x-sh.r, sh.t==="rect"?sh.y:sh.y-sh.r);
-    g.textAlign="left";
-    haloText(g,sh.n+(sh.from?"  ↳ "+lvName(sh.from):""),tl.x,tl.y-u*.9,r.ko?"#c62a1f":col,u,600);
-    if(rs) drawEcart(g,P,centerOf(sh),centerOf(rs),u,"écart "+Math.round(ecart(sh,r.o).d*100)+" cm",
-      dimsChanged(sh,r.o)?["réel "+dimTxt(rs)+" (prévu "+dimTxt(sh)+")"]:[]);
-    else if(r.ko) haloText(g,"anomalie (position non pointée)",tl.x,tl.y-u*3.8,"#c62a1f",u,700);
-    g.restore();
+  }
+  function arrow(a,b,color,w){
+    var len=Math.hypot(b.x-a.x,b.y-a.y); if(len<w*2) return;
+    page.drawLine({start:a,end:b,thickness:w,color:color});
+    var an=Math.atan2(b.y-a.y,b.x-a.x), s=Math.min(Tz*.7,len/2.5);
+    var p1={x:b.x-s*Math.cos(an-.4),y:b.y-s*Math.sin(an-.4)}, p2={x:b.x-s*Math.cos(an+.4),y:b.y-s*Math.sin(an+.4)};
+    page.drawSvgPath("M "+b.x+" "+(Hd-b.y)+" L "+p1.x+" "+(Hd-p1.y)+" L "+p2.x+" "+(Hd-p2.y)+" Z",{x:0,y:Hd,color:color,borderWidth:0});
+  }
+  function overlap(a,b){ return a.x<b.x+b.w&&b.x<a.x+a.w&&a.y<b.y+b.h&&b.y<a.y+a.h; }
+  function wrap(t,font,size,maxW){
+    var words=win(t).split(" "), out=[], cur="";
+    words.forEach(function(w){ var n=cur?cur+" "+w:w; if(font.widthOfTextAtSize(n,size)>maxW&&cur){ out.push(cur); cur=w; } else cur=n; });
+    if(cur) out.push(cur); return out;
+  }
+  /* lignes : [{t, b(gras), s(taille), c(couleur)}] → dimensions de la boîte */
+  function measure(lines){
+    var w=0; lines.forEach(function(li){ w=Math.max(w,(li.b?F.b:F.r).widthOfTextAtSize(li.t,li.s)); });
+    return {w:w+pad*2, h:lines.reduce(function(h,li){ return h+li.s*1.22; },0)+pad*1.4};
+  }
+  function drawBox(b,lines,border){
+    var ro={x:b.x,y:b.y,width:b.w,height:b.h,color:WHITE,opacity:.93};
+    if(border){ ro.borderColor=border; ro.borderWidth=lw*.9; ro.borderOpacity=1; }
+    page.drawRectangle(ro);
+    var y=b.y+b.h-pad*.7;
+    lines.forEach(function(li){ y-=li.s; page.drawText(li.t,{x:b.x+pad,y:y+li.s*.12,size:li.s,font:li.b?F.b:F.r,color:li.c||L.rgb(0,0,0)}); y-=li.s*.22; });
+  }
+  /* emplacement libre près de (ax,ay), de préférence du côté (px,py), sans recouvrir une autre étiquette */
+  function place(w,h,ax,ay,px,py,gap){
+    for(var m=1;m<=4;m++){
+      var c=[[px,py],[px,-py],[-px,py],[-px,-py]];
+      for(var i=0;i<4;i++){
+        var x=c[i][0]>0? ax+gap*m : ax-gap*m-w, y=c[i][1]>0? ay+gap*m : ay-gap*m-h, b={x:x,y:y,w:w,h:h};
+        if(x<3||y<3||x+w>Wd-3||y+h>Hd-3) continue;
+        if(boxes.some(function(o){ return overlap(o,b); })) continue;
+        boxes.push(b); return b;
+      }
+    }
+    var f={x:Math.min(Math.max(3,ax+gap),Wd-w-3),y:Math.min(Math.max(3,ay+gap),Hd-h-3),w:w,h:h}; boxes.push(f); return f;
+  }
+  function leader(from,b){
+    var to={x:Math.min(Math.max(from.x,b.x),b.x+b.w), y:Math.min(Math.max(from.y,b.y),b.y+b.h)};
+    page.drawLine({start:from,end:to,thickness:lw*.7,color:RED});
+  }
+
+  /* cartouche */
+  var kos=rows.filter(function(r){ return r.ko; }).length;
+  var head=[{t:win(l.name+" — contrôle des réservations"),b:1,s:Tz*1.3},
+    {t:win([title,today()].filter(Boolean).join("  ·  ")),s:Tz*.8,c:GREY},
+    {t:win(rows.length+" réservation(s)  ·  "+kos+" anomalie(s)"),b:1,s:Tz*.85,c:kos?RED:L.rgb(0,0,0)},
+    {t:win("Trait plein : position attendue  ·  Pointillé rouge : position réelle"),s:Tz*.72,c:GREY},
+    {t:win("Écart X + vers la droite, Y + vers le bas du plan"),s:Tz*.72,c:GREY}];
+  /* le cartouche va dans un bandeau ajouté au-dessus du plan : rien du plan n'est masqué */
+  var hm=measure(head), band=hm.h+Tz*1.2;
+  page.setSize(Wd,Hd+band);
+  var hb={x:Tz*.6,y:Hd+Tz*.6,w:hm.w,h:hm.h};
+  page.drawLine({start:{x:0,y:Hd},end:{x:Wd,y:Hd},thickness:lw*.6,color:GREY});
+
+  /* contours : projet d'origine (si correction reprise), position attendue, position réelle */
+  rows.forEach(function(r){
+    var c=col(colOf(r.orig));
+    if(r.sh.from) shape(r.orig,{color:GREY,fill:undefined,op:0,width:lw*.6,dash:[lw*2,lw*2]});
+    shape(r.sh,{color:c,fill:c,op:.15,width:lw});
+    if(r.ko&&r.o.real) shape(realShape(r.sh,r.o),{color:RED,fill:RED,op:.12,width:lw*1.1,dash:[lw*4,lw*2.5]});
   });
-}
-function scaleBar(g,vs,H,u){
-  var want=u*25/vs, steps=[.05,.1,.2,.25,.5,1,2,5,10,20,50,100], L=steps[steps.length-1];
-  for(var i=0;i<steps.length;i++) if(steps[i]>=want){ L=steps[i]; break; }
-  var px=L*vs, x=u*4, y=H-u*4;
-  g.save(); g.globalAlpha=.88; g.fillStyle="#fff"; g.fillRect(x-u*1.5,y-u*4.5,px+u*14,u*6.3); g.globalAlpha=1;
-  g.fillStyle="#222"; g.fillRect(x,y-u*1.2,px/2,u*1.2); g.strokeStyle="#222"; g.lineWidth=u*.25; g.strokeRect(x,y-u*1.2,px,u*1.2);
-  g.font="600 "+(u*2.2)+"px Arial, sans-serif"; g.fillText(L<1? Math.round(L*100)+" cm" : L+" m",x+px+u*1.5,y);
-  g.restore();
-}
-/* rendu d'une zone du plan (coordonnées monde, m) en image W×H px ; u = px par mm de papier */
-function viewCanvas(lv,view,W,H,rows,u){
-  var c=document.createElement("canvas"); c.width=W; c.height=H;
-  var g=c.getContext("2d"); g.fillStyle="#fff"; g.fillRect(0,0,W,H);
-  var vs=Math.min(W/(view.x1-view.x0),H/(view.y1-view.y0));
-  var tx=(W-(view.x1+view.x0)*vs)/2, ty=(H-(view.y1+view.y0)*vs)/2;
-  function P(X,Y){ return {x:X*vs+tx, y:Y*vs+ty}; }
-  var cc=cal(lv), k=vs/cc.s;
-  return pdfTile(lv,view,k).then(function(tile){
-    g.save();
-    g.setTransform(k*cc.co,-k*cc.si,k*cc.si,k*cc.co, tx-k*(cc.co*cc.ax+cc.si*cc.ay), ty-k*(-cc.si*cc.ax+cc.co*cc.ay));
-    g.imageSmoothingQuality="high";
-    try{ if(tile) g.drawImage(tile.cv,tile.x0,tile.y0,tile.w,tile.h); else if(lv.img) g.drawImage(lv.img,0,0); }catch(e){}
-    g.restore();
-    drawMarks(g,P,vs,rows,u);
-    scaleBar(g,vs,H,u);
-    return c;
+  /* écarts cotés */
+  rows.forEach(function(r){
+    if(!(r.ko&&r.o.real)) return;
+    var C=centerOf(r.sh), R=centerOf(realShape(r.sh,r.o)), a=bu(C.X,C.Y), b=bu(R.X,R.Y), m=bu(R.X,C.Y);
+    page.drawLine({start:a,end:b,thickness:lw*.5,color:RED,dashArray:[lw,lw]});
+    if(Math.abs(R.X-C.X)>=.005) arrow(a,m,RED,lw*.9);
+    if(Math.abs(R.Y-C.Y)>=.005) arrow(m,b,RED,lw*.9);
+    page.drawCircle({x:a.x,y:a.y,size:lw*1.3,color:RED});
   });
+  /* noms des réservations conformes ou non contrôlées */
+  rows.forEach(function(r){
+    if(r.ko) return;
+    var s=r.sh, tl=bu(s.t==="rect"?s.x:s.x-s.r, s.t==="rect"?s.y:s.y-s.r);
+    var t=win(s.n+(s.from?" (repris de "+lvName(s.from)+")":"")), sz=Tz*.7, w=F.b.widthOfTextAtSize(t,sz)+pad, h=sz*1.3;
+    var b={x:Math.min(Math.max(3,tl.x),Wd-w-3), y:Math.min(tl.y+lw,Hd-h-3), w:w, h:h};
+    page.drawRectangle({x:b.x,y:b.y,width:b.w,height:b.h,color:WHITE,opacity:.8});
+    page.drawText(t,{x:b.x+pad/2,y:b.y+sz*.3,size:sz,font:F.b,color:col(colOf(r.orig))});
+    boxes.push(b);
+  });
+  /* étiquettes des anomalies */
+  rows.forEach(function(r){
+    if(!r.ko) return;
+    var s=r.sh, o=r.o, rs=o.real?realShape(s,o):null, ec=rs?ecart(s,o):null;
+    var lines=[{t:win(s.n+(ec?" — écart "+Math.round(ec.d*100)+" cm":" — anomalie")),b:1,s:Tz,c:RED}];
+    if(ec) lines.push({t:win("X "+cm(ec.dx)+"   ·   Y "+cm(ec.dy)),b:1,s:Tz*.85,c:RED});
+    else lines.push({t:win("position réelle non pointée"),s:Tz*.8,c:RED});
+    if(rs&&dimsChanged(s,o)) lines.push({t:win("réel "+dimTxt(rs)+"  (prévu "+dimTxt(s)+")"),s:Tz*.8});
+    if(o.c) wrap(o.c,F.r,Tz*.8,Tz*24).slice(0,3).forEach(function(t){ lines.push({t:t,s:Tz*.8}); });
+    if(s.from) lines.push({t:win("position attendue reprise de "+lvName(s.from)),s:Tz*.72,c:GREY});
+    var anchor=rs? bu(centerOf(rs).X,centerOf(rs).Y) : bu(centerOf(s).X,centerOf(s).Y);
+    var px=ec&&ec.dx<0?-1:1, py=ec&&ec.dy>0?-1:1, mz=measure(lines);
+    var b=place(mz.w,mz.h,anchor.x,anchor.y,px,py,Tz*2.5);
+    leader(anchor,b); drawBox(b,lines,RED);
+  });
+  drawBox(hb,head,null);
 }
-function pad(v,m){ return {x0:v.x0-m,y0:v.y0-m,x1:v.x1+m,y1:v.y1+m}; }
-var EXPORT_FMT="png";   /* PNG : traits nets sans artefacts de compression */
-function exportPlans(fmt,prog){
-  var J=window.jspdf&&window.jspdf.jsPDF;
-  if(!J) return Promise.reject(new Error("module PDF non chargé"));
+
+function exportPlans(prog){
+  var L=window.PDFLib;
+  if(!L) return Promise.reject(new Error("module PDF non chargé"));
   var lvs=levelsUp(); if(!lvs.length) return Promise.reject(new Error("aucun niveau calé (échelle + repère)"));
-  var doc=new J({orientation:"landscape",unit:"mm",format:fmt,compress:true});
-  var Wp=doc.internal.pageSize.getWidth(), Hp=doc.internal.pageSize.getHeight(), M=8, title=S.title||"";
-  var chain=Promise.resolve();
+  var out, F={}, cache=new Map(), title=S.title||"";
+  var chain=L.PDFDocument.create().then(function(d){ out=d;
+    return Promise.all([out.embedFont(L.StandardFonts.Helvetica),out.embedFont(L.StandardFonts.HelveticaBold)]); })
+    .then(function(f){ F.r=f[0]; F.b=f[1]; });
   lvs.forEach(function(l,i){ chain=chain.then(function(){
     prog("Plan "+(i+1)+" / "+lvs.length+" — "+l.name+"…");
-    var rows=exportRows(l), kos=rows.filter(function(r){ return r.ko; }).length;
-    if(i>0) doc.addPage();
-    doc.setFont("helvetica","bold"); doc.setFontSize(12); doc.setTextColor(0); T(doc,l.name,M,M+3.5);
-    doc.setFont("helvetica","normal"); doc.setFontSize(8.5); doc.setTextColor(90);
-    T(doc,[title,"Échelle "+scaleTxt(l),rows.length+" réservation(s)",kos+" anomalie(s)",today()].filter(Boolean).join("  ·  "),Wp-M,M+3.5,{align:"right"});
-    doc.setTextColor(0);
-    var top=M+6, iw=Wp-2*M, ih=Hp-top-M;
-    return viewCanvas(l,pad(planBounds(l),.1),Math.round(iw*PPMM),Math.round(ih*PPMM),rows,PPMM).then(function(cv){
-      var data=EXPORT_FMT==="png"? cv.toDataURL("image/png") : cv.toDataURL("image/jpeg",.95);
-      doc.addImage(data,EXPORT_FMT==="png"?"PNG":"JPEG",M,top,iw,ih,undefined,"FAST");
-      doc.setDrawColor(210); doc.rect(M,top,iw,ih);
-    });
+    return levelPage(out,l,cache).then(function(info){ annotate(info,l,exportRows(l),F,title); });
   }); });
-  return chain.then(function(){ var f=fname("Plans"); doc.save(f); return f; });
+  return chain.then(function(){ prog("Écriture du PDF…"); return out.save(); }).then(function(bytes){
+    var f=fname("Plans"), a=document.createElement("a");
+    a.href=URL.createObjectURL(new Blob([bytes],{type:"application/pdf"})); a.download=f;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function(){ URL.revokeObjectURL(a.href); },60000);
+    return f;
+  });
 }
 
 document.getElementById("repBtn").onclick=function(){
   var old=document.getElementById("expSheet"); if(old) old.remove();
-  var lvs=levelsUp(), skip=S.levels.length-lvs.length, h=hiddenLayers(), fmtSel="a3";
+  var lvs=levelsUp(), skip=S.levels.length-lvs.length, h=hiddenLayers(), imgs=lvs.filter(function(l){ return !l.pdf; }).length;
   var d=document.createElement("div"); d.className="sheet"; d.id="expSheet";
   d.innerHTML='<h3>Exporter les plans</h3>'+
-    '<p>Un PDF, une page par niveau, avec les réservations et les écarts cotés (ΔX, ΔY, écart total).</p>'+
+    '<p>Un PDF, une page par niveau : le plan d\'origine tel quel (vectoriel, net à tout zoom, à son format) avec les réservations et les écarts annotés par-dessus.</p>'+
     '<div class="fld"><label>Chantier</label><input id="r_t" type="text" value="'+esc(S.title||"")+'" placeholder="ex. Résidence Les Tilleuls — lot gros œuvre"></div>'+
-    '<div class="fld" style="margin-top:9px"><label>Format</label><div class="seg" id="r_f"><button data-f="a3" class="on">A3 paysage</button><button data-f="a4">A4 paysage</button></div></div>'+
     '<p style="margin:9px 0 0;font-size:12px">'+lvs.length+' niveau'+(lvs.length>1?"x":"")+
       (skip?' · <b>'+skip+' niveau'+(skip>1?"x":"")+' non calé'+(skip>1?"s":"")+'</b>, ignoré'+(skip>1?"s":""):'')+
       (h.length?' · calque'+(h.length>1?"s":"")+' masqué'+(h.length>1?"s":"")+' non inclus : <b>'+h.map(function(l){ return esc(l.name); }).join(", ")+'</b>':'')+'</p>'+
+    (imgs?'<p style="margin:6px 0 0;font-size:12px;color:var(--muted)">'+imgs+' plan'+(imgs>1?"s":"")+' importé'+(imgs>1?"s":"")+' en image : repris à la résolution de l\'image. Importez le PDF pour un rendu net.</p>':'')+
     '<p id="r_p" style="margin:6px 0 0;font-size:12px;color:var(--blue);min-height:16px"></p>'+
     '<div class="acts"><button class="btn" id="ko">Fermer</button><button class="btn primary" id="goP">Exporter les plans</button></div>';
   stage.appendChild(d);
   d.querySelector("#ko").onclick=function(){ d.remove(); };
-  d.querySelector("#r_f").addEventListener("click",function(e){
-    var b=e.target.closest("button"); if(!b) return; fmtSel=b.dataset.f;
-    Array.prototype.forEach.call(this.children,function(x){ x.classList.toggle("on",x===b); }); });
   d.querySelector("#goP").onclick=function(){
     var b=this, p=d.querySelector("#r_p");
     S.title=d.querySelector("#r_t").value; save(); b.disabled=true;
-    var pr; try{ pr=exportPlans(fmtSel,function(t){ p.textContent=t; }); }catch(err){ pr=Promise.reject(err); }
+    var pr; try{ pr=exportPlans(function(t){ p.textContent=t; }); }catch(err){ pr=Promise.reject(err); }
     pr.then(function(f){ p.textContent="Fichier généré : "+f; b.disabled=false; })
       .catch(function(err){ p.textContent=""; b.disabled=false; note("Export impossible : "+(err&&err.message||err)); });
   };
