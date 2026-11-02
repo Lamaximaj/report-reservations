@@ -50,6 +50,26 @@ Ou ouvrir `index.html` dans un navigateur, ou le servir depuis un NAS.
   réservations y sont rangées. Le calque d'une réservation se change dans Propriétés.
   Supprimer un calque déplace ses réservations dans un autre calque.
 
+## Objets (types de réservation)
+
+- Onglet **Objets** à côté de Calques : un objet = un type de réservation (GT, VH, VB…)
+  avec code, désignation, forme, cotes, couleur et calque. **+** en crée un.
+- Cliquer un objet (ou « Poser »), puis cliquer sur le plan : chaque clic pose une
+  réservation numérotée à la suite (GT 1, GT 2… ; en reprenant l'objet plus tard, on
+  repart du plus grand numéro). `Échap` ou clic droit pour terminer.
+- Changer le code d'un objet renomme ses réservations « GT n » → « GTH n » (les noms
+  personnalisés ne changent pas). Les cotes modifiées valent pour les prochaines poses.
+- Le ▶ d'un objet ouvre ses réglages et la liste de ses réservations.
+
+## Report des corrections aux étages
+
+Une anomalie pointée (position et dimensions réelles) sur un niveau devient la position
+attendue des niveaux du dessus : la réservation y apparaît recalée, marquée « ↳ R+1 »,
+avec le contour du projet en filigrane. Un nouvel écart sur ces niveaux se mesure par
+rapport à cette position corrigée. Décocher « Reporter cette correction aux niveaux du
+dessus » (Propriétés) leur fait reprendre la position du projet, par exemple pour une
+réservation à recouper.
+
 ## Raccourcis
 
 `V` sélection · `R` rectangle · `C` ronde · `M` mesure · `E` échelle · `P` repère ·

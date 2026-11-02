@@ -123,6 +123,18 @@ button{cursor:pointer}
 .ly.off .lnm,.ly.off .lsw,.ly.off .cnt{opacity:.45}
 .ly .act{display:none}
 .ly.on .act{display:inline}
+/* objets : même rangée que les calques, colonnes différentes */
+.ob{grid-template-columns:18px 14px 44px minmax(0,1fr) auto auto auto}
+.ob.on{background:var(--accent-soft)}
+.ob .code{width:100%;min-width:0;background:transparent;border:0;padding:0;font-family:var(--f-num);font-size:12.5px;font-weight:600}
+.ob .code:focus{outline:0;border-bottom:1px solid var(--blue)}
+.ob .lbl{font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ob.on [data-go]{background:var(--accent);border-color:var(--accent);color:#fff}
+.obed{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;padding:8px 10px 9px 30px;border-bottom:1px solid var(--line-soft)}
+.obed .full{grid-column:1/-1}
+.card header .seg{padding:2px;gap:2px}
+.card header .seg button{flex:none;padding:3px 8px;font-size:11.5px}
+.inh{margin:0;font-size:11.5px;color:var(--blue);line-height:1.4}
 .res.sub{padding-left:30px}
 .res.hide{opacity:.45}
 .res.none{cursor:default;color:var(--muted);font-size:11.5px;font-style:italic}
@@ -230,14 +242,15 @@ canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-acti
 
     <section class="card" id="cardLy">
       <header>
-        <h2>Calques</h2>
+        <div class="seg" id="lstSeg"><button data-v="ly" class="on">Calques</button><button data-v="ob">Objets</button></div>
         <span class="sp"></span>
-        <button class="btn sm" id="addLy" title="Nouveau calque">+ Calque</button>
+        <button class="btn sm" id="addLy" title="Nouveau calque">+</button>
         <button class="btn sm" id="repBtn">Rapport</button>
         <button class="btn ghost sm" id="jsonBtn" title="Sauvegarde / restauration">⇄</button>
         <button class="btn ghost sm" data-hide="ly" title="Masquer le panneau">–</button>
       </header>
       <div class="scroll" id="rsList"></div>
+      <div class="scroll" id="obList" hidden></div>
     </section>
   </aside>
 
@@ -298,7 +311,7 @@ try{ if(window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.c
 var S={ levels:[], shapes:[], activeId:null, selId:null, tool:"select",
         view:{s:1,tx:0,ty:0}, under:"", underOp:.45, grid:false, seq:1,
         asc:true,            /* true : le 1er de la liste est le niveau le plus bas */
-        title:"", layers:[], activeLayer:null, ui:{lv:true,ly:true,pr:true} };
+        title:"", layers:[], activeLayer:null, types:undefined, ui:{lv:true,ly:true,pr:true,lst:"ly"} };
 var PAL=["#c8492a","#1f6f8b","#2d7a4f","#8a5bbf","#9d7312","#1f8b7e"];
 var cv=document.getElementById("cv"), ctx=cv.getContext("2d"), dpr=1;
 var stage=document.getElementById("stage");
@@ -316,7 +329,39 @@ function fmt(v,d){ return (Math.round(v*Math.pow(10,d))/Math.pow(10,d)).toFixed(
 
 /* ============ calques ============ */
 function layerOf(sh){ return S.layers.find(function(l){ return l.id===sh.ly; })||null; }
-function colOf(sh){ var l=layerOf(sh); return l? l.c : (sh.c||PAL[0]); }
+function colOf(sh){ var t=sh.ty&&typeOf(sh.ty); if(t) return t.c; var l=layerOf(sh); return l? l.c : (sh.c||PAL[0]); }
+function typeOf(id){ return (S.types||[]).find(function(t){ return t.id===id; })||null; }
+function escRe(s){ return String(s).replace(/[.*+?^${}()|[\]\\]/g,"\\$&"); }
+function typeDim(t){ return t.t==="rect"? Math.round(t.w*100)+"×"+Math.round(t.h*100)+" cm" : "Ø"+Math.round(t.r*200)+" cm"; }
+/* objets : types de réservation (GT, VH, VB…) avec forme, cotes, couleur et calque par défaut */
+function fixTypes(){
+  if(!Array.isArray(S.types)) S.types=[
+    {code:"GT",name:"Gaine technique",t:"rect",w:.6,h:.4},
+    {code:"VH",name:"Ventilation haute",t:"circle",r:.1},
+    {code:"VB",name:"Ventilation basse",t:"circle",r:.1}
+  ].map(function(d,i){ d.id=uid(); d.c=PAL[[0,1,3][i]]; return d; });
+  S.types=S.types.filter(function(t){ return t&&t.id; });
+  S.types.forEach(function(t){
+    if(!/^#[0-9a-f]{6}$/i.test(t.c||"")) t.c=PAL[0];
+    t.code=String(t.code||"OBJ"); t.name=String(t.name||""); if(t.t!=="circle") t.t="rect";
+    if(t.t==="rect"){ if(!(t.w>0)) t.w=.5; if(!(t.h>0)) t.h=.5; } else if(!(t.r>0)) t.r=.1;
+    if(!S.layers.some(function(l){ return l.id===t.ly; })) t.ly=S.activeLayer;
+  });
+  S.shapes.forEach(function(s){ if(s.ty&&!typeOf(s.ty)) delete s.ty; });
+}
+/* « GT » → « GT n+1 », n = plus grand numéro déjà utilisé */
+function typeName(code){
+  var re=new RegExp("^"+escRe(code)+"\\s+(\\d+)$","i"), max=0;
+  S.shapes.forEach(function(x){ var m=String(x.n).trim().match(re); if(m) max=Math.max(max,parseInt(m[1],10)); });
+  return code+" "+(max+1);
+}
+/* changement de code : « GT 3 » devient « GTH 3 », les noms personnalisés ne bougent pas */
+function renameType(t,old){
+  if(!old||old===t.code) return 0;
+  var re=new RegExp("^"+escRe(old)+"(\\s+\\d+)$","i"), n=0;
+  S.shapes.forEach(function(s){ if(s.ty!==t.id) return; var m=String(s.n).trim().match(re); if(m){ s.n=t.code+m[1]; n++; } });
+  return n;
+}
 function shown(sh){ var l=layerOf(sh); return !l||l.vis!==false; }
 function newLayer(name){ var n=S.layers.length;
   var l={id:uid(), name:name||("Calque "+(n+1)), c:PAL[n%PAL.length], vis:true, open:true};
@@ -328,6 +373,7 @@ function fixLayers(){
   if(!S.layers.length) newLayer("Réservations");
   if(!S.layers.some(function(l){ return l.id===S.activeLayer; })) S.activeLayer=S.layers[0].id;
   S.shapes.forEach(function(s){ if(!layerOf(s)) s.ly=S.layers[0].id; });
+  fixTypes();
 }
 
 /* ============ géométrie ============ */
@@ -387,7 +433,7 @@ function db(){ return new Promise(function(res,rej){
 function pack(){ return { levels:S.levels.map(function(l){
     return {id:l.id,name:l.name,src:l.src,w:l.w,h:l.h,scale:l.scale,org:l.org,rot:l.rot,pdf:l.pdf}; }),
     shapes:S.shapes, activeId:S.activeId, seq:S.seq, demo:S.demo, asc:S.asc, title:S.title,
-    layers:S.layers, activeLayer:S.activeLayer, ui:S.ui }; }
+    layers:S.layers, activeLayer:S.activeLayer, types:S.types, ui:S.ui }; }
 var saveT=null;
 function save(){ clearTimeout(saveT); saveT=setTimeout(function(){
   db().then(function(d){ var t=d.transaction("kv","readwrite"); t.objectStore("kv").put(pack(),"project"); })
@@ -570,6 +616,26 @@ function dimPair(sh,o){ var r=realShape(sh,o);
   if(!r||!dimsChanged(sh,o)) return dimTxt(sh);
   return dimTxt(sh).replace(/ cm$/,"")+" → "+dimTxt(r); }
 function inShape(r,W){ return r.t==="rect"? (W.X>=r.x&&W.X<=r.x+r.w&&W.Y>=r.y&&W.Y<=r.y+r.h) : Math.hypot(W.X-r.x,W.Y-r.y)<=r.r; }
+/* position attendue sur un niveau : la dernière correction pointée en dessous (et reportée)
+   remplace la position du projet pour les niveaux du dessus ; .from = niveau d'où elle vient */
+function at(sh,lvId){
+  var i=lvIndex(lvId); if(i<0||!sh.obs) return sh;
+  var below=S.asc? S.levels.slice(0,i).reverse() : S.levels.slice(i+1);
+  for(var k=0;k<below.length;k++){
+    var L=below[k]; if(!onLevel(sh,L.id)) continue;
+    var o=sh.obs[L.id];
+    if(o&&o.st==="ko"&&o.real&&o.prop!==false){
+      var r=realShape(at(sh,L.id),o);
+      return Object.assign({},sh,r,{t:sh.t,from:L.id});
+    }
+  }
+  return sh;
+}
+function lvName(id){ var i=lvIndex(id); return i>=0? S.levels[i].name : "?"; }
+/* niveaux qui reprennent la correction pointée sur lvId */
+function heirs(sh,lvId){ return S.levels.filter(function(L){ return L.id!==lvId&&onLevel(sh,L.id)&&at(sh,L.id).from===lvId; })
+  .map(function(L){ return L.name; }); }
+function centerOf(s){ return {X:s.t==="rect"?s.x+s.w/2:s.x, Y:s.t==="rect"?s.y+s.h/2:s.y}; }
 function lvIndex(id){ for(var i=0;i<S.levels.length;i++) if(S.levels[i].id===id) return i; return -1; }
 function idsFrom(id,up){   /* niveaux à partir de id, vers le haut ou vers le bas du bâtiment */
   var i=lvIndex(id); if(i<0) return null;
@@ -580,7 +646,20 @@ function corners(sh){
   return [[sh.x-sh.r,sh.y-sh.r],[sh.x+sh.r,sh.y-sh.r],[sh.x+sh.r,sh.y+sh.r],[sh.x-sh.r,sh.y+sh.r]];
 }
 function drawShape(sh,here,isSel){
-  var lvA=active(), o=(here&&lvA)?obsOf(sh,lvA.id):null;
+  var lvA=active();
+  if(here&&lvA&&sh.id!=="_"){
+    var att=at(sh,lvA.id);
+    if(att.from){
+      /* correction reportée : contour du projet en filigrane, réservation à sa position corrigée */
+      ctx.save(); ctx.globalAlpha=.35;
+      outline(sh,0,0,colOf(sh),[3,4],w2s,1);
+      var c1=centerOf(sh), c2=centerOf(att), p1=w2s(c1.X,c1.Y), p2=w2s(c2.X,c2.Y);
+      ctx.strokeStyle=colOf(sh); ctx.setLineDash([2,3]); ctx.beginPath(); ctx.moveTo(p1.x,p1.y); ctx.lineTo(p2.x,p2.y); ctx.stroke();
+      ctx.restore();
+      sh=att;
+    }
+  }
+  var o=(here&&lvA)?obsOf(sh,lvA.id):null;
   var ko=!!(o&&o.st==="ko");
   var col=ko? "#d8352a" : colOf(sh);
   ctx.save();
@@ -605,7 +684,7 @@ function drawShape(sh,here,isSel){
   /* étiquette */
   if(S.view.s>5){
     var tl=w2s(sh.t==="rect"?sh.x:sh.x-sh.r, sh.t==="rect"?sh.y:sh.y-sh.r);
-    var txt=sh.n+"  "+dimTxt(sh);
+    var txt=sh.n+"  "+dimTxt(sh)+(sh.from?"  ↳ "+lvName(sh.from):"");
     ctx.font="500 11px "+("'IBM Plex Mono', monospace");
     var w=ctx.measureText(txt).width+10;
     ctx.globalAlpha=here?.95:.6; ctx.fillStyle=col;
@@ -634,7 +713,7 @@ function drawShape(sh,here,isSel){
     ctx.fillStyle="#fff"; ctx.font="700 12px 'Archivo', sans-serif"; ctx.textAlign="center";
     ctx.fillText("!",bx.x+8,bx.y-3.5); ctx.textAlign="left";
   }
-  if(isSel && here){
+  if(isSel && here && !sh.from){
     ctx.globalAlpha=1; ctx.fillStyle=css("--panel"); ctx.strokeStyle=col; ctx.lineWidth=1.5;
     handles(sh).forEach(function(h){ var p=w2s(h.X,h.Y);
       ctx.beginPath(); ctx.rect(p.x-4,p.y-4,8,8); ctx.fill(); ctx.stroke(); });
@@ -772,11 +851,13 @@ function setTool(t){
   if(t!=="meas") meas=null;
   closeDock();
   if(t==="scale"){ openDock(); hint(""); }
-  else if(t==="stamp"){ var src=stampSrc(); hint("Cliquez sur le plan pour poser des copies de « "+(src?src.n:"")+" » — Échap ou clic droit pour terminer."); }
+  else if(t==="stamp") stampHint();
   else if(t==="org"){ hint("Cliquez le point de repère du plan — il devient l'origine (0,0) de ce niveau."); }
   else hint(t==="rect"?"Tracez le rectangle de la réservation.":t==="circle"?"Cliquez le centre puis tirez le rayon.":
        t==="meas"?"Tirez entre deux points — Maj pour contraindre à l'horizontale ou la verticale.":
        t==="real"?"Faites glisser la réservation jusqu'à sa position réelle sur le plan.":"");
+  Array.prototype.forEach.call(document.querySelectorAll("#obList .ob"),function(r){
+    r.classList.toggle("on",t==="stamp"&&!!objId&&r.dataset.id===objId); });
   draw();
 }
 document.addEventListener("keydown",function(e){
@@ -816,10 +897,9 @@ cv.addEventListener("pointerdown",function(e){
 
   if(S.tool==="real"){
     var sh=sel(); if(!sh){ setTool("select"); return; }
-    var oo=obs(sh,lv.id);
-    var cx=sh.t==="rect"?sh.x+sh.w/2:sh.x, cy=sh.t==="rect"?sh.y+sh.h/2:sh.y;
-    var gx=oo.real?oo.real.X:cx, gy=oo.real?oo.real.Y:cy;
-    var inside=inShape(realShape(sh,{real:{X:gx,Y:gy,w:oo.real&&oo.real.w,h:oo.real&&oo.real.h,r:oo.real&&oo.real.r}}),W);
+    var oo=obs(sh,lv.id), sa=at(sh,lv.id), c0=centerOf(sa);
+    var gx=oo.real?oo.real.X:c0.X, gy=oo.real?oo.real.Y:c0.Y;
+    var inside=inShape(realShape(sa,{real:{X:gx,Y:gy,w:oo.real&&oo.real.w,h:oo.real&&oo.real.h,r:oo.real&&oo.real.r}}),W);
     if(!inside){ gx=W.X; gy=W.Y; }
     oo.st="ko"; oo.real=Object.assign({},oo.real||{},{X:gx,Y:gy});
     drag={m:"real",id:sh.id,dx:W.X-gx,dy:W.Y-gy};
@@ -856,7 +936,7 @@ cv.addEventListener("pointerdown",function(e){
   var s=sel(), tol=7/S.view.s;
   if(s && onLevel(s,lv.id)){
     /* anomalie pointée : poignées rouges = dimensions réelles, intérieur = déplacer la position réelle */
-    var so=obsOf(s,lv.id), rsh=(so&&so.st==="ko")?realShape(s,so):null;
+    var sa=at(s,lv.id), so=obsOf(s,lv.id), rsh=(so&&so.st==="ko")?realShape(sa,so):null;
     if(rsh){
       var rh=handles(rsh);
       for(var j=0;j<rh.length;j++){
@@ -865,22 +945,25 @@ cv.addEventListener("pointerdown",function(e){
       }
       if(inShape(rsh,W)){ drag={m:"real",id:s.id,dx:W.X-so.real.X,dy:W.Y-so.real.Y,quiet:true}; return; }
     }
-    var hs=handles(s);
+    var hs=sa.from?[]:handles(s);
     for(var i=0;i<hs.length;i++){
       if(Math.abs(hs[i].X-W.X)<tol && Math.abs(hs[i].Y-W.Y)<tol){
         drag={m:"size",id:s.id,i:hs[i].i,o:JSON.parse(JSON.stringify(s))}; return; }
     }
   }
   var hit=pick(W,lv);
-  if(hit){ S.selId=hit.id; drag={m:"move",id:hit.id,dx:W.X-hit.x,dy:W.Y-hit.y}; renderAll(); return; }
+  if(hit){
+    var ha=at(hit,lv.id); S.selId=hit.id;
+    /* position reprise d'un niveau inférieur : on la corrige par un pointage, pas en déplaçant le projet */
+    if(ha.from){ renderAll(); if(hit.id!==(s&&s.id)) note("Position reprise de "+lvName(ha.from)+" — si elle est encore décalée ici : « Déplacer vers la position réelle »."); return; }
+    drag={m:"move",id:hit.id,dx:W.X-hit.x,dy:W.Y-hit.y}; renderAll(); return; }
   S.selId=null; renderAll();
   drag={m:"pan",x:p.x,y:p.y,tx:S.view.tx,ty:S.view.ty};
 });
 function pick(W,lv){
   for(var i=S.shapes.length-1;i>=0;i--){ var s=S.shapes[i];
     if(!onLevel(s,lv.id)||!shown(s)) continue;
-    if(s.t==="rect"){ if(W.X>=s.x&&W.X<=s.x+s.w&&W.Y>=s.y&&W.Y<=s.y+s.h) return s; }
-    else if(Math.hypot(W.X-s.x,W.Y-s.y)<=s.r) return s;
+    if(inShape(at(s,lv.id),W)) return s;
   }
   return null;
 }
@@ -963,14 +1046,15 @@ function endPtr(e){
   if(drag.m==="real"){
     var sr=S.shapes.find(function(x){return x.id===drag.id;}), lr=active(), quiet=drag.quiet&&!drag.moved;
     drag=null; setTool("select");
-    if(sr&&lr&&!quiet){ var ec2=ecart(sr,obsOf(sr,lr.id));
-      note("Position réelle enregistrée — écart "+(ec2?Math.round(ec2.d*100):0)+" cm. Tirez les poignées rouges pour reprendre les dimensions.",5000); }
+    if(sr&&lr&&!quiet){ var ec2=ecart(at(sr,lr.id),obsOf(sr,lr.id)), up=heirs(sr,lr.id);
+      note("Position réelle enregistrée — écart "+(ec2?Math.round(ec2.d*100):0)+" cm"+
+        (up.length?" · correction reportée sur "+up.join(", "):"")+". Tirez les poignées rouges pour reprendre les dimensions.",6000); }
     renderAll(); save(); return;
   }
   if(drag.m==="rsize"){
     var sq=S.shapes.find(function(x){return x.id===drag.id;}), lq=active();
     drag=null;
-    if(sq&&lq){ var oq=obsOf(sq,lq.id); note("Dimensions réelles : "+dimTxt(realShape(sq,oq))+" (prévu "+dimTxt(sq)+")."); }
+    if(sq&&lq){ var oq=obsOf(sq,lq.id), aq=at(sq,lq.id); note("Dimensions réelles : "+dimTxt(realShape(aq,oq))+" (prévu "+dimTxt(aq)+")."); }
     renderAll(); save(); return;
   }
   if(drag.m==="draw"&&drag.prev){
@@ -1180,25 +1264,110 @@ function renderShapes(){
     if(!open) return;
     if(!items.length){ var em=document.createElement("div"); em.className="res sub none"+(vis?"":" hide");
       em.textContent=S.levels.length?"vide — outils Rectangle / Ronde sur un plan calé":"vide"; box.appendChild(em); return; }
-    items.forEach(function(s){
-      var el=document.createElement("div");
-      el.className="res sub"+(s.id===S.selId?" on":"")+(vis?"":" hide");
-      var nb=s.levels? s.levels.length : S.levels.length;
-      var ko=koCount(s);
-      el.innerHTML='<span class="swatch" style="background:'+(ko?"#d8352a":ly.c)+'"></span>'+
-        '<div><div class="nm">'+esc(s.n)+(ko?' <span class="bad">'+ko+' anomalie'+(ko>1?'s':'')+'</span>':'')+'</div>'+
-        '<div class="dim">'+dimTxt(s)+' · '+nb+' niv.</div></div>'+
-        '<button class="btn ghost sm" data-rm>✕</button>';
-      el.onclick=function(e){ if(e.target.closest("[data-rm]")) return;
-        S.selId=s.id; ly.vis=true;
-        if(lv&&!onLevel(s,lv.id)){ var t=S.levels.find(function(l){ return onLevel(s,l.id)&&ready(l); }); if(t){ S.activeId=t.id; fit(); } }
-        centerOn(s); renderAll(); save(); };
-      el.querySelector("[data-rm]").onclick=function(){ delShape(s.id); };
-      box.appendChild(el);
+    items.forEach(function(s){ box.appendChild(resRow(s)); });
+  });
+  renderTypes();
+}
+function resRow(s){
+  var L=layerOf(s), vis=!L||L.vis!==false, lv=active();
+  var el=document.createElement("div");
+  el.className="res sub"+(s.id===S.selId?" on":"")+(vis?"":" hide");
+  var nb=s.levels? s.levels.length : S.levels.length;
+  var ko=koCount(s);
+  el.innerHTML='<span class="swatch" style="background:'+(ko?"#d8352a":colOf(s))+'"></span>'+
+    '<div><div class="nm">'+esc(s.n)+(ko?' <span class="bad">'+ko+' anomalie'+(ko>1?'s':'')+'</span>':'')+'</div>'+
+    '<div class="dim">'+dimTxt(s)+' · '+nb+' niv.</div></div>'+
+    '<button class="btn ghost sm" data-rm>✕</button>';
+  el.onclick=function(e){ if(e.target.closest("[data-rm]")) return;
+    S.selId=s.id; if(L) L.vis=true;
+    if(lv&&!onLevel(s,lv.id)){ var t=S.levels.find(function(l){ return onLevel(s,l.id)&&ready(l); }); if(t){ S.activeId=t.id; fit(); } }
+    var cur=active(); centerOn(cur&&onLevel(s,cur.id)? at(s,cur.id) : s); renderAll(); save(); };
+  el.querySelector("[data-rm]").onclick=function(){ delShape(s.id); };
+  return el;
+}
+/* onglet Objets : un type par rangée ; clic = poser ce type sur le plan */
+function renderTypes(){
+  var box=document.getElementById("obList"); if(!box) return;
+  box.innerHTML="";
+  if(!S.types.length){ box.innerHTML='<div class="empty">Aucun objet. <b>+</b> crée un type de réservation (GT, VH, VB…) : un clic dessus, puis un clic par réservation à poser.</div>'; return; }
+  S.types.forEach(function(t,ti){
+    var items=S.shapes.filter(function(s){ return s.ty===t.id; }), open=!!t.open;
+    var hd=document.createElement("div");
+    hd.className="ly ob"+(S.tool==="stamp"&&objId===t.id?" on":""); hd.dataset.id=t.id;
+    hd.title="Cliquer pour poser des "+t.code+" sur le plan";
+    hd.innerHTML='<button class="chev" data-ch title="'+(open?"Replier":"Réglages et réservations")+'">'+(open?"▼":"▶")+'</button>'+
+      '<label class="lsw" style="background:'+t.c+'" title="Couleur"><input type="color" value="'+t.c+'"></label>'+
+      '<input class="code" value="'+esc(t.code)+'" spellcheck="false" title="Code (renomme aussi les réservations « '+esc(t.code)+' n »)">'+
+      '<span class="lbl">'+esc(t.name?t.name+" · ":"")+typeDim(t)+'</span>'+
+      '<span class="cnt">'+items.length+'</span>'+
+      '<button class="btn sm" data-go>Poser</button>'+
+      '<button class="btn ghost sm" data-rm title="Supprimer l\'objet">✕</button>';
+    hd.onclick=function(e){ if(e.target.closest("button,input,label")) return; startObj(t); };
+    hd.querySelector("[data-go]").onclick=function(){ if(S.tool==="stamp"&&objId===t.id) setTool("select"); else startObj(t); };
+    hd.querySelector("[data-ch]").onclick=function(){ t.open=!open; renderTypes(); save(); };
+    var ci=hd.querySelector("input[type=color]");
+    ci.oninput=function(){ t.c=this.value; hd.querySelector(".lsw").style.background=this.value; draw(); };
+    ci.onchange=function(){ renderShapes(); save(); };
+    var cd=hd.querySelector(".code"), old=t.code;
+    cd.onfocus=function(){ old=t.code; };
+    cd.onkeydown=function(e){ if(e.key==="Enter") this.blur(); };
+    cd.onchange=function(){
+      var v=this.value.trim(); if(!v){ this.value=old; return; }
+      t.code=v; var n=renameType(t,old);
+      renderAll(); save();
+      if(n) note(n+" réservation"+(n>1?"s":"")+" renommée"+(n>1?"s":"")+" : « "+old+" n » → « "+v+" n ».");
+    };
+    hd.querySelector("[data-rm]").onclick=function(){
+      S.types.splice(ti,1); items.forEach(function(s){ delete s.ty; });
+      if(objId===t.id&&S.tool==="stamp") setTool("select");
+      renderAll(); save();
+      note("Objet « "+t.code+" » supprimé"+(items.length?" — ses "+items.length+" réservation"+(items.length>1?"s":"")+" sont conservées":"")+".");
+    };
+    box.appendChild(hd);
+    if(!open) return;
+    var ed=document.createElement("div"); ed.className="obed";
+    ed.innerHTML='<div class="fld full"><label>Désignation</label><input type="text" data-k="name" value="'+esc(t.name)+'" placeholder="ex. Gaine technique"></div>'+
+      '<div class="fld"><label>Forme</label><select data-k="t"><option value="rect"'+(t.t==="rect"?" selected":"")+'>Rectangle</option><option value="circle"'+(t.t==="circle"?" selected":"")+'>Ronde</option></select></div>'+
+      '<div class="fld"><label>Calque</label><select data-k="ly">'+S.layers.map(function(l){ return '<option value="'+l.id+'"'+(l.id===t.ly?" selected":"")+'>'+esc(l.name)+'</option>'; }).join("")+'</select></div>'+
+      (t.t==="rect"
+        ? '<div class="fld"><label>Largeur (cm)</label><input type="number" min="1" step="1" data-k="w" value="'+Math.round(t.w*100)+'"></div>'+
+          '<div class="fld"><label>Hauteur (cm)</label><input type="number" min="1" step="1" data-k="h" value="'+Math.round(t.h*100)+'"></div>'
+        : '<div class="fld"><label>Diamètre (cm)</label><input type="number" min="1" step="1" data-k="r" value="'+Math.round(t.r*200)+'"></div><div></div>')+
+      '<p class="full" style="margin:0;font-size:11px;color:var(--muted)">Cotes appliquées aux prochaines poses ; la prochaine sera <b>'+esc(typeName(t.code))+'</b>.</p>';
+    ed.querySelector('[data-k=name]').oninput=function(){ t.name=this.value; save(); };
+    ed.querySelector('[data-k=name]').onchange=function(){ renderTypes(); };
+    ed.querySelector('[data-k=t]').onchange=function(){ t.t=this.value; fixTypes(); renderTypes(); save(); };
+    ed.querySelector('[data-k=ly]').onchange=function(){
+      t.ly=this.value; items.forEach(function(s){ s.ly=t.ly; });
+      var L=S.layers.find(function(l){ return l.id===t.ly; }); if(L) L.vis=true;
+      renderAll(); save(); };
+    Array.prototype.forEach.call(ed.querySelectorAll('[data-k=w],[data-k=h],[data-k=r]'),function(inp){
+      inp.oninput=function(){ var v=parseFloat(this.value); if(!(v>0)) return;
+        t[inp.dataset.k]=Math.round(v/(inp.dataset.k==="r"?200:100)*1000)/1000; save(); if(S.tool==="stamp") draw(); };
+      inp.onchange=function(){ renderTypes(); };
     });
+    box.appendChild(ed);
+    if(!items.length){ var em=document.createElement("div"); em.className="res sub none"; em.textContent="aucune — « Poser » puis cliquez sur le plan"; box.appendChild(em); }
+    items.forEach(function(s){ box.appendChild(resRow(s)); });
   });
 }
+function setListView(v){
+  S.ui.lst=v==="ob"?"ob":"ly";
+  var ob=S.ui.lst==="ob";
+  document.getElementById("rsList").hidden=ob; document.getElementById("obList").hidden=!ob;
+  Array.prototype.forEach.call(document.querySelectorAll("#lstSeg button"),function(b){ b.classList.toggle("on",b.dataset.v===S.ui.lst); });
+  document.getElementById("addLy").title=ob?"Nouvel objet (type de réservation)":"Nouveau calque";
+}
+document.getElementById("lstSeg").addEventListener("click",function(e){
+  var b=e.target.closest("button"); if(!b) return; setListView(b.dataset.v); save(); });
 document.getElementById("addLy").onclick=function(){
+  if(S.ui.lst==="ob"){
+    var n=S.types.length;
+    var t={id:uid(), code:"OBJ"+(n+1), name:"", t:"rect", w:.5, h:.5, c:PAL[(n+2)%PAL.length], ly:S.activeLayer, open:true};
+    S.types.push(t); renderTypes(); save();
+    var ci=document.querySelector('#obList .ob[data-id="'+t.id+'"] .code'); if(ci){ ci.focus(); ci.select(); }
+    return;
+  }
   var l=newLayer(); S.activeLayer=l.id; renderShapes(); save();
   var i=document.querySelector('#rsList .ly[data-id="'+l.id+'"] .lnm'); if(i){ i.focus(); i.select(); }
 };
@@ -1210,7 +1379,7 @@ function delShape(id){ S.shapes=S.shapes.filter(function(s){return s.id!==id;});
 
 function renderInsp(){
   var box=document.getElementById("insp"), s=sel();
-  if(!s){ box.innerHTML='<div class="empty">Aucune réservation sélectionnée. Cliquez une réservation sur le plan ou dans les calques.</div>'; return; }
+  if(!s){ box.innerHTML='<div class="empty">Aucune réservation sélectionnée. Cliquez une réservation sur le plan, dans les calques ou dans les objets.</div>'; return; }
   var isR=s.t==="rect";
   box.innerHTML='<div class="insp">'+
     '<div class="acts"><button class="btn sm" id="i_dup" title="Puis cliquez sur le plan pour poser les copies (Ctrl+D)">Dupliquer</button>'+
@@ -1218,6 +1387,9 @@ function renderInsp(){
     '<div class="fld"><label>Désignation</label><input id="i_n" type="text" value="'+esc(s.n)+'"></div>'+
     '<div class="fld"><label>Calque</label><select id="i_ly">'+
       S.layers.map(function(l){ return '<option value="'+l.id+'"'+(l.id===s.ly?" selected":"")+'>'+esc(l.name)+'</option>'; }).join("")+
+    '</select></div>'+
+    '<div class="fld"><label>Objet</label><select id="i_ty"><option value="">— aucun —</option>'+
+      S.types.map(function(t){ return '<option value="'+t.id+'"'+(t.id===s.ty?" selected":"")+'>'+esc(t.code+(t.name?" · "+t.name:""))+'</option>'; }).join("")+
     '</select></div>'+
     '<div class="row">'+
       '<div class="fld"><label>X / repère (m)</label><input id="i_x" type="number" step="0.01" value="'+fmt(isR?s.x+s.w/2:s.x,2)+'"></div>'+
@@ -1240,6 +1412,10 @@ function renderInsp(){
   function num(id){ var e=box.querySelector(id); return e?parseFloat(e.value):NaN; }
   box.querySelector("#i_n").oninput=function(){ s.n=this.value; renderShapes(); draw(); save(); };
   box.querySelector("#i_ly").onchange=function(){ s.ly=this.value; var L=layerOf(s); if(L){ L.vis=true; L.open=true; } renderAll(); save(); };
+  box.querySelector("#i_ty").onchange=function(){
+    var t=typeOf(this.value);
+    if(t){ s.ty=t.id; s.ly=t.ly; var L=layerOf(s); if(L) L.vis=true; } else delete s.ty;
+    renderAll(); save(); };
   function pos(){ var X=num("#i_x"),Y=num("#i_y"); if(isNaN(X)||isNaN(Y))return;
     if(isR){ s.x=X-s.w/2; s.y=Y-s.h/2; } else { s.x=X; s.y=Y; } round(s); draw(); save(); }
   box.querySelector("#i_x").oninput=pos; box.querySelector("#i_y").oninput=pos;
@@ -1277,11 +1453,22 @@ function nextName(n){
   S.shapes.forEach(function(x){ var m=x.n.trim().match(re); if(m) max=Math.max(max,m[1]?parseInt(m[1],10):1); });
   return base+" "+(max+1);
 }
-/* duplication façon tampon : un clic sur Dupliquer, puis chaque clic gauche pose une copie */
-var stampId=null;
+/* pose façon tampon : la source est une réservation (Dupliquer) ou un objet (GT, VH…) ;
+   chaque clic gauche pose une réservation, Échap ou clic droit pour terminer */
+var stampId=null, objId=null;
 function stampSrc(){ return S.shapes.find(function(x){ return x.id===stampId; })||null; }
-function startStamp(s){ stampId=s.id; setTool("stamp"); }
+function objSrc(){ return objId? typeOf(objId) : null; }
+function startStamp(s){ objId=null; stampId=s.id; setTool("stamp"); }
+function startObj(t){ stampId=null; objId=t.id; setTool("stamp"); }
+function stampHint(){ var src=stampSrc(), ob=objSrc();
+  hint("Cliquez sur le plan pour poser "+(ob?"des « "+ob.code+" » (prochain : "+typeName(ob.code)+")":"des copies de « "+(src?src.n:"")+" »")+" — Échap ou clic droit pour terminer."); }
 function copyAt(W){
+  var ty=objSrc();
+  if(ty){
+    var n={id:uid(), n:typeName(ty.code), t:ty.t, ty:ty.id, ly:ty.ly, origin:S.activeId, levels:idsFrom(S.activeId,true)};
+    if(ty.t==="rect"){ n.w=ty.w; n.h=ty.h; n.x=W.X-n.w/2; n.y=W.Y-n.h/2; } else { n.r=ty.r; n.x=W.X; n.y=W.Y; }
+    round(n); return n;
+  }
   var src=stampSrc(); if(!src) return null;
   var c=JSON.parse(JSON.stringify(src)); c.id=uid(); c.n=nextName(src.n); delete c.obs;
   if(c.t==="rect"){ c.x=W.X-c.w/2; c.y=W.Y-c.h/2; } else { c.x=W.X; c.y=W.Y; }
@@ -1290,14 +1477,18 @@ function copyAt(W){
 function placeCopy(W){
   var c=copyAt(W); if(!c){ setTool("select"); return; }
   var m=c.n.match(/^RÉS\s+(\d+)$/i); if(m) S.seq=Math.max(S.seq,parseInt(m[1],10)+1);
-  S.shapes.push(c); S.selId=c.id; renderAll(); save();
+  var L=layerOf(c); if(L) L.vis=true;
+  S.shapes.push(c); S.selId=c.id; renderAll(); save(); stampHint();
 }
 function stateBlock(s){
   var lv=active(); if(!lv) return "";
   if(!onLevel(s,lv.id)) return '<p style="margin:0;font-size:12px;color:var(--muted)">Non concernée par '+esc(lv.name)+'.</p>';
-  var o=obsOf(s,lv.id)||{st:"",c:"",real:null}, ec=ecart(s,o);
+  var o=obsOf(s,lv.id)||{st:"",c:"",real:null}, sa=at(s,lv.id), ec=ecart(sa,o);
+  var up=(o.st==="ko"&&o.real)? heirs(s,lv.id) : [];
   return '<div class="fld" style="border-top:1px dashed var(--line);padding-top:9px">'+
     '<label>État sur '+esc(lv.name)+'</label>'+
+    (sa.from?'<p class="inh">↳ Position attendue reprise de la correction pointée sur <b>'+esc(lvName(sa.from))+'</b> ('+
+      dimTxt(sa)+', X '+fmt(centerOf(sa).X,2)+' · Y '+fmt(centerOf(sa).Y,2)+' m).</p>':'')+
     '<div class="st"><button id="s_ok" class="'+(o.st==="ok"?"ok":"")+'">Conforme</button>'+
     '<button id="s_ko" class="'+(o.st==="ko"?"ko":"")+'">Anomalie</button></div>'+
     '<input id="s_c" type="text" placeholder="observation (ex. décalée vers la file 2)" value="'+esc(o.c||"")+'" style="margin-top:6px">'+
@@ -1305,7 +1496,11 @@ function stateBlock(s){
     (o.real?'<button id="s_rm">Effacer le pointage</button>':'')+'</div>'+
     (ec?'<p style="margin:0;font-family:var(--f-num);font-size:11px;color:#d8352a">écart '+Math.round(ec.d*100)+' cm — ΔX '+
         (ec.dx>0?"+":"")+Math.round(ec.dx*100)+' cm, ΔY '+(ec.dy>0?"+":"")+Math.round(ec.dy*100)+' cm</p>':'')+
-    (o.real?realDims(s,o):'')+
+    (o.real?realDims(sa,o):'')+
+    (o.st==="ko"&&o.real?'<label class="ck" style="display:flex;gap:7px;align-items:center;margin-top:8px;font-size:12px;text-transform:none;letter-spacing:0;color:var(--ink)">'+
+      '<input type="checkbox" id="s_up"'+(o.prop!==false?" checked":"")+'> Reporter cette correction aux niveaux du dessus</label>'+
+      '<p style="margin:3px 0 0;font-size:11px;color:var(--muted)">'+(o.prop===false?"Les niveaux du dessus gardent la position du projet (ex. réservation à recouper).":
+        (up.length?"Reprise sur : "+esc(up.join(", "))+".":"Aucun niveau du dessus concerné."))+'</p>':'')+
     '</div>';
 }
 function realDims(s,o){
@@ -1325,6 +1520,10 @@ function bindState(box,s){
   box.querySelector("#s_c").oninput=function(){ var o=obs(s,lv.id); o.c=this.value; if(this.value&&!o.st) o.st="ko"; save(); };
   box.querySelector("#s_pt").onclick=function(){ setTool("real");
     hint("Faites glisser la réservation jusqu'à sa position réelle sur le plan."); };
+  var su=box.querySelector("#s_up");
+  if(su) su.onchange=function(){ var o=obs(s,lv.id); o.prop=this.checked; renderAll(); save();
+    var up=heirs(s,lv.id); note(this.checked? (up.length?"Correction reportée sur "+up.join(", ")+".":"Aucun niveau du dessus concerné.")
+      : "Les niveaux du dessus reprennent la position du projet."); };
   [["#s_w","w",100],["#s_h","h",100],["#s_d","r",200]].forEach(function(f){
     var el=box.querySelector(f[0]); if(!el) return;
     el.oninput=function(){ var v=parseFloat(this.value)/f[2], o=obs(s,lv.id);
@@ -1365,7 +1564,7 @@ document.getElementById("jsonBtn").onclick=function(){
     '<button class="btn" id="cp">Copier</button><button class="btn primary" id="ld">Restaurer</button></div>';
   stage.appendChild(d);
   var ta=d.querySelector("#ta");
-  ta.value=JSON.stringify({levels:S.levels.map(function(l){ return {name:l.name,scale:l.scale,org:l.org,rot:l.rot}; }),layers:S.layers,shapes:S.shapes},null,1);
+  ta.value=JSON.stringify({levels:S.levels.map(function(l){ return {name:l.name,scale:l.scale,org:l.org,rot:l.rot}; }),layers:S.layers,types:S.types,shapes:S.shapes},null,1);
   d.querySelector("#ko").onclick=function(){ d.remove(); };
   d.querySelector("#cp").onclick=function(){
     var b=this;
@@ -1376,6 +1575,7 @@ document.getElementById("jsonBtn").onclick=function(){
     try{ var o=JSON.parse(ta.value);
       if(o.shapes) S.shapes=o.shapes;
       if(o.layers) S.layers=o.layers;
+      if(o.types) S.types=o.types;
       fixLayers();
       if(o.levels) o.levels.forEach(function(l,i){ if(S.levels[i]){ S.levels[i].name=l.name;
         S.levels[i].scale=l.scale; S.levels[i].org=l.org; S.levels[i].rot=l.rot; } });
@@ -1404,7 +1604,7 @@ function planImage(lv,W,H,rows){
   try{ g.drawImage(lv.img,0,0); if(lv.tile) g.drawImage(lv.tile.cv,lv.tile.x0,lv.tile.y0,lv.tile.w,lv.tile.h); }catch(e){}
   g.restore();
   rows.forEach(function(r){
-    var sh=r.sh, o=obsOf(sh,lv.id), ko=!!(o&&o.st==="ko"), col=ko?"#d8352a":colOf(sh);
+    var sh=at(r.sh,lv.id), o=obsOf(sh,lv.id), ko=!!(o&&o.st==="ko"), col=ko?"#d8352a":colOf(sh);
     g.lineWidth=2.4; g.strokeStyle=col; g.fillStyle=col;
     g.beginPath();
     if(sh.t==="rect"){ var q=corners(sh).map(function(z){ return P(z[0],z[1]); });
@@ -1468,7 +1668,7 @@ function buildPdf(only){
   lvs.forEach(function(l){
     shapes.forEach(function(sh){
       if(!onLevel(sh,l.id)) return;
-      var o=obsOf(sh,l.id); if(o&&o.st==="ko") anos.push({l:l,sh:sh,o:o});
+      var o=obsOf(sh,l.id); if(o&&o.st==="ko") anos.push({l:l,sh:at(sh,l.id),o:o});
     });
   });
   doc.setFont("helvetica","bold"); doc.setFontSize(20);
@@ -1510,7 +1710,7 @@ function buildPdf(only){
       if(!onLevel(sh,l.id)) return;
       var o=obsOf(sh,l.id);
       if(only && !(o&&o.st==="ko")) return;
-      rows.push({n:n++,sh:sh,o:o});
+      rows.push({n:n++,sh:at(sh,l.id),o:o});
     });
     doc.addPage();
     doc.setFont("helvetica","bold"); doc.setFontSize(13);
@@ -1540,7 +1740,8 @@ function buildPdf(only){
       doc.text(fmt(cx,2),c2[3],y2);
       doc.text(fmt(cy,2),c2[4],y2);
       doc.text(ko?"ANOMALIE":(o&&o.st==="ok"?"conforme":"—"),c2[5],y2);
-      var obsTxt=(o&&o.c?o.c:"")+(ec?(o&&o.c?" — ":"")+"écart "+Math.round(ec.d*100)+" cm":"");
+      var obsTxt=[r.sh.from?"position reprise de "+lvName(r.sh.from):"", o&&o.c?o.c:"", ec?"écart "+Math.round(ec.d*100)+" cm":""]
+        .filter(Boolean).join(" — ");
       doc.text(doc.splitTextToSize(obsTxt||"—",Wp-M-c2[6])[0]||"—",c2[6],y2);
       doc.setTextColor(0);
       y2+=5.4;
@@ -1626,6 +1827,7 @@ function demo(){
     {id:uid(),n:"Chute EU",t:"circle",x:12.95,y:6.9,r:.08,ly:lc.id,levels:[ids[1],ids[2]],origin:ids[1]},
     {id:uid(),n:"Trémie CF monte-charge",t:"rect",x:9.8,y:8.6,w:1.4,h:1.6,ly:lt.id,levels:null,origin:ids[0]}
   ];
+  S.types=undefined; fixLayers();
   S.seq=4; S.asc=true; S.activeId=S.levels[1].id; S.selId=S.shapes[0].id; S.demo=true; S.under=S.levels[0].id;
   Promise.all(S.levels.map(loadImg)).then(function(){ fit(); renderAll(); save();
     note("Exemple chargé : 3 niveaux à échelles différentes, déjà calés."); });
@@ -1638,8 +1840,9 @@ load().then(function(p){
     S.levels=p.levels.map(migrate); S.shapes=p.shapes||[]; S.activeId=p.activeId||p.levels[0].id;
     S.seq=p.seq||(S.shapes.length+1); S.demo=!!p.demo;
     if(p.asc!==undefined) S.asc=p.asc; S.title=p.title||"";
-    S.layers=p.layers||[]; S.activeLayer=p.activeLayer||null; fixLayers();
+    S.layers=p.layers||[]; S.activeLayer=p.activeLayer||null; S.types=p.types; fixLayers();
     if(p.ui) ["lv","ly","pr"].forEach(function(k){ if(typeof p.ui[k]==="boolean") S.ui[k]=p.ui[k]; });
+    if(p.ui&&p.ui.lst) setListView(p.ui.lst);
     layout();
     return Promise.all(S.levels.map(loadImg)).then(function(){ fit(); });
   }
