@@ -50,7 +50,7 @@ button{cursor:pointer}
 :focus-visible{outline:2px solid var(--blue);outline-offset:1px}
 
 #app{
-  height:100%;display:grid;grid-template-columns:286px minmax(0,1fr);gap:10px;
+  height:100%;display:grid;grid-template-columns:272px minmax(0,1fr) 292px;gap:10px;
   padding-left:max(10px,env(safe-area-inset-left,0px));
   padding-right:max(10px,env(safe-area-inset-right,0px));
   padding-block:10px;
@@ -59,7 +59,7 @@ button{cursor:pointer}
 /* ---------- panneau ---------- */
 .side{min-width:0;display:flex;flex-direction:column;gap:10px;overflow:hidden}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);display:flex;flex-direction:column;min-height:0}
-.card > header{display:flex;align-items:center;gap:8px;padding:9px 11px;border-bottom:1px solid var(--line-soft)}
+.card > header{display:flex;align-items:center;gap:5px;padding:8px 8px 8px 11px;border-bottom:1px solid var(--line-soft)}
 .card > header h2{margin:0;font-size:11px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
 .card > header .sp{margin-left:auto}
 .scroll{overflow:auto;min-height:0}
@@ -110,9 +110,31 @@ button{cursor:pointer}
 
 .empty{padding:14px 12px;color:var(--muted);font-size:12.5px;line-height:1.5}
 
+/* ---------- calques ---------- */
+.ly{display:grid;grid-template-columns:18px 22px 14px minmax(0,1fr) auto auto;gap:6px;align-items:center;padding:5px 6px;border-bottom:1px solid var(--line-soft);background:var(--panel-2);cursor:pointer}
+.ly.on{box-shadow:inset 3px 0 0 var(--accent)}
+.ly .chev,.ly .eye{border:0;background:transparent;color:var(--muted);padding:0;height:22px;display:grid;place-items:center;border-radius:4px;font-size:10px}
+.ly .chev:hover,.ly .eye:hover{color:var(--ink);background:var(--line-soft)}
+.ly .lsw{width:14px;height:14px;border-radius:3px;position:relative;overflow:hidden;cursor:pointer}
+.ly .lsw input{position:absolute;inset:-4px;width:24px;height:24px;opacity:0;cursor:pointer;border:0;padding:0}
+.ly .lnm{width:100%;min-width:0;background:transparent;border:0;padding:0;font-size:12.5px;font-weight:600}
+.ly .lnm:focus{outline:0;border-bottom:1px solid var(--blue)}
+.ly .cnt{font-family:var(--f-num);font-size:10px;color:var(--muted);display:flex;gap:5px;align-items:center}
+.ly.off .lnm,.ly.off .lsw,.ly.off .cnt{opacity:.45}
+.ly .act{display:none}
+.ly.on .act{display:inline}
+.res.sub{padding-left:30px}
+.res.hide{opacity:.45}
+.res.none{cursor:default;color:var(--muted);font-size:11.5px;font-style:italic}
+
+/* ---------- panneaux ---------- */
+#cardLv{flex:0 1 auto;max-height:45%}
+#cardLy{flex:1 1 auto;min-height:140px}
+#cardPr{flex:0 1 auto;max-height:100%}
+#insp{min-height:0;overflow:auto}
+.panes .tool.on{background:rgba(255,255,255,.18);color:#fff}
+
 /* ---------- inspecteur ---------- */
-#rsList{flex:1 1 auto;min-height:84px}
-#insp{flex:0 1 auto;min-height:0;overflow:auto}
 .insp{padding:10px 11px;display:flex;flex-direction:column;gap:9px}
 .insp .acts{display:flex;gap:6px;position:sticky;top:0;margin:-10px -11px 0;padding:8px 11px;background:var(--panel);z-index:1;border-bottom:1px solid var(--line-soft)}
 .insp .row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
@@ -177,45 +199,45 @@ canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-acti
 @media (max-width:900px){.dock{left:10px;right:10px;width:auto}}
 .tabs{display:none}
 @media (max-width:900px){
-  #app{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(240px,1fr) auto;height:100%}
+  #app{grid-template-columns:minmax(0,1fr)!important;grid-template-rows:minmax(240px,1fr) auto auto;height:100%}
   .stage{grid-row:1}
-  .side{grid-row:2;max-height:46vh}
-  .tabs{display:flex;gap:4px;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:3px}
+  .tabs{grid-row:2;display:flex;gap:4px;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:3px}
   .tabs button{flex:1;border:0;background:transparent;border-radius:5px;padding:6px;font-size:12.5px;color:var(--muted);font-weight:500}
   .tabs button.on{background:var(--accent);color:#fff}
-  .side .card.hid{display:none}
+  .side{grid-row:3;max-height:42vh}
+  .brand,.panes,[data-hide]{display:none!important}
+  #tools{max-width:100%;overflow-x:auto;scrollbar-width:none}
+  #tools .tool{flex:none}
 }
 </style>
 
 </head>
 <body>
 <div id="app">
-  <aside class="side">
+  <aside class="side" id="sideL">
     <div class="brand"><b>Report de réservations</b><span>NIVEAU → NIVEAU</span></div>
-    <div class="tabs">
-      <button data-tab="lv" class="on">Niveaux</button>
-      <button data-tab="rs">Réservations</button>
-    </div>
 
-    <section class="card" id="cardLv" style="flex:1 1 auto">
+    <section class="card" id="cardLv">
       <header>
         <h2>Niveaux</h2>
         <button class="btn ghost sm" id="ordBtn" title="Sens de rangement de la liste"></button>
         <span class="sp"></span>
         <button class="btn sm" id="addBtn">+ Importer</button>
+        <button class="btn ghost sm" data-hide="lv" title="Masquer le panneau">–</button>
       </header>
       <div class="scroll" id="lvList"></div>
     </section>
 
-    <section class="card hid" id="cardRs" style="flex:1 1 auto">
+    <section class="card" id="cardLy">
       <header>
-        <h2>Réservations</h2>
+        <h2>Calques</h2>
         <span class="sp"></span>
+        <button class="btn sm" id="addLy" title="Nouveau calque">+ Calque</button>
         <button class="btn sm" id="repBtn">Rapport</button>
         <button class="btn ghost sm" id="jsonBtn" title="Sauvegarde / restauration">⇄</button>
+        <button class="btn ghost sm" data-hide="ly" title="Masquer le panneau">–</button>
       </header>
       <div class="scroll" id="rsList"></div>
-      <div id="insp"></div>
     </section>
   </aside>
 
@@ -231,8 +253,13 @@ canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-acti
         <button class="tool" data-tool="org" title="Poser le point de repère (P)">Repère</button>
         <button class="tool" data-tool="pan" title="Déplacer la vue (H)">Main</button>
       </div>
+      <div class="tools panes" id="panes" title="Afficher / masquer les panneaux">
+        <button class="tool" data-pane="lv">Niveaux</button>
+        <button class="tool" data-pane="ly">Calques</button>
+        <button class="tool" data-pane="pr">Propriétés</button>
+      </div>
       <label class="pill" title="Afficher un autre niveau en transparence sous le plan courant">
-        Calque
+        Superposer
         <select id="under"></select>
         <input type="range" id="underOp" min="10" max="90" value="45">
       </label>
@@ -241,6 +268,23 @@ canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-acti
     </div>
     <div class="status" id="status"></div>
   </section>
+
+  <aside class="side" id="sideR">
+    <section class="card" id="cardPr">
+      <header>
+        <h2>Propriétés</h2>
+        <span class="sp"></span>
+        <button class="btn ghost sm" data-hide="pr" title="Masquer le panneau">–</button>
+      </header>
+      <div id="insp"></div>
+    </section>
+  </aside>
+
+  <div class="tabs">
+    <button data-tab="lv">Niveaux</button>
+    <button data-tab="ly" class="on">Calques</button>
+    <button data-tab="pr">Propriétés</button>
+  </div>
 </div>
 
 <input type="file" id="file" accept="image/*,application/pdf" multiple hidden>
@@ -254,7 +298,7 @@ try{ if(window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.c
 var S={ levels:[], shapes:[], activeId:null, selId:null, tool:"select",
         view:{s:1,tx:0,ty:0}, under:"", underOp:.45, grid:false, seq:1,
         asc:true,            /* true : le 1er de la liste est le niveau le plus bas */
-        title:"" };
+        title:"", layers:[], activeLayer:null, ui:{lv:true,ly:true,pr:true} };
 var PAL=["#c8492a","#1f6f8b","#2d7a4f","#8a5bbf","#9d7312","#1f8b7e"];
 var cv=document.getElementById("cv"), ctx=cv.getContext("2d"), dpr=1;
 var stage=document.getElementById("stage");
@@ -269,6 +313,22 @@ function active(){ return S.levels.find(function(l){return l.id===S.activeId;})|
 function sel(){ return S.shapes.find(function(s){return s.id===S.selId;})||null; }
 function css(n){ return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
 function fmt(v,d){ return (Math.round(v*Math.pow(10,d))/Math.pow(10,d)).toFixed(d); }
+
+/* ============ calques ============ */
+function layerOf(sh){ return S.layers.find(function(l){ return l.id===sh.ly; })||null; }
+function colOf(sh){ var l=layerOf(sh); return l? l.c : (sh.c||PAL[0]); }
+function shown(sh){ var l=layerOf(sh); return !l||l.vis!==false; }
+function newLayer(name){ var n=S.layers.length;
+  var l={id:uid(), name:name||("Calque "+(n+1)), c:PAL[n%PAL.length], vis:true, open:true};
+  S.layers.push(l); return l; }
+/* au moins un calque, un calque actif valide, chaque réservation rangée dans un calque existant */
+function fixLayers(){
+  S.layers=(S.layers||[]).filter(function(l){ return l&&l.id; });
+  S.layers.forEach(function(l){ if(!/^#[0-9a-f]{6}$/i.test(l.c||"")) l.c=PAL[0]; l.name=String(l.name||"Calque"); });
+  if(!S.layers.length) newLayer("Réservations");
+  if(!S.layers.some(function(l){ return l.id===S.activeLayer; })) S.activeLayer=S.layers[0].id;
+  S.shapes.forEach(function(s){ if(!layerOf(s)) s.ly=S.layers[0].id; });
+}
 
 /* ============ géométrie ============ */
 /* calage d'un plan : 2 points en pixels + distance réelle → origine, rotation, échelle */
@@ -326,7 +386,8 @@ function db(){ return new Promise(function(res,rej){
   }catch(err){ rej(err); } }); }
 function pack(){ return { levels:S.levels.map(function(l){
     return {id:l.id,name:l.name,src:l.src,w:l.w,h:l.h,scale:l.scale,org:l.org,rot:l.rot,pdf:l.pdf}; }),
-    shapes:S.shapes, activeId:S.activeId, seq:S.seq, demo:S.demo, asc:S.asc, title:S.title }; }
+    shapes:S.shapes, activeId:S.activeId, seq:S.seq, demo:S.demo, asc:S.asc, title:S.title,
+    layers:S.layers, activeLayer:S.activeLayer, ui:S.ui }; }
 var saveT=null;
 function save(){ clearTimeout(saveT); saveT=setTimeout(function(){
   db().then(function(d){ var t=d.transaction("kv","readwrite"); t.objectStore("kv").put(pack(),"project"); })
@@ -510,7 +571,7 @@ function corners(sh){
 function drawShape(sh,here,isSel){
   var lvA=active(), o=(here&&lvA)?obsOf(sh,lvA.id):null;
   var ko=!!(o&&o.st==="ko");
-  var col=ko? "#d8352a" : (sh.c||PAL[0]);
+  var col=ko? "#d8352a" : colOf(sh);
   ctx.save();
   ctx.lineWidth=isSel?2.5:(here?2:1.4);
   ctx.strokeStyle=col;
@@ -637,7 +698,7 @@ function draw(){
   drawPlan(lv,1);
   if(ready(lv)){
     var others=[],mine=[];
-    S.shapes.forEach(function(sh){ (onLevel(sh,lv.id)?mine:others).push(sh); });
+    S.shapes.forEach(function(sh){ if(shown(sh)) (onLevel(sh,lv.id)?mine:others).push(sh); });
     others.forEach(function(sh){ drawShape(sh,false,false); });
     mine.forEach(function(sh){ drawShape(sh,true,sh.id===S.selId); });
   }
@@ -793,7 +854,7 @@ cv.addEventListener("pointerdown",function(e){
 });
 function pick(W,lv){
   for(var i=S.shapes.length-1;i>=0;i--){ var s=S.shapes[i];
-    if(!onLevel(s,lv.id)) continue;
+    if(!onLevel(s,lv.id)||!shown(s)) continue;
     if(s.t==="rect"){ if(W.X>=s.x&&W.X<=s.x+s.w&&W.Y>=s.y&&W.Y<=s.y+s.h) return s; }
     else if(Math.hypot(W.X-s.x,W.Y-s.y)<=s.r) return s;
   }
@@ -832,11 +893,11 @@ cv.addEventListener("pointermove",function(e){
   }
   if(drag.m==="draw"){
     if(drag.t==="rect"){
-      drag.prev={id:"_",n:"nouvelle",t:"rect",c:PAL[S.shapes.length%PAL.length],
+      drag.prev={id:"_",n:"nouvelle",t:"rect",ly:S.activeLayer,
         x:Math.min(drag.sx,W.X),y:Math.min(drag.sy,W.Y),
         w:Math.abs(W.X-drag.sx),h:Math.abs(W.Y-drag.sy)};
     }else{
-      drag.prev={id:"_",n:"nouvelle",t:"circle",c:PAL[S.shapes.length%PAL.length],
+      drag.prev={id:"_",n:"nouvelle",t:"circle",ly:S.activeLayer,
         x:drag.sx,y:drag.sy,r:Math.hypot(W.X-drag.sx,W.Y-drag.sy)};
     }
     draw(); return;
@@ -873,9 +934,10 @@ function endPtr(e){
     if(big){
       s.id=uid(); s.n="RÉS "+(S.seq++); s.origin=S.activeId;
       s.levels=idsFrom(S.activeId,true); round(s);
+      var L=layerOf(s); if(L){ L.vis=true; L.open=true; }
       S.shapes.push(s); S.selId=s.id; setTool("select"); renderAll(); save();
       var nb=s.levels?s.levels.length:S.levels.length;
-      note("Reportée sur "+nb+" niveau"+(nb>1?"x":"")+" : celui-ci et ceux du dessus.");
+      note((L?"Calque « "+L.name+" » — r":"R")+"eportée sur "+nb+" niveau"+(nb>1?"x":"")+" : celui-ci et ceux du dessus.");
     }
   }
   if(drag.m==="move"||drag.m==="size") save();
@@ -1030,28 +1092,71 @@ document.getElementById("under").onchange=function(){ S.under=this.value; draw()
 document.getElementById("underOp").oninput=function(){ S.underOp=this.value/100; draw(); };
 document.getElementById("gridChk").onchange=function(){ S.grid=this.checked; draw(); };
 
+var EYE='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>';
+var EYE_OFF='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l18 18"/><path d="M10.6 5.1A10 10 0 0 1 12 5c6.4 0 10 7 10 7a17 17 0 0 1-3.2 4.1M6.6 6.6A17 17 0 0 0 2 12s3.6 7 10 7a9.6 9.6 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>';
+function setActiveLayer(id){ S.activeLayer=id;
+  Array.prototype.forEach.call(document.querySelectorAll("#rsList .ly"),function(r){ r.classList.toggle("on",r.dataset.id===id); });
+  save(); }
+/* arbre des calques : un calque = couleur + visibilité ; les nouvelles réservations vont dans le calque actif */
 function renderShapes(){
   var box=document.getElementById("rsList");
-  if(!S.shapes.length){ box.innerHTML='<div class="empty">Aucune réservation. Outil <b>Rectangle</b> ou <b>Ronde</b> sur un plan calé : elle se reporte aussitôt sur les autres niveaux, à leur échelle.</div>'; return; }
   box.innerHTML="";
   var lv=active();
-  S.shapes.forEach(function(s){
-    var el=document.createElement("div");
-    el.className="res"+(s.id===S.selId?" on":"");
-    var nb=s.levels? s.levels.length : S.levels.length;
-    var ko=koCount(s);
-    el.innerHTML='<span class="swatch" style="background:'+(ko?"#d8352a":s.c)+'"></span>'+
-      '<div><div class="nm">'+esc(s.n)+(ko?' <span class="bad">'+ko+' anomalie'+(ko>1?'s':'')+'</span>':'')+'</div>'+
-      '<div class="dim">'+dimTxt(s)+' · '+nb+' niv.</div></div>'+
-      '<button class="btn ghost sm" data-rm>✕</button>';
-    el.onclick=function(e){ if(e.target.closest("[data-rm]")) return;
-      S.selId=s.id;
-      if(lv&&!onLevel(s,lv.id)){ var t=S.levels.find(function(l){ return onLevel(s,l.id)&&ready(l); }); if(t){ S.activeId=t.id; fit(); } }
-      centerOn(s); renderAll(); };
-    el.querySelector("[data-rm]").onclick=function(){ delShape(s.id); };
-    box.appendChild(el);
+  S.layers.forEach(function(ly,li){
+    var items=S.shapes.filter(function(s){ return s.ly===ly.id; });
+    var vis=ly.vis!==false, open=ly.open!==false;
+    var hd=document.createElement("div");
+    hd.className="ly"+(ly.id===S.activeLayer?" on":"")+(vis?"":" off"); hd.dataset.id=ly.id;
+    hd.title="Calque actif : les nouvelles réservations y sont rangées";
+    hd.innerHTML='<button class="chev" data-ch title="'+(open?"Replier":"Déplier")+'">'+(open?"▼":"▶")+'</button>'+
+      '<button class="eye" data-eye title="'+(vis?"Masquer":"Afficher")+' le calque">'+(vis?EYE:EYE_OFF)+'</button>'+
+      '<label class="lsw" style="background:'+ly.c+'" title="Couleur du calque"><input type="color" value="'+ly.c+'"></label>'+
+      '<input class="lnm" value="'+esc(ly.name)+'" spellcheck="false" title="Renommer le calque">'+
+      '<span class="cnt"><span class="tag warn act">actif</span>'+items.length+'</span>'+
+      '<button class="btn ghost sm" data-rm title="Supprimer le calque"'+(S.layers.length<2?" disabled":"")+'>✕</button>';
+    hd.onclick=function(e){ if(e.target.closest("button,input,label")) return; setActiveLayer(ly.id); };
+    hd.querySelector("[data-ch]").onclick=function(){ ly.open=!open; renderShapes(); save(); };
+    hd.querySelector("[data-eye]").onclick=function(){ ly.vis=!vis; renderShapes(); draw(); save(); };
+    var ci=hd.querySelector("input[type=color]");
+    ci.oninput=function(){ ly.c=this.value; hd.querySelector(".lsw").style.background=this.value; draw(); };
+    ci.onchange=function(){ renderShapes(); save(); };
+    var ni=hd.querySelector(".lnm");
+    ni.onfocus=function(){ setActiveLayer(ly.id); };
+    ni.oninput=function(){ ly.name=this.value; save(); };
+    ni.onchange=function(){ renderInsp(); };
+    hd.querySelector("[data-rm]").onclick=function(){
+      if(S.layers.length<2) return;
+      var to=S.layers[li===0?1:0];
+      items.forEach(function(s){ s.ly=to.id; });
+      S.layers.splice(li,1); fixLayers(); renderAll(); save();
+      note("Calque supprimé"+(items.length?" — "+items.length+" réservation"+(items.length>1?"s":"")+" déplacée"+(items.length>1?"s":"")+" dans « "+to.name+" »":"")+".");
+    };
+    box.appendChild(hd);
+    if(!open) return;
+    if(!items.length){ var em=document.createElement("div"); em.className="res sub none"+(vis?"":" hide");
+      em.textContent=S.levels.length?"vide — outils Rectangle / Ronde sur un plan calé":"vide"; box.appendChild(em); return; }
+    items.forEach(function(s){
+      var el=document.createElement("div");
+      el.className="res sub"+(s.id===S.selId?" on":"")+(vis?"":" hide");
+      var nb=s.levels? s.levels.length : S.levels.length;
+      var ko=koCount(s);
+      el.innerHTML='<span class="swatch" style="background:'+(ko?"#d8352a":ly.c)+'"></span>'+
+        '<div><div class="nm">'+esc(s.n)+(ko?' <span class="bad">'+ko+' anomalie'+(ko>1?'s':'')+'</span>':'')+'</div>'+
+        '<div class="dim">'+dimTxt(s)+' · '+nb+' niv.</div></div>'+
+        '<button class="btn ghost sm" data-rm>✕</button>';
+      el.onclick=function(e){ if(e.target.closest("[data-rm]")) return;
+        S.selId=s.id; ly.vis=true;
+        if(lv&&!onLevel(s,lv.id)){ var t=S.levels.find(function(l){ return onLevel(s,l.id)&&ready(l); }); if(t){ S.activeId=t.id; fit(); } }
+        centerOn(s); renderAll(); save(); };
+      el.querySelector("[data-rm]").onclick=function(){ delShape(s.id); };
+      box.appendChild(el);
+    });
   });
 }
+document.getElementById("addLy").onclick=function(){
+  var l=newLayer(); S.activeLayer=l.id; renderShapes(); save();
+  var i=document.querySelector('#rsList .ly[data-id="'+l.id+'"] .lnm'); if(i){ i.focus(); i.select(); }
+};
 function centerOn(s){
   var cx=s.t==="rect"?s.x+s.w/2:s.x, cy=s.t==="rect"?s.y+s.h/2:s.y;
   S.view.tx=stage.clientWidth/2-cx*S.view.s; S.view.ty=stage.clientHeight/2-cy*S.view.s;
@@ -1060,12 +1165,15 @@ function delShape(id){ S.shapes=S.shapes.filter(function(s){return s.id!==id;});
 
 function renderInsp(){
   var box=document.getElementById("insp"), s=sel();
-  if(!s){ box.innerHTML=""; return; }
+  if(!s){ box.innerHTML='<div class="empty">Aucune réservation sélectionnée. Cliquez une réservation sur le plan ou dans les calques.</div>'; return; }
   var isR=s.t==="rect";
-  box.innerHTML='<div class="insp" style="border-top:1px solid var(--line)">'+
+  box.innerHTML='<div class="insp">'+
     '<div class="acts"><button class="btn sm" id="i_dup" title="Puis cliquez sur le plan pour poser les copies (Ctrl+D)">Dupliquer</button>'+
     '<button class="btn sm" id="i_del" style="margin-left:auto;color:var(--accent)">Supprimer</button></div>'+
     '<div class="fld"><label>Désignation</label><input id="i_n" type="text" value="'+esc(s.n)+'"></div>'+
+    '<div class="fld"><label>Calque</label><select id="i_ly">'+
+      S.layers.map(function(l){ return '<option value="'+l.id+'"'+(l.id===s.ly?" selected":"")+'>'+esc(l.name)+'</option>'; }).join("")+
+    '</select></div>'+
     '<div class="row">'+
       '<div class="fld"><label>X / repère (m)</label><input id="i_x" type="number" step="0.01" value="'+fmt(isR?s.x+s.w/2:s.x,2)+'"></div>'+
       '<div class="fld"><label>Y / repère (m)</label><input id="i_y" type="number" step="0.01" value="'+fmt(isR?s.y+s.h/2:s.y,2)+'"></div>'+
@@ -1086,6 +1194,7 @@ function renderInsp(){
   bindState(box,s);
   function num(id){ var e=box.querySelector(id); return e?parseFloat(e.value):NaN; }
   box.querySelector("#i_n").oninput=function(){ s.n=this.value; renderShapes(); draw(); save(); };
+  box.querySelector("#i_ly").onchange=function(){ s.ly=this.value; var L=layerOf(s); if(L){ L.vis=true; L.open=true; } renderAll(); save(); };
   function pos(){ var X=num("#i_x"),Y=num("#i_y"); if(isNaN(X)||isNaN(Y))return;
     if(isR){ s.x=X-s.w/2; s.y=Y-s.h/2; } else { s.x=X; s.y=Y; } round(s); draw(); save(); }
   box.querySelector("#i_x").oninput=pos; box.querySelector("#i_y").oninput=pos;
@@ -1165,13 +1274,28 @@ function bindState(box,s){
 }
 function renderAll(){ ordLabel(); renderLevels(); renderUnder(); renderShapes(); renderInsp(); draw(); }
 
-/* onglets mobiles */
+/* ============ panneaux : masquables sur ordinateur, en onglets sur téléphone ============ */
+var mobQ=window.matchMedia("(max-width:900px)"), mobTab="ly";
+function layout(){
+  var mob=mobQ.matches;
+  var v=mob? {lv:mobTab==="lv", ly:mobTab==="ly", pr:mobTab==="pr"} : S.ui;
+  var $=function(id){ return document.getElementById(id); };
+  $("cardLv").hidden=!v.lv; $("cardLy").hidden=!v.ly; $("cardPr").hidden=!v.pr;
+  $("cardLv").style.maxHeight=v.ly?"":"none";
+  $("sideL").hidden=!(v.lv||v.ly); $("sideR").hidden=!v.pr;
+  $("app").style.gridTemplateColumns=mob?"":[(v.lv||v.ly)?"272px":"","minmax(0,1fr)",v.pr?"292px":""].filter(Boolean).join(" ");
+  Array.prototype.forEach.call(document.querySelectorAll("#panes [data-pane]"),function(b){
+    b.classList.toggle("on",!!S.ui[b.dataset.pane]); b.title=(S.ui[b.dataset.pane]?"Masquer":"Afficher")+" le panneau"; });
+  Array.prototype.forEach.call(document.querySelectorAll(".tabs [data-tab]"),function(b){ b.classList.toggle("on",b.dataset.tab===mobTab); });
+}
+function setPane(k,on){ S.ui[k]=on; layout(); save(); }
+document.getElementById("panes").addEventListener("click",function(e){
+  var b=e.target.closest("[data-pane]"); if(b) setPane(b.dataset.pane,!S.ui[b.dataset.pane]); });
+Array.prototype.forEach.call(document.querySelectorAll("[data-hide]"),function(b){
+  b.onclick=function(){ setPane(b.dataset.hide,false); }; });
 document.querySelector(".tabs").addEventListener("click",function(e){
-  var b=e.target.closest("button"); if(!b) return;
-  Array.prototype.forEach.call(this.children,function(x){ x.classList.toggle("on",x===b); });
-  document.getElementById("cardLv").classList.toggle("hid",b.dataset.tab!=="lv");
-  document.getElementById("cardRs").classList.toggle("hid",b.dataset.tab!=="rs");
-});
+  var b=e.target.closest("[data-tab]"); if(!b) return; mobTab=b.dataset.tab; layout(); });
+if(mobQ.addEventListener) mobQ.addEventListener("change",layout); else mobQ.addListener(layout);
 
 /* ============ sauvegarde texte ============ */
 document.getElementById("jsonBtn").onclick=function(){
@@ -1181,7 +1305,7 @@ document.getElementById("jsonBtn").onclick=function(){
     '<button class="btn" id="cp">Copier</button><button class="btn primary" id="ld">Restaurer</button></div>';
   stage.appendChild(d);
   var ta=d.querySelector("#ta");
-  ta.value=JSON.stringify({levels:S.levels.map(function(l){ return {name:l.name,scale:l.scale,org:l.org,rot:l.rot}; }),shapes:S.shapes},null,1);
+  ta.value=JSON.stringify({levels:S.levels.map(function(l){ return {name:l.name,scale:l.scale,org:l.org,rot:l.rot}; }),layers:S.layers,shapes:S.shapes},null,1);
   d.querySelector("#ko").onclick=function(){ d.remove(); };
   d.querySelector("#cp").onclick=function(){
     var b=this;
@@ -1191,6 +1315,8 @@ document.getElementById("jsonBtn").onclick=function(){
   d.querySelector("#ld").onclick=function(){
     try{ var o=JSON.parse(ta.value);
       if(o.shapes) S.shapes=o.shapes;
+      if(o.layers) S.layers=o.layers;
+      fixLayers();
       if(o.levels) o.levels.forEach(function(l,i){ if(S.levels[i]){ S.levels[i].name=l.name;
         S.levels[i].scale=l.scale; S.levels[i].org=l.org; S.levels[i].rot=l.rot; } });
       d.remove(); fit(); renderAll(); save(); note("Sauvegarde restaurée.");
@@ -1218,7 +1344,7 @@ function planImage(lv,W,H,rows){
   try{ g.drawImage(lv.img,0,0); if(lv.tile) g.drawImage(lv.tile.cv,lv.tile.x0,lv.tile.y0,lv.tile.w,lv.tile.h); }catch(e){}
   g.restore();
   rows.forEach(function(r){
-    var sh=r.sh, o=obsOf(sh,lv.id), ko=!!(o&&o.st==="ko"), col=ko?"#d8352a":(sh.c||PAL[0]);
+    var sh=r.sh, o=obsOf(sh,lv.id), ko=!!(o&&o.st==="ko"), col=ko?"#d8352a":colOf(sh);
     g.lineWidth=2.4; g.strokeStyle=col; g.fillStyle=col;
     g.beginPath();
     if(sh.t==="rect"){ var q=corners(sh).map(function(z){ return P(z[0],z[1]); });
@@ -1252,6 +1378,9 @@ document.getElementById("repBtn").onclick=function(){
     '<p>Une page par niveau : plan de repérage avec réservations numérotées, puis le tableau des cotes et des anomalies. Page de synthèse en tête.</p>'+
     '<div class="fld"><label>Chantier</label><input id="r_t" type="text" value="'+esc(S.title||"")+'" placeholder="ex. Résidence Les Tilleuls — lot gros œuvre"></div>'+
     '<label class="ck" style="display:flex;gap:7px;align-items:center;margin-top:9px;font-size:12.5px"><input type="checkbox" id="r_k"> Ne lister que les réservations en anomalie</label>'+
+    (function(){ var h=S.layers.filter(function(l){ return l.vis===false; });
+      return h.length? '<p style="margin:9px 0 0;font-size:12px">Calque'+(h.length>1?"s":"")+' masqué'+(h.length>1?"s":"")+', non inclus : <b>'+
+        h.map(function(l){ return esc(l.name); }).join(", ")+'</b></p>' : ''; })()+
     '<div class="acts"><button class="btn" id="ko">Fermer</button><button class="btn primary" id="go">Générer le PDF</button></div>';
   stage.appendChild(d);
   d.querySelector("#ko").onclick=function(){ d.remove(); };
@@ -1272,11 +1401,12 @@ function buildPdf(only){
   var doc=new J({orientation:"landscape",unit:"mm",format:"a4"});
   var Wp=297,Hp=210,M=12, today=new Date().toLocaleDateString("fr-FR");
   var title=S.title||"Report de réservations";
+  var shapes=S.shapes.filter(shown);
 
   /* ---- synthèse ---- */
   var anos=[];
   lvs.forEach(function(l){
-    S.shapes.forEach(function(sh){
+    shapes.forEach(function(sh){
       if(!onLevel(sh,l.id)) return;
       var o=obsOf(sh,l.id); if(o&&o.st==="ko") anos.push({l:l,sh:sh,o:o});
     });
@@ -1286,7 +1416,7 @@ function buildPdf(only){
   doc.setFont("helvetica","normal"); doc.setFontSize(12);
   doc.text(title,M,35);
   doc.setFontSize(9); doc.setTextColor(110);
-  doc.text("Édité le "+today+"  ·  "+lvs.length+" niveau(x)  ·  "+S.shapes.length+" réservation(s)  ·  "+anos.length+" anomalie(s)",M,42);
+  doc.text("Édité le "+today+"  ·  "+lvs.length+" niveau(x)  ·  "+shapes.length+" réservation(s)  ·  "+anos.length+" anomalie(s)",M,42);
   doc.setTextColor(0);
   doc.setDrawColor(200); doc.line(M,46,Wp-M,46);
   doc.setFont("helvetica","bold"); doc.setFontSize(11);
@@ -1316,7 +1446,7 @@ function buildPdf(only){
   /* ---- une page par niveau ---- */
   lvs.forEach(function(l){
     var rows=[],n=1;
-    S.shapes.forEach(function(sh){
+    shapes.forEach(function(sh){
       if(!onLevel(sh,l.id)) return;
       var o=obsOf(sh,l.id);
       if(only && !(o&&o.st==="ko")) return;
@@ -1429,10 +1559,12 @@ function demo(){
   });
   var ids=S.levels.map(function(l){ return l.id; });   /* [RDC, R+1, R+2] */
   var o1={}; o1[ids[2]]={st:"ko",c:"décalée au coulage, à recouper",real:{X:12.33,Y:5.72}};
+  S.layers=[]; var lg=newLayer("Gaines"), lc=newLayer("Chutes"), lt=newLayer("Trémies");
+  S.activeLayer=lg.id;
   S.shapes=[
-    {id:uid(),n:"Gaine VMC",t:"rect",x:11.95,y:5.55,w:.6,h:.4,c:PAL[0],levels:null,origin:ids[0],obs:o1},
-    {id:uid(),n:"Chute EU",t:"circle",x:12.95,y:6.9,r:.08,c:PAL[1],levels:[ids[1],ids[2]],origin:ids[1]},
-    {id:uid(),n:"Trémie CF monte-charge",t:"rect",x:9.8,y:8.6,w:1.4,h:1.6,c:PAL[2],levels:null,origin:ids[0]}
+    {id:uid(),n:"Gaine VMC",t:"rect",x:11.95,y:5.55,w:.6,h:.4,ly:lg.id,levels:null,origin:ids[0],obs:o1},
+    {id:uid(),n:"Chute EU",t:"circle",x:12.95,y:6.9,r:.08,ly:lc.id,levels:[ids[1],ids[2]],origin:ids[1]},
+    {id:uid(),n:"Trémie CF monte-charge",t:"rect",x:9.8,y:8.6,w:1.4,h:1.6,ly:lt.id,levels:null,origin:ids[0]}
   ];
   S.seq=4; S.asc=true; S.activeId=S.levels[1].id; S.selId=S.shapes[0].id; S.demo=true; S.under=S.levels[0].id;
   Promise.all(S.levels.map(loadImg)).then(function(){ fit(); renderAll(); save();
@@ -1440,12 +1572,15 @@ function demo(){
 }
 
 /* ============ démarrage ============ */
-resize();
+fixLayers(); layout(); resize();
 load().then(function(p){
   if(p && p.levels && p.levels.length){
     S.levels=p.levels.map(migrate); S.shapes=p.shapes||[]; S.activeId=p.activeId||p.levels[0].id;
     S.seq=p.seq||(S.shapes.length+1); S.demo=!!p.demo;
     if(p.asc!==undefined) S.asc=p.asc; S.title=p.title||"";
+    S.layers=p.layers||[]; S.activeLayer=p.activeLayer||null; fixLayers();
+    if(p.ui) ["lv","ly","pr"].forEach(function(k){ if(typeof p.ui[k]==="boolean") S.ui[k]=p.ui[k]; });
+    layout();
     return Promise.all(S.levels.map(loadImg)).then(function(){ fit(); });
   }
   return demo();

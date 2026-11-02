@@ -27,13 +27,25 @@ Ou ouvrir `index.html` dans un navigateur, ou le servir depuis un NAS.
 4. **Dessiner** une réservation rectangulaire (R) ou ronde (C). Elle est stockée en
    mètres par rapport au repère et se reporte à l'échelle sur les autres niveaux :
    par défaut celui où elle est créée et tous ceux du dessus.
-5. **Contrôler** : le calque affiche un autre niveau en transparence sous le plan courant,
-   recalé à son échelle. L'outil Mesure (M) donne les distances réelles.
+5. **Contrôler** : « Superposer » affiche un autre niveau en transparence sous le plan
+   courant, recalé à son échelle. L'outil Mesure (M) donne les distances réelles.
 6. **Anomalies** : pour chaque niveau, marquer une réservation conforme ou en anomalie,
    avec observation. « Déplacer vers la position réelle » permet de faire glisser la
    réservation là où elle est réellement tombée : l'écart est calculé et coté.
 7. **Rapport PDF** : page de synthèse des anomalies, puis une page A4 paysage par niveau
    avec plan de repérage numéroté et tableau des cotes.
+
+## Panneaux et calques
+
+- Trois panneaux : **Niveaux** et **Calques** à gauche, **Propriétés** (réservation
+  sélectionnée) à droite. Les boutons Niveaux / Calques / Propriétés de la barre d'outils,
+  ou le « – » de chaque panneau, les masquent et les réaffichent. Sur téléphone, ce sont
+  des onglets sous le plan.
+- Chaque réservation appartient à un **calque** (Gaines, Chutes, Trémies…) qui porte sa
+  couleur. L'œil masque ou réaffiche le calque sur le plan ; un calque masqué n'est pas
+  repris dans le rapport PDF. Cliquer un calque le rend **actif** : les nouvelles
+  réservations y sont rangées. Le calque d'une réservation se change dans Propriétés.
+  Supprimer un calque déplace ses réservations dans un autre calque.
 
 ## Raccourcis
 
