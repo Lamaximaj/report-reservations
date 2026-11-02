@@ -414,6 +414,8 @@ document.getElementById("fitBtn").onclick=fit;
 function resize(){
   dpr=Math.max(1,Math.min(window.devicePixelRatio||1,3));
   cv.width=Math.round(stage.clientWidth*dpr); cv.height=Math.round(stage.clientHeight*dpr);
+  /* page chargée dans une fenêtre encore sans taille : recadrer dès qu'elle en a une */
+  if(!(S.view.s>0)) fit();
   draw(); scheduleRefine();
 }
 new ResizeObserver(resize).observe(stage);
