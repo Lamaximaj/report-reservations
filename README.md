@@ -31,7 +31,10 @@ Ou ouvrir `index.html` dans un navigateur, ou le servir depuis un NAS.
    courant, recalé à son échelle. L'outil Mesure (M) donne les distances réelles.
 6. **Anomalies** : pour chaque niveau, marquer une réservation conforme ou en anomalie,
    avec observation. « Déplacer vers la position réelle » permet de faire glisser la
-   réservation là où elle est réellement tombée : l'écart est calculé et coté.
+   réservation là où elle est réellement tombée : l'écart est calculé et coté. Elle passe
+   en rouge ; ses poignées rouges (ou les champs « Largeur / Hauteur / Diamètre réels »
+   des Propriétés) reprennent ses dimensions réelles, et cliquer-glisser dans le contour
+   rouge la replace sans changer ses dimensions. Le rapport indique « prévu → réel ».
 7. **Rapport PDF** : page de synthèse des anomalies, puis une page A4 paysage par niveau
    avec plan de repérage numéroté et tableau des cotes.
 
