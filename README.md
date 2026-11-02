@@ -41,8 +41,11 @@ Ou ouvrir `index.html` dans un navigateur, ou le servir depuis un NAS.
 `H` main · flèches : décalage 1 cm (Maj : 10 cm) · `Ctrl+D` / `Cmd+D` dupliquer ·
 `Suppr` supprimer · `Échap` annuler
 
-Une réservation dupliquée reprend le nom de l'original suivi du numéro libre suivant
-(« Gaine VMC » → « Gaine VMC 2 », « Gaine VMC 3 »…).
+**Dupliquer** fonctionne comme un tampon : un clic sur le bouton (ou `Ctrl+D`), puis
+chaque clic gauche sur le plan pose une copie centrée sur le clic. `Échap` ou clic droit
+pour terminer. Chaque copie reprend le nom de l'original suivi du numéro libre suivant
+(« Gaine VMC » → « Gaine VMC 2 », « Gaine VMC 3 »…), avec ses dimensions et ses niveaux,
+mais sans état ni observation.
 
 ## Technique
 

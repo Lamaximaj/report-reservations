@@ -178,7 +178,8 @@ canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-acti
 .tabs{display:none}
 @media (max-width:900px){
   #app{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(240px,1fr) auto;height:100%}
-  .side{max-height:46vh}
+  .stage{grid-row:1}
+  .side{grid-row:2;max-height:46vh}
   .tabs{display:flex;gap:4px;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:3px}
   .tabs button{flex:1;border:0;background:transparent;border-radius:5px;padding:6px;font-size:12.5px;color:var(--muted);font-weight:500}
   .tabs button.on{background:var(--accent);color:#fff}
@@ -643,6 +644,7 @@ function draw(){
   drawCal(lv);
   if(meas&&ready(lv)) drawMeas();
   if(drag&&drag.m==="draw"&&drag.prev) drawShape(drag.prev,true,false);
+  if(S.tool==="stamp"&&cursor&&ready(lv)){ var gh=copyAt(cursor); if(gh) drawShape(gh,false,false); }
   status();
 }
 function emptyStage(){
@@ -693,6 +695,7 @@ function setTool(t){
   if(t!=="meas") meas=null;
   closeDock();
   if(t==="scale"){ openDock(); hint(""); }
+  else if(t==="stamp"){ var src=stampSrc(); hint("Cliquez sur le plan pour poser des copies de « "+(src?src.n:"")+" » — Échap ou clic droit pour terminer."); }
   else if(t==="org"){ hint("Cliquez le point de repère du plan — il devient l'origine (0,0) de ce niveau."); }
   else hint(t==="rect"?"Tracez le rectangle de la réservation.":t==="circle"?"Cliquez le centre puis tirez le rayon.":
        t==="meas"?"Tirez entre deux points — Maj pour contraindre à l'horizontale ou la verticale.":
@@ -702,12 +705,13 @@ function setTool(t){
 document.addEventListener("keydown",function(e){
   if(/input|select|textarea/i.test(e.target.tagName)) return;
   var k=e.key.toLowerCase();
-  if(e.ctrlKey||e.metaKey){ if(k==="d"&&sel()){ e.preventDefault(); dupShape(sel()); } return; }
+  if(e.ctrlKey||e.metaKey){ if(k==="d"&&sel()){ e.preventDefault(); startStamp(sel()); } return; }
   if(k==="v") setTool("select"); else if(k==="r") setTool("rect");
   else if(k==="c") setTool("circle"); else if(k==="e") setTool("scale");
   else if(k==="p") setTool("org");
   else if(k==="h") setTool("pan"); else if(k==="m") setTool("meas");
-  else if(e.key==="Escape"){ meas=null; calLine=null; closeDock(); hint(""); S.selId=null; renderAll(); }
+  else if(e.key==="Escape"){ if(S.tool==="stamp"){ setTool("select"); return; }
+    meas=null; calLine=null; closeDock(); hint(""); S.selId=null; renderAll(); }
   else if(e.key==="Delete"||e.key==="Backspace"){ if(sel()){ delShape(S.selId); e.preventDefault(); } }
   else if(e.key.indexOf("Arrow")===0){
     var s=sel(); if(!s) return; e.preventDefault();
@@ -759,6 +763,11 @@ cv.addEventListener("pointerdown",function(e){
     calLine={a:{x:q0.x,y:q0.y},b:{x:q0.x,y:q0.y}}; drag={m:"cal"}; draw(); return;
   }
   if(S.tool==="pan"||e.button===1){ drag={m:"pan",x:p.x,y:p.y,tx:S.view.tx,ty:S.view.ty}; cv.style.cursor="grabbing"; return; }
+  if(S.tool==="stamp"){
+    if(e.button!==0){ setTool("select"); return; }
+    if(!ready(lv)){ note("Définissez l'échelle et le repère de ce plan."); return; }
+    placeCopy(W); return;
+  }
   if(!ready(lv) && (S.tool==="rect"||S.tool==="circle")){ note("Définissez l'échelle et le repère de ce plan."); return; }
 
   if(S.tool==="meas"){
@@ -801,7 +810,7 @@ cv.addEventListener("pointermove",function(e){
     pinch={d:d,c:c}; draw(); scheduleRefine(); return;
   }
   cursor=s2w(p.x,p.y);
-  if(!drag){ status(); return; }
+  if(!drag){ if(S.tool==="stamp") draw(); else status(); return; }
   var W=cursor;
   if(drag.m==="pan"){ S.view.tx=drag.tx+(p.x-drag.x); S.view.ty=drag.ty+(p.y-drag.y); draw(); return; }
   if(drag.m==="real"){
@@ -876,6 +885,7 @@ function endPtr(e){
 }
 cv.addEventListener("pointerup",endPtr);
 cv.addEventListener("pointercancel",endPtr);
+cv.addEventListener("contextmenu",function(e){ e.preventDefault(); });
 cv.addEventListener("wheel",function(e){
   e.preventDefault(); var p=evPos(e), w=s2w(p.x,p.y);
   var k=Math.pow(1.0016,-e.deltaY);
@@ -1053,7 +1063,7 @@ function renderInsp(){
   if(!s){ box.innerHTML=""; return; }
   var isR=s.t==="rect";
   box.innerHTML='<div class="insp" style="border-top:1px solid var(--line)">'+
-    '<div class="acts"><button class="btn sm" id="i_dup" title="Dupliquer (Ctrl+D)">Dupliquer</button>'+
+    '<div class="acts"><button class="btn sm" id="i_dup" title="Puis cliquez sur le plan pour poser les copies (Ctrl+D)">Dupliquer</button>'+
     '<button class="btn sm" id="i_del" style="margin-left:auto;color:var(--accent)">Supprimer</button></div>'+
     '<div class="fld"><label>Désignation</label><input id="i_n" type="text" value="'+esc(s.n)+'"></div>'+
     '<div class="row">'+
@@ -1103,7 +1113,7 @@ function renderInsp(){
     if(s.levels.length===S.levels.length) s.levels=null;
     renderAll(); save();
   });
-  box.querySelector("#i_dup").onclick=function(){ dupShape(s); };
+  box.querySelector("#i_dup").onclick=function(){ startStamp(s); };
   box.querySelector("#i_del").onclick=function(){ delShape(s.id); };
 }
 /* « Gaine VMC » → « Gaine VMC 2 », « Gaine VMC 2 » → numéro libre suivant */
@@ -1111,13 +1121,22 @@ function nextName(n){
   var base=n.replace(/\s*\d+$/,"").trim()||n.trim();
   var re=new RegExp("^"+base.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")+"(?:\\s+(\\d+))?$","i"), max=1;
   S.shapes.forEach(function(x){ var m=x.n.trim().match(re); if(m) max=Math.max(max,m[1]?parseInt(m[1],10):1); });
-  if(/^RÉS$/i.test(base)) S.seq=Math.max(S.seq,max+2);
   return base+" "+(max+1);
 }
-function dupShape(s){
-  var c=JSON.parse(JSON.stringify(s)); c.id=uid(); c.n=nextName(s.n); c.x+=.2; c.y+=.2;
+/* duplication façon tampon : un clic sur Dupliquer, puis chaque clic gauche pose une copie */
+var stampId=null;
+function stampSrc(){ return S.shapes.find(function(x){ return x.id===stampId; })||null; }
+function startStamp(s){ stampId=s.id; setTool("stamp"); }
+function copyAt(W){
+  var src=stampSrc(); if(!src) return null;
+  var c=JSON.parse(JSON.stringify(src)); c.id=uid(); c.n=nextName(src.n); delete c.obs;
+  if(c.t==="rect"){ c.x=W.X-c.w/2; c.y=W.Y-c.h/2; } else { c.x=W.X; c.y=W.Y; }
+  round(c); return c;
+}
+function placeCopy(W){
+  var c=copyAt(W); if(!c){ setTool("select"); return; }
+  var m=c.n.match(/^RÉS\s+(\d+)$/i); if(m) S.seq=Math.max(S.seq,parseInt(m[1],10)+1);
   S.shapes.push(c); S.selId=c.id; renderAll(); save();
-  note("Copie créée : "+c.n+".");
 }
 function stateBlock(s){
   var lv=active(); if(!lv) return "";
