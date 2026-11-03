@@ -313,6 +313,8 @@ kbd{font-family:var(--f-num);font-size:10.5px;background:var(--panel-2);border:1
   .side .card{max-height:none!important}
   [data-hide]{display:none!important}
   #themeBtn,#helpBtn,#lstSeg [data-v=mt]{display:none!important}
+  .menu kbd{display:none}
+  .menu button{padding:9px 10px}
   #repBtn{padding:7px 9px}
   #repBtn span{display:none}
   .acts{gap:1px}
@@ -703,7 +705,7 @@ function applyPack(p){
   return Promise.all(S.levels.map(loadImg));
 }
 function projLabel(){ var e=document.getElementById("projName"); if(e) e.textContent=S.title||(projMeta(PID)||{}).name||"Projet"; document.title=(S.title?S.title+" — ":"")+"Report & métré"; }
-function afterOpen(){ closeMenu(); setTool("select"); setListView(S.ui.lst); layout(); fit(); histReset(); renderAll(); projLabel(); }
+function afterOpen(){ closeMenu(); var na=document.querySelector(".hint.auto"); if(na) na.remove(); setTool("select"); setListView(S.ui.lst); layout(); fit(); histReset(); renderAll(); projLabel(); }
 function openProject(id){
   return saveNow().then(function(){ return kvGet("p:"+id); }).then(function(p){
     PID=id; var m=projMeta(id); return applyPack(p||{title:m?m.name:""});
@@ -1103,12 +1105,13 @@ function draw(){
 function emptyStage(){
   var d=document.createElement("div"); d.className="drop";
   d.innerHTML='<h3>Importez vos plans d\'étages</h3>'+
-   '<p>PDF ou images. Chaque plan devient un niveau : vous les rangez, vous posez un repère, et vos réservations se reportent à l\'échelle sur tous les niveaux.</p>'+
+   '<p>PDF ou images. Chaque plan devient un niveau : vous posez l\'échelle et un repère, vos réservations se reportent sur tous les niveaux et vous métrez surfaces, linéaires et comptages.</p>'+
    '<div class="acts"><button class="btn primary" id="d1">Importer des plans</button>'+
    '<button class="btn" id="d2" style="background:rgba(255,255,255,.07);border-color:rgba(255,255,255,.14);color:#dfe5ed">Charger l\'exemple</button></div>'+
    '<div class="steps"><span><b>1.</b> Importer et ordonner les niveaux</span>'+
    '<span><b>2.</b> Repère : 2 points + la cote réelle entre eux</span>'+
-   '<span><b>3.</b> Dessiner la réservation — elle apparaît partout</span></div>';
+   '<span><b>3.</b> Dessiner les réservations — elles apparaissent partout</span>'+
+   '<span><b>4.</b> Métrer : Surface (S), Linéaire (L), Comptage (N)</span></div>';
   stage.appendChild(d);
   d.querySelector("#d1").onclick=function(){ document.getElementById("file").click(); };
   d.querySelector("#d2").onclick=function(){ demo(false); };

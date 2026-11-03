@@ -1,10 +1,11 @@
-# Report de réservations
+# Report & métré
 
 Outil web pour vérifier que les réservations (gaines, trémies, chutes, percements)
-tombent au bon endroit d'un niveau à l'autre d'un bâtiment.
+tombent au bon endroit d'un niveau à l'autre d'un bâtiment, et pour **métrer sur plan**
+(surfaces, linéaires, comptages) avec un rapport de quantités.
 
-Page HTML autonome : aucun serveur, aucune installation. Les plans et le calage
-restent dans le navigateur (IndexedDB), rien n'est envoyé sur le réseau.
+Page HTML autonome : aucun serveur, aucune installation. Les plans, le calage et le
+métré restent dans le navigateur (IndexedDB), rien n'est envoyé sur le réseau.
 
 ## Utilisation
 
@@ -12,100 +13,116 @@ En ligne : https://lamaximaj.github.io/report-reservations/
 
 Ou ouvrir `index.html` dans un navigateur, ou le servir depuis un NAS.
 
+L'écran : la **barre d'outils** en haut (outils, Annuler / Rétablir, panneaux, thème,
+aide `?`, Exporter), à gauche les **niveaux** et les listes **Calques / Objets / Métré**,
+au centre le plan (zoom, recadrage, trame et superposition en haut à droite), à droite
+les **Propriétés** de ce qui est sélectionné. Sur téléphone, les panneaux deviennent des
+onglets sous le plan.
+
+### Projets
+
+- Le bouton du projet (en haut à gauche, `Ctrl+O`) ouvre la liste des **projets** :
+  nouveau projet, ouvrir, renommer, dupliquer, supprimer. Chaque projet garde ses plans,
+  ses réservations et son métré ; l'enregistrement est automatique.
+- **Enregistrer le fichier** (menu ⋯ d'un projet) télécharge tout le projet, plans compris,
+  dans un fichier `.json` ; **Ouvrir un fichier projet** le recharge, par exemple sur un
+  autre appareil. Les projets restent sinon dans le navigateur où ils ont été créés.
+- Au premier lancement de cette version, l'ancien projet unique est repris tel quel.
+
+### Calage des plans
+
 1. **Importer** les plans d'étages (PDF, une page = un niveau, ou images), puis les
    ranger dans l'ordre. Un bouton indique le sens de la liste (bas → haut ou l'inverse) :
    c'est lui qui définit ce que veut dire « au-dessus ».
-2. **Échelle** (E) : soit en traçant une cote connue sur le plan, soit en saisissant
+2. **Échelle** (`E`) : soit en traçant une cote connue sur le plan, soit en saisissant
    le rapport (1/50, 1/100…). Sur un PDF l'échelle réelle est déduite du format de page ;
    sur une image il faut préciser le format papier. Champ d'orientation pour un plan
    scanné de travers. « Appliquer à tous les niveaux » reporte la même échelle 1/N sur
-   tous les plans, recalculée selon le format de chacun (avec une cote tracée sur une
-   image, c'est la valeur en px/m qui est recopiée). L'orientation et le repère restent
-   propres à chaque plan.
-3. **Repère** (P) : un clic pose l'origine (0,0) du niveau. Prendre le même repère
-   physique sur tous les plans (nu de voile, file de poteaux, angle de trémie).
-4. **Dessiner** une réservation rectangulaire (R) ou ronde (C). Elle est stockée en
-   mètres par rapport au repère et se reporte à l'échelle sur les autres niveaux :
-   par défaut celui où elle est créée et tous ceux du dessus.
-5. **Contrôler** : « Superposer » affiche un autre niveau en transparence sous le plan
-   courant, recalé à son échelle. L'outil Mesure (M) donne les distances réelles.
-6. **Anomalies** : pour chaque niveau, marquer une réservation conforme ou en anomalie,
-   avec observation. « Déplacer vers la position réelle » permet de faire glisser la
-   réservation là où elle est réellement tombée : l'écart est calculé et coté. Elle passe
-   en rouge ; ses poignées rouges (ou les champs « Largeur / Hauteur / Diamètre réels »
-   des Propriétés) reprennent ses dimensions réelles, et cliquer-glisser dans le contour
-   rouge la replace sans changer ses dimensions. Le rapport indique « prévu → réel ».
-7. **Exporter** (barre d'outils en haut) : un PDF des plans de tous les niveaux, une page
-   par niveau, au **format d'origine** (impression à 100 %, à l'échelle du plan) ou mis à
-   l'échelle sur **A0, A1, A2, A3 ou A4**, en portrait, paysage ou orientation
-   automatique. La fenêtre affiche l'échelle imprimée de chaque niveau, reprise dans le
-   cartouche ; les étiquettes s'impriment à ≈ 9 pt quel que soit le format.
-   Chaque page reprend **le plan d'origine tel quel, en vectoriel** (net à tout
-   zoom, rotation du PDF source gérée), avec par-dessus, en
-   vectoriel aussi : positions attendues, positions réelles en pointillé rouge, flèches
-   d'écart X / Y et une étiquette par anomalie (nom, écart, cotes réelles, observation),
-   placées sans se chevaucher. Le cartouche est dans un bandeau ajouté au-dessus du plan,
-   qui reste entièrement visible. Un plan importé en image est repris à sa résolution
-   native. Les calques masqués et les niveaux non calés ne sont pas exportés.
-8. **Exporter réservation par réservation** (même fenêtre, Contenu « Réservation par
-   réservation ») : un PDF, une page par réservation. Chaque page montre tous les niveaux
-   où passe la réservation, zoomés et placés côte à côte (du bas vers le haut du
-   bâtiment ; sur plusieurs rangées s'il y en a beaucoup), tous à la même échelle ronde
-   (1/20, 1/50…), la plus grande qui tient sur la feuille A0 à A4 choisie. Seule cette
-   réservation est dessinée, avec son état par niveau (conforme, anomalie et écart, non
-   contrôlée), sa position réelle et la correction reprise des niveaux inférieurs. Option
-   « Uniquement les réservations en anomalie ». Le plan reste vectoriel.
+   tous les plans, recalculée selon le format de chacun.
+3. **Repère** (`P`, ou clic droit → « Poser le repère 0,0 ici ») : l'origine (0,0) du
+   niveau. Prendre le même repère physique sur tous les plans (nu de voile, file de
+   poteaux, angle de trémie). Le métré n'a besoin que de l'échelle ; les réservations
+   ont besoin de l'échelle et du repère.
 
-## Panneaux et calques
+### Réservations
 
-- Trois panneaux : **Niveaux** et **Calques** à gauche, **Propriétés** (réservation
-  sélectionnée) à droite. Les boutons Niveaux / Calques / Propriétés de la barre d'outils,
-  ou le « – » de chaque panneau, les masquent et les réaffichent. Sur téléphone, ce sont
-  des onglets sous le plan.
-- Chaque réservation appartient à un **calque** (Gaines, Chutes, Trémies…) qui porte sa
-  couleur. L'œil masque ou réaffiche le calque sur le plan ; un calque masqué n'est pas
-  repris dans le rapport PDF. Cliquer un calque le rend **actif** : les nouvelles
-  réservations y sont rangées. Le calque d'une réservation se change dans Propriétés.
-  Supprimer un calque déplace ses réservations dans un autre calque.
+- **Dessiner** une réservation rectangulaire (`R`) ou ronde (`C`). Elle est stockée en
+  mètres par rapport au repère et se reporte sur les autres niveaux : par défaut celui
+  où elle est créée et tous ceux du dessus.
+- **Contrôler** : « Superposer » affiche un autre niveau en transparence sous le plan
+  courant. `Pg↑` / `Pg↓` passent au niveau du dessus / du dessous en gardant le même
+  endroit à l'écran. L'outil Mesure (`M`) donne les distances réelles.
+- **Anomalies** : pour chaque niveau, marquer une réservation conforme ou en anomalie
+  (Propriétés ou clic droit), avec observation. « Déplacer vers la position réelle »
+  permet de la faire glisser là où elle est réellement tombée : l'écart est calculé et
+  coté. Ses poignées rouges reprennent ses dimensions réelles.
+- **Calques** (couleur, visibilité, calque actif) et **Objets** (types GT, VH, VB… posés
+  en série, numérotés à la suite) comme avant.
+- **Report des corrections** : une anomalie pointée devient la position attendue des
+  niveaux du dessus (marquée « ↳ R+1 »), sauf si l'on décoche « Reporter cette
+  correction aux niveaux du dessus ».
 
-## Objets (types de réservation)
+### Métré
 
-- Onglet **Objets** à côté de Calques : un objet = un type de réservation (GT, VH, VB…)
-  avec code, désignation, forme, cotes, couleur et calque. **+** en crée un.
-- Cliquer un objet (ou « Poser »), puis cliquer sur le plan : chaque clic pose une
-  réservation numérotée à la suite (GT 1, GT 2… ; en reprenant l'objet plus tard, on
-  repart du plus grand numéro). `Échap` ou clic droit pour terminer.
-- Changer le code d'un objet renomme ses réservations « GT n » → « GTH n » (les noms
-  personnalisés ne changent pas). Les cotes modifiées valent pour les prochaines poses.
-- Le ▶ d'un objet ouvre ses réglages et la liste de ses réservations.
+- Outils **Surface** (`S`, polygone), **Surface rectangulaire** (`Maj+S`), **Linéaire**
+  (`L`) et **Comptage** (`N`). Le plan doit avoir son échelle.
+- Surface et linéaire : un clic par point ; double-clic, `Entrée` ou clic droit pour
+  terminer (clic sur le premier point pour fermer une surface). `Retour arrière` enlève
+  le dernier point, `Maj` force les angles droits / 45°, `Échap` abandonne. Les points
+  **s'aimantent** aux sommets existants (carré jaune). La quantité s'affiche sous le
+  pointeur pendant le tracé. Comptage : un clic par élément, numérotés sur le plan.
+- Chaque mesure est rangée dans un **poste** (onglet **Métré**, `+` pour en créer :
+  « Dalle BA ép. 20 », « Voiles h. 2,60 », « Prises »…). Un poste porte une couleur,
+  une référence de prix (DPGF) facultative, un **prix unitaire** facultatif et :
+  - pour une surface, une **épaisseur** → volume en m³ ;
+  - pour un linéaire, une **hauteur** → surface en m².
+  La liste donne le total de chaque poste, le détail par niveau, et le total HT des
+  postes chiffrés.
+- Modifier : sélectionner la mesure, tirer ses carrés (sommets) ou ses ronds (ajouter un
+  sommet au milieu d'un côté) ; clic droit sur un sommet pour le supprimer. Une surface
+  peut être marquée **déduction** (trémie, vide) : hachurée, elle est retirée du total.
+  Une grande surface se sélectionne d'un premier clic, puis se déplace.
 
-## Report des corrections aux étages
+### Exporter (`Ctrl+E`)
 
-Une anomalie pointée (position et dimensions réelles) sur un niveau devient la position
-attendue des niveaux du dessus : la réservation y apparaît recalée, marquée « ↳ R+1 »,
-avec le contour du projet en filigrane. Un nouvel écart sur ces niveaux se mesure par
-rapport à cette position corrigée. Décocher « Reporter cette correction aux niveaux du
-dessus » (Propriétés) leur fait reprendre la position du projet, par exemple pour une
-réservation à recouper.
+- **Plans de tous les niveaux** : un PDF, une page par niveau, au format d'origine
+  (impression à 100 %) ou sur A0 à A4. Le plan d'origine reste **vectoriel**, avec les
+  réservations, les écarts annotés et, si la case est cochée, **le métré** (surfaces,
+  linéaires, comptages) et sa légende dans le cartouche.
+- **Réservation par réservation** : une page par réservation, tous ses niveaux zoomés
+  côte à côte à la même échelle ronde, seule cette réservation affichée.
+- **Rapport de métré (PDF A4)** : récapitulatif par poste (quantités par niveau, prix,
+  total HT), puis le détail de chaque mesure.
+- **Métré pour Excel (CSV)** et **Liste des réservations pour Excel (CSV)** :
+  séparateur « ; » et virgule décimale, à ouvrir directement dans Excel.
 
-## Raccourcis
+## Clic droit et raccourcis
 
-`V` sélection · `R` rectangle · `C` ronde · `M` mesure · `E` échelle · `P` repère ·
-`H` main · flèches : décalage 1 cm (Maj : 10 cm) · `Ctrl+D` / `Cmd+D` dupliquer ·
-`Suppr` supprimer · `Échap` annuler
+Clic droit sur le plan (appui long au doigt) : menu d'actions selon ce qui est dessous —
+réservation (conforme / anomalie, position réelle, dupliquer, copier, calque, supprimer),
+métré (déduction, poste, sommet, dupliquer, supprimer) ou plan vide (coller, outils,
+repère, trame, superposer, niveau du dessus / dessous, exporter). Clic droit aussi dans
+les listes.
 
-**Dupliquer** fonctionne comme un tampon : un clic sur le bouton (ou `Ctrl+D`), puis
-chaque clic gauche sur le plan pose une copie centrée sur le clic. `Échap` ou clic droit
-pour terminer. Chaque copie reprend le nom de l'original suivi du numéro libre suivant
-(« Gaine VMC » → « Gaine VMC 2 », « Gaine VMC 3 »…), avec ses dimensions et ses niveaux,
-mais sans état ni observation.
+| Outils | | Édition | |
+|---|---|---|---|
+| `V` sélection | `H` / `Espace` main | `Ctrl+Z` annuler | `Ctrl+Maj+Z` / `Ctrl+Y` rétablir |
+| `R` rectangle | `C` ronde | `Ctrl+C` / `Ctrl+V` copier / coller sous le pointeur | `Ctrl+X` couper |
+| `S` surface | `Maj+S` surface rect. | `Ctrl+D` dupliquer | `Suppr` supprimer |
+| `L` linéaire | `N` comptage | flèches : 1 cm (`Maj` : 10 cm) | `Échap` désélectionner |
+| `M` mesure | `E` échelle, `P` repère | `F` recadrer, `+` / `−` zoom | `G` trame, `Pg↑` / `Pg↓` niveaux |
+
+`Ctrl+O` projets · `Ctrl+I` importer des plans · `Ctrl+E` exporter · `?` aide (sur Mac,
+`⌘` à la place de `Ctrl`).
 
 ## Technique
 
-- Un seul fichier, sans build. pdf.js pour la lecture et la re-rastérisation des PDF
-  au zoom, jsPDF pour le rapport (chargés depuis cdnjs).
+- Un seul fichier, sans build. pdf.js pour la lecture et la re-rastérisation des PDF au
+  zoom, pdf-lib pour les exports PDF vectoriels (chargés depuis cdnjs).
 - Chaque niveau porte son propre calage (origine, rotation, échelle) ; les réservations
-  sont en coordonnées monde (mètres), ce qui permet de superposer des plans d'échelles
-  et d'orientations différentes.
-- Sauvegarde automatique dans IndexedDB. Le bouton ⇄ exporte/réimporte le calage et les
-  réservations en JSON (sans les images).
+  sont en coordonnées monde (mètres), les mesures de métré en pixels du plan (elles
+  restent collées au plan si l'on reprend le repère ; seule l'échelle compte pour les
+  quantités).
+- IndexedDB : `projects` (liste), `cur` (projet ouvert), `p:<id>` (contenu d'un projet).
+  Annuler / Rétablir garde 150 étapes en mémoire pendant la session.
+- Préférences de l'appareil (panneaux, thème, réglages d'export) dans `localStorage`.
