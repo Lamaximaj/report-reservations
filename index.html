@@ -2176,7 +2176,7 @@ function ratioTxt(N){
   for(var i=0;i<std.length;i++) if(Math.abs(N-std[i])/std[i]<.02) return "1/"+std[i];
   return "≈ 1/"+Math.round(N);
 }
-function exportPlans(fmt,ori,prog){
+function exportPlans(fmt,ori,prog,withMt){
   var L=window.PDFLib;
   if(!L) return Promise.reject(new Error("module PDF non chargé"));
   var lvs=levelsUp(); if(!lvs.length) return Promise.reject(new Error("aucun niveau calé (échelle + repère)"));
@@ -2188,8 +2188,10 @@ function exportPlans(fmt,ori,prog){
     prog("Plan "+(i+1)+" / "+lvs.length+" — "+l.name+"…");
     return levelPage(tmp,l,cache).then(function(info){
       var ly=layoutFor(l,info.Wd,info.Hd,info.k,fmt,ori);
+      if(withMt) drawMetrePdf(info,l,F,ly.Tz);
       annotate(info,l,exportRows(l),F,title,ly.Tz,
         "Échelle à l'impression : "+ratioTxt(ly.N)+" — "+(ly.paper?ly.paper.name:"format d'origine")+", imprimer à 100 % (taille réelle)");
+      if(withMt) metreLegendPdf(info,l,F,ly.Tz);
       lays.push({ly:ly, W:info.Wd});
     });
   }); });
@@ -2324,43 +2326,224 @@ function exportByRes(fmt,ori,koOnly,prog){
   });
 }
 
+/* ============ métré : dessin sur les plans exportés, rapport PDF, tableaux pour Excel ============ */
+function measOnLevel(l){ return S.meas.filter(function(m){ return m.lv===l.id&&itemVis(itemOf(m)); }); }
+/* métré d'un niveau, en vectoriel, sur la page du plan (coordonnées du niveau, k = points PDF par pixel du plan) */
+function drawMetrePdf(info,l,F,Tz){
+  var L=window.PDFLib, page=info.page, k=info.k, Hd=info.Hd, lw=Math.max(.15,Tz/10), list=measOnLevel(l);
+  if(!list.length) return;
+  var order={area:0,line:1,count:2}, idx={};
+  list.sort(function(a,b){ return order[itemOf(a).kind]-order[itemOf(b).kind]; });
+  function col(hex){ var c=hexRGB(hex); return L.rgb(c[0]/255,c[1]/255,c[2]/255); }
+  function td(q){ return (q.x*k).toFixed(2)+" "+(q.y*k).toFixed(2); }
+  function label(t,x,y,c){ var sz=Tz*.72, w=F.b.widthOfTextAtSize(t,sz)+sz*.8, h=sz*1.45;
+    page.drawRectangle({x:x-w/2,y:y-h/2,width:w,height:h,color:L.rgb(1,1,1),opacity:.85,borderColor:c,borderWidth:lw*.6});
+    page.drawText(t,{x:x-w/2+sz*.4,y:y-sz*.35,size:sz,font:F.b,color:c}); }
+  list.forEach(function(m){
+    var it=itemOf(m), c=col(it.c), r=mq(m);
+    if(it.kind==="area"){
+      page.drawSvgPath("M "+m.pts.map(td).join(" L ")+" Z",{x:0,y:Hd,color:c,opacity:m.neg?.06:.16,borderColor:c,borderWidth:lw*1.1,borderOpacity:1,borderDashArray:m.neg?[lw*5,lw*3]:undefined});
+      var ce=pcentroid(m.pts); if(r.ok) label(win((m.neg?"- ":"")+qTxt(Math.abs(r.q),"m²")),ce.x*k,Hd-ce.y*k,c);
+    }else if(it.kind==="line"){
+      page.drawSvgPath("M "+m.pts.map(td).join(" L "),{x:0,y:Hd,borderColor:c,borderWidth:lw*2.4,borderOpacity:1,borderLineCap:L.LineCapStyle.Round});
+      var bi=1,bl=-1; for(var j=1;j<m.pts.length;j++){ var dd=Math.hypot(m.pts[j].x-m.pts[j-1].x,m.pts[j].y-m.pts[j-1].y); if(dd>bl){ bl=dd; bi=j; } }
+      if(r.ok&&m.pts.length>1){ var a=m.pts[bi-1], b=m.pts[bi]; label(win(qTxt(r.q,"ml")),(a.x+b.x)/2*k,Hd-(a.y+b.y)/2*k+Tz*.9,c); }
+    }else{
+      var n=(idx[it.id]=(idx[it.id]||0)+1), p=m.pts[0], rr=Tz*.55, t=String(n), sz=Tz*(n>99?.42:.55);
+      page.drawCircle({x:p.x*k,y:Hd-p.y*k,size:rr,color:c,borderColor:L.rgb(1,1,1),borderWidth:lw*.8});
+      page.drawText(t,{x:p.x*k-F.b.widthOfTextAtSize(t,sz)/2,y:Hd-p.y*k-sz*.36,size:sz,font:F.b,color:L.rgb(1,1,1)});
+    }
+  });
+}
+/* légende du métré dans le bandeau du cartouche (à droite) */
+function metreLegendPdf(info,l,F,Tz){
+  var list=measOnLevel(l); if(!list.length) return;
+  var L=window.PDFLib, page=info.page, Wd=info.Wd, Hd=info.Hd, band=bandH(Tz), T=totals(), per={};
+  list.forEach(function(m){ per[m.it]=1; });
+  var its=S.items.filter(function(it){ return per[it.id]; }), sz=Tz*.72, lh=sz*1.35;
+  var x=Math.max(Wd*.52,Tz*24), y=Hd+band-Tz*.8, maxRows=Math.max(1,Math.floor((band-Tz*1.8)/lh));
+  page.drawText(win("Métré sur ce niveau"),{x:x,y:y-sz,size:sz*1.05,font:F.b,color:L.rgb(.25,.25,.25)}); y-=lh*1.2;
+  its.slice(0,maxRows).forEach(function(it,i){
+    var Lq=T[it.id].lv[l.id]||{q:0,q2:0}, u=unitOf(it), c=hexRGB(it.c);
+    page.drawRectangle({x:x,y:y-sz*.9,width:sz*.8,height:sz*.8,color:L.rgb(c[0]/255,c[1]/255,c[2]/255)});
+    var t=win(it.name+" : "+qTxt(it.k>0?Lq.q2:Lq.q,u)); while(t.length>4&&F.r.widthOfTextAtSize(t,sz)>Wd-x-sz*2.5) t=t.slice(0,-2);
+    page.drawText(t,{x:x+sz*1.2,y:y-sz*.8,size:sz,font:F.r,color:L.rgb(0,0,0)}); y-=lh;
+  });
+  if(its.length>maxRows) page.drawText(win("+ "+(its.length-maxRows)+" autre(s) poste(s) — voir le rapport de métré"),{x:x,y:y-sz*.8,size:sz*.9,font:F.r,color:L.rgb(.45,.45,.45)});
+}
+
+/* ---------- rapport de métré (PDF A4) ---------- */
+function exportMetrePdf(prog){
+  var L=window.PDFLib; if(!L) return Promise.reject(new Error("module PDF non chargé"));
+  if(!S.items.length) return Promise.reject(new Error("aucun poste de métré"));
+  var doc, F={}, T=totals(), pages=[], page, y, W=595, H=842, M=40, title=S.title||"";
+  var anyPu=S.items.some(function(it){ return it.pu>0; });
+  var GREY=L.rgb(.42,.45,.5), LINE=L.rgb(.84,.86,.89), INK=L.rgb(.09,.1,.13), ACC=L.rgb(.78,.29,.16);
+  /* colonnes : désignation, unité, quantité, (PU, montant) */
+  var C= anyPu? {d:M, u:M+258, q:M+340, pu:M+420, mt:W-M} : {d:M, u:M+330, q:W-M};
+  function txt(t,x,yy,o){ o=o||{}; var f=o.b?F.b:F.r, s=o.s||9, t2=win(t);
+    if(o.w) while(t2.length>3&&f.widthOfTextAtSize(t2,s)>o.w) t2=t2.slice(0,-2)+"…";
+    var w=f.widthOfTextAtSize(t2,s), xx= o.r? x-w : o.c? x-w/2 : x;
+    page.drawText(t2,{x:xx,y:yy,size:s,font:f,color:o.col||INK}); }
+  function header(first){
+    page=doc.addPage([W,H]); pages.push(page); y=H-M;
+    if(first){
+      txt("Métré",M,y-16,{b:1,s:18}); y-=24;
+      txt([title,"édité le "+today()].filter(Boolean).join("  ·  "),M,y-10,{s:10,col:GREY}); y-=26;
+    }else{ txt("Métré"+(title?" — "+title:""),M,y-9,{s:9,col:GREY}); y-=20; }
+  }
+  function need(h,head){ if(y-h<M+24){ header(false); if(head) head(); } }
+  function hline(yy,c,w){ page.drawLine({start:{x:M,y:yy},end:{x:W-M,y:yy},thickness:w||.5,color:c||LINE}); }
+  function thead(){
+    hline(y,INK,.8); y-=13;
+    txt("Désignation",C.d,y,{b:1,s:8.5,col:GREY}); txt("Unité",C.u,y,{b:1,s:8.5,col:GREY}); txt("Quantité",C.q,y,{b:1,s:8.5,col:GREY,r:1});
+    if(anyPu){ txt("PU HT",C.pu,y,{b:1,s:8.5,col:GREY,r:1}); txt("Montant HT",C.mt,y,{b:1,s:8.5,col:GREY,r:1}); }
+    y-=6; hline(y,INK,.8); y-=4;
+  }
+  var chain=L.PDFDocument.create().then(function(d){ doc=d;
+    return Promise.all([doc.embedFont(L.StandardFonts.Helvetica),doc.embedFont(L.StandardFonts.HelveticaBold)]); })
+  .then(function(f){ F.r=f[0]; F.b=f[1]; prog("Mise en page du métré…");
+    header(true);
+    txt("Récapitulatif par poste",M,y-11,{b:1,s:11.5}); y-=20; thead();
+    var total=0;
+    S.items.forEach(function(it){
+      var t=T[it.id], u=unitOf(it), ret=itemRet(it,t), lvs=levelsUp().concat(S.levels.filter(function(l){ return !ready(l); })).filter(function(l){ return t.lv[l.id]; });
+      need(30+lvs.length*13,thead);
+      y-=13;
+      var c=hexRGB(it.c); page.drawRectangle({x:C.d,y:y-1,width:7,height:7,color:L.rgb(c[0]/255,c[1]/255,c[2]/255)});
+      txt((it.ref?it.ref+"  ":"")+it.name,C.d+12,y,{b:1,s:9.5,w:C.u-C.d-18});
+      txt(u,C.u,y,{s:9.5}); txt(nf(ret,u==="u"?0:2),C.q,y,{b:1,s:9.5,r:1});
+      if(anyPu&&it.pu>0){ txt(nf(it.pu,2),C.pu,y,{s:9.5,r:1}); txt(nf(ret*it.pu,2),C.mt,y,{b:1,s:9.5,r:1}); total+=ret*it.pu; }
+      if(it.k>0){ y-=11; txt("soit "+qTxt(t.q,KIND[it.kind].u)+" × "+nf(it.k,2)+" m ("+KIND[it.kind].kl.replace(/ \(m\)/,"").toLowerCase()+")",C.d+12,y,{s:8,col:GREY}); }
+      lvs.forEach(function(l){ var Lq=t.lv[l.id]; y-=12;
+        txt(l.name+"  ·  "+plural(Lq.n,"mesure"),C.d+22,y,{s:8.5,col:GREY,w:C.u-C.d-30});
+        txt(nf(it.k>0?Lq.q2:Lq.q,u==="u"?0:2),C.q,y,{s:8.5,col:GREY,r:1}); });
+      if(t.bad){ y-=12; txt(t.bad+" mesure(s) sur un plan sans échelle : non comptée(s)",C.d+22,y,{s:8,col:ACC}); }
+      y-=6; hline(y);
+    });
+    if(anyPu){ need(30); y-=16; txt("Total HT",C.pu,y,{b:1,s:10.5,r:1}); txt(eur(total),C.mt,y,{b:1,s:10.5,r:1}); y-=6; }
+    /* détail : chaque mesure, niveau par niveau */
+    var lvAll=levelsUp().concat(S.levels.filter(function(l){ return !ready(l); }));
+    if(S.meas.some(function(m){ return lvIndex(m.lv)>=0; })){
+      need(80); y-=26; txt("Détail des mesures",M,y,{b:1,s:11.5}); y-=10;
+      lvAll.forEach(function(l){
+        var ms=S.meas.filter(function(m){ return m.lv===l.id; }); if(!ms.length) return;
+        need(46); y-=18; txt(l.name+(pxm(l)?"":"  —  échelle non définie"),M,y,{b:1,s:10}); y-=5; hline(y,INK,.6);
+        S.items.forEach(function(it){
+          var mi=ms.filter(function(m){ return m.it===it.id; }); if(!mi.length) return;
+          need(28); y-=13; txt(it.name,C.d,y,{b:1,s:9,w:C.u-C.d-10}); txt(KIND[it.kind].t.toLowerCase(),C.u,y,{s:8.5,col:GREY});
+          var n=0;
+          mi.forEach(function(m){ n++; var r=mq(m); need(14); y-=11.5;
+            txt(KIND[it.kind].t+" "+n+(m.neg?"  (déduction)":"")+(m.note?"  —  "+m.note:""),C.d+12,y,{s:8.5,col:m.neg?ACC:INK,w:C.u-C.d-20});
+            if(it.kind!=="count"){ txt(KIND[it.kind].u,C.u,y,{s:8.5,col:GREY}); txt(r.ok? nf(r.q,2) : "—",C.q,y,{s:8.5,r:1});
+              if(anyPu&&r.q2!=null) txt("("+qTxt(r.q2,KIND[it.kind].ku)+")",C.mt,y,{s:8,col:GREY,r:1}); }
+            else txt("1",C.q,y,{s:8.5,r:1});
+          });
+          y-=4; hline(y);
+        });
+      });
+    }
+    pages.forEach(function(pg,i){ page=pg; txt("Report & métré  ·  page "+(i+1)+" / "+pages.length,W-M,M-16,{s:7.5,col:GREY,r:1}); });
+    prog("Écriture du PDF…"); return doc.save();
+  });
+  return chain.then(function(bytes){ return download(bytes,"application/pdf",fname("Metre")); });
+}
+function download(data,type,name){
+  var a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([data],{type:type})); a.download=name;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(function(){ URL.revokeObjectURL(a.href); },60000); return name;
+}
+/* ---------- tableaux CSV (Excel en français : « ; » et virgule décimale) ---------- */
+function csvCell(v){ if(typeof v==="number") return (Math.round(v*100)/100).toString().replace(".",","); v=String(v==null?"":v);
+  return /[;"\n\r]/.test(v)? '"'+v.replace(/"/g,'""')+'"' : v; }
+function csvText(rows){ return "﻿"+rows.map(function(r){ return r.map(csvCell).join(";"); }).join("\r\n")+"\r\n"; }
+function exportMetreCsv(){
+  if(!S.items.length) return Promise.reject(new Error("aucun poste de métré"));
+  var T=totals(), lvs=levelsUp().concat(S.levels.filter(function(l){ return !ready(l); }));
+  var rows=[["Chantier",S.title||""],["Édité le",today()],[],
+    ["Réf.","Poste","Type","Niveau","Nb mesures","Quantité","Unité","Épaisseur / hauteur (m)","Quantité retenue","Unité retenue","PU HT (€)","Montant HT (€)"]], total=0;
+  S.items.forEach(function(it){
+    var t=T[it.id], u=unitOf(it), K=KIND[it.kind];
+    lvs.forEach(function(l){ var Lq=t.lv[l.id]; if(!Lq) return; var ret=it.k>0?Lq.q2:Lq.q;
+      rows.push([it.ref,it.name,K.t,l.name,Lq.n,Lq.q,K.u,it.k||"",ret,u,it.pu||"",it.pu?ret*it.pu:""]); });
+    var ret=itemRet(it,t); total+=it.pu?ret*it.pu:0;
+    rows.push([it.ref,it.name,K.t,"TOTAL",t.n,t.q,K.u,it.k||"",ret,u,it.pu||"",it.pu?ret*it.pu:""]);
+  });
+  if(total) rows.push([],["","Total HT","","","","","","","","","",total]);
+  return Promise.resolve(download(csvText(rows),"text/csv;charset=utf-8",fname("Metre").replace(/\.pdf$/,".csv")));
+}
+function exportResCsv(){
+  var lvs=levelsUp(); if(!S.shapes.length) return Promise.reject(new Error("aucune réservation"));
+  var rows=[["Chantier",S.title||""],["Édité le",today()],[],
+    ["Réservation","Calque","Objet","Forme","Dimensions prévues","X repère (m)","Y repère (m)","Niveau","État","Écart (cm)","Écart X (cm)","Écart Y (cm)","Dimensions réelles","Position reprise de","Observation"]];
+  S.shapes.forEach(function(s){
+    var ly=layerOf(s), ty=s.ty&&typeOf(s.ty);
+    lvs.filter(function(l){ return onLevel(s,l.id); }).forEach(function(l){
+      var sa=at(s,l.id), o=obsOf(s,l.id), ec=o&&o.st==="ko"? ecart(sa,o) : null, c=centerOf(sa), rs=o&&o.real? realShape(sa,o) : null;
+      rows.push([s.n,ly?ly.name:"",ty?ty.code:"",s.t==="rect"?"Rectangulaire":"Ronde",dimTxt(sa),Math.round(c.X*100)/100,Math.round(c.Y*100)/100,l.name,
+        o&&o.st==="ok"?"Conforme":o&&o.st==="ko"?"Anomalie":"Non contrôlée", ec?Math.round(ec.d*100):"", ec?Math.round(ec.dx*100):"", ec?Math.round(ec.dy*100):"",
+        rs&&dimsChanged(sa,o)?dimTxt(rs):"", sa.from?lvName(sa.from):"", o&&o.c||""]);
+    });
+  });
+  return Promise.resolve(download(csvText(rows),"text/csv;charset=utf-8",fname("Reservations").replace(/\.pdf$/,".csv")));
+}
+
 document.getElementById("repBtn").onclick=function(){
   var old=document.getElementById("expSheet"); if(old) old.remove();
   closeMenu();
   var lvs=levelsUp(), skip=S.levels.length-lvs.length, h=hiddenLayers(), imgs=lvs.filter(function(l){ return !l.pdf; }).length;
   var d=document.createElement("div"); d.className="sheet"; d.id="expSheet";
-  var ex=S.ui.exp||{fmt:"orig",ori:"auto"}, mode=ex.mode==="res"?"res":"plans";
+  var ex=S.ui.exp||{fmt:"orig",ori:"auto"}, MODES=["plans","res","metre","csvm","csvr"], mode=MODES.indexOf(ex.mode)>=0? ex.mode : "plans";
+  var hasMt=S.meas.some(function(m){ return lvIndex(m.lv)>=0; });
   var fmts=[["orig","Format d'origine du plan (100 %)"],["a0","A0 — 841 × 1189 mm"],["a1","A1 — 594 × 841 mm"],["a2","A2 — 420 × 594 mm"],["a3","A3 — 297 × 420 mm"],["a4","A4 — 210 × 297 mm"]];
   d.innerHTML='<h3>Exporter</h3>'+
     '<div class="fld"><label>Contenu</label><select id="r_m">'+
       '<option value="plans"'+(mode==="plans"?" selected":"")+'>Plans de tous les niveaux — une page par niveau</option>'+
-      '<option value="res"'+(mode==="res"?" selected":"")+'>Réservation par réservation — vue zoomée de ses niveaux</option></select></div>'+
+      '<option value="res"'+(mode==="res"?" selected":"")+'>Réservation par réservation — vue zoomée de ses niveaux</option>'+
+      '<option value="metre"'+(mode==="metre"?" selected":"")+'>Rapport de métré — PDF (A4)</option>'+
+      '<option value="csvm"'+(mode==="csvm"?" selected":"")+'>Métré pour Excel — CSV</option>'+
+      '<option value="csvr"'+(mode==="csvr"?" selected":"")+'>Liste des réservations pour Excel — CSV</option></select></div>'+
     '<p id="r_d" style="margin:6px 0 9px"></p>'+
     '<div class="fld"><label>Chantier</label><input id="r_t" type="text" value="'+esc(S.title||"")+'" placeholder="ex. Résidence Les Tilleuls — lot gros œuvre"></div>'+
-    '<div style="display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:7px;margin-top:9px">'+
+    '<div id="r_fo" style="display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:7px;margin-top:9px">'+
       '<div class="fld"><label>Format de sortie</label><select id="r_fmt">'+fmts.map(function(f){ return '<option value="'+f[0]+'"'+(f[0]===ex.fmt?" selected":"")+'>'+f[1]+'</option>'; }).join("")+'</select></div>'+
       '<div class="fld"><label>Orientation</label><select id="r_ori">'+
         [["auto","Automatique"],["p","Portrait"],["l","Paysage"]].map(function(o){ return '<option value="'+o[0]+'"'+(o[0]===ex.ori?" selected":"")+'>'+o[1]+'</option>'; }).join("")+'</select></div>'+
     '</div>'+
     '<label class="ck" id="r_kow" style="display:flex;gap:7px;align-items:center;margin-top:8px;font-size:12px"><input type="checkbox" id="r_ko"'+(ex.ko?" checked":"")+'> Uniquement les réservations en anomalie</label>'+
+    '<label class="ck" id="r_mtw" style="display:flex;gap:7px;align-items:center;margin-top:8px;font-size:12px"><input type="checkbox" id="r_mt"'+(hasMt&&ex.mt!==false?" checked":"")+(hasMt?"":" disabled")+'> Dessiner aussi le métré (surfaces, linéaires, comptages) et sa légende</label>'+
     '<p id="r_sc" style="margin:7px 0 0;font-size:11.5px;color:var(--muted);line-height:1.5"></p>'+
-    '<p style="margin:9px 0 0;font-size:12px">'+lvs.length+' niveau'+(lvs.length>1?"x":"")+
+    '<p id="r_info" style="margin:9px 0 0;font-size:12px">'+lvs.length+' niveau'+(lvs.length>1?"x":"")+
       (skip?' · <b>'+skip+' niveau'+(skip>1?"x":"")+' non calé'+(skip>1?"s":"")+'</b>, ignoré'+(skip>1?"s":""):'')+
       (h.length?' · calque'+(h.length>1?"s":"")+' masqué'+(h.length>1?"s":"")+' non inclus : <b>'+h.map(function(l){ return esc(l.name); }).join(", ")+'</b>':'')+'</p>'+
-    (imgs?'<p style="margin:6px 0 0;font-size:12px;color:var(--muted)">'+imgs+' plan'+(imgs>1?"s":"")+' importé'+(imgs>1?"s":"")+' en image : repris à la résolution de l\'image. Importez le PDF pour un rendu net.</p>':'')+
+    (imgs?'<p id="r_img" style="margin:6px 0 0;font-size:12px;color:var(--muted)">'+imgs+' plan'+(imgs>1?"s":"")+' importé'+(imgs>1?"s":"")+' en image : repris à la résolution de l\'image. Importez le PDF pour un rendu net.</p>':'')+
     '<p id="r_p" style="margin:6px 0 0;font-size:12px;color:var(--blue);min-height:16px"></p>'+
     '<div class="acts"><button class="btn" id="ko">Fermer</button><button class="btn primary" id="goP">Exporter</button></div>';
   openModal(d);
-  var sf=d.querySelector("#r_fmt"), so=d.querySelector("#r_ori"), sm=d.querySelector("#r_m"), sk=d.querySelector("#r_ko"), lastFmt=ex.fmt;
+  var sf=d.querySelector("#r_fmt"), so=d.querySelector("#r_ori"), sm=d.querySelector("#r_m"), sk=d.querySelector("#r_ko"), smt=d.querySelector("#r_mt"), lastFmt=ex.fmt;
   /* aperçu : échelle à laquelle chaque niveau sortira sur la feuille choisie */
   function preview(){
-    var res=sm.value==="res", oo=sf.querySelector('option[value="orig"]');
+    var res=sm.value==="res", oo=sf.querySelector('option[value="orig"]'), md=sm.value, paper=md==="plans"||md==="res";
+    d.querySelector("#r_fo").style.display=paper?"grid":"none";
+    d.querySelector("#r_mtw").style.display=md==="plans"?"flex":"none";
+    ["#r_info","#r_img"].forEach(function(q){ var e=d.querySelector(q); if(e) e.style.display=paper?"":"none"; });
+    d.querySelector("#goP").textContent= md==="csvm"||md==="csvr"? "Télécharger le tableau" : "Exporter";
+    if(!paper){
+      S.ui.exp={fmt:lastFmt,ori:so.value,mode:md,ko:sk.checked,mt:smt.checked}; savePrefs();
+      d.querySelector("#r_kow").style.display="none";
+      var T=totals(), nm=S.meas.filter(function(m){ return lvIndex(m.lv)>=0; }).length, pu=S.items.filter(function(it){ return it.pu>0; });
+      d.querySelector("#r_d").textContent= md==="metre"? "Un PDF A4 : récapitulatif par poste (quantités par niveau, prix et total HT s'ils sont renseignés), puis le détail de chaque mesure."
+        : md==="csvm"? "Un tableau à ouvrir dans Excel : une ligne par poste et par niveau, plus le total de chaque poste. Séparateur « ; », virgule décimale."
+        : "Un tableau à ouvrir dans Excel : une ligne par réservation et par niveau (état, écarts, observation).";
+      d.querySelector("#r_sc").innerHTML= md==="csvr"? plural(S.shapes.length,"réservation")+" · "+plural(levelsUp().length,"niveau calé","niveaux calés")
+        : plural(S.items.length,"poste")+" · "+plural(nm,"mesure")+(pu.length?" · "+plural(pu.length,"poste chiffré","postes chiffrés"):" · aucun prix (▶ d'un poste dans l'onglet Métré)");
+      return;
+    }
     /* la vue zoomée se pose sur une feuille A0 à A4 : pas de « format d'origine » */
     oo.disabled=res;
     sf.value= res&&lastFmt==="orig"? "a3" : lastFmt;
     so.disabled=sf.value==="orig";
     d.querySelector("#r_kow").style.display=res?"flex":"none";
-    S.ui.exp={fmt:lastFmt,ori:so.value,mode:sm.value,ko:sk.checked}; savePrefs();
+    S.ui.exp={fmt:lastFmt,ori:so.value,mode:sm.value,ko:sk.checked,mt:smt.checked}; savePrefs();
     if(res){
       var rl=resList(sk.checked);
       d.querySelector("#r_d").textContent="Un PDF, une page par réservation : tous les niveaux où elle passe, zoomés côte à côte (du bas vers le haut du bâtiment), à la même échelle. Seule cette réservation est affichée, avec son écart éventuel.";
@@ -2374,13 +2557,15 @@ document.getElementById("repBtn").onclick=function(){
       return esc(l.name)+" <b>"+esc(ratioTxt(ly.N))+"</b>"+(ly.paper?" ("+esc(ly.paper.name)+")":"");
     }).join(" · ")+(sf.value==="orig"?"":"<br>Étiquettes imprimées à 9 pt quel que soit le format.") : "";
   }
-  sf.onchange=function(){ lastFmt=sf.value; preview(); }; so.onchange=preview; sm.onchange=preview; sk.onchange=preview; preview();
+  sf.onchange=function(){ lastFmt=sf.value; preview(); }; so.onchange=preview; sm.onchange=preview; sk.onchange=preview; smt.onchange=preview; preview();
   d.querySelector("#ko").onclick=function(){ d.remove(); };
   d.querySelector("#goP").onclick=function(){
     var b=this, p=d.querySelector("#r_p");
     S.title=d.querySelector("#r_t").value; save(); b.disabled=true;
     var pg=function(t){ p.textContent=t; }, pr;
-    try{ pr= sm.value==="res"? exportByRes(sf.value,so.value,sk.checked,pg) : exportPlans(sf.value,so.value,pg); }catch(err){ pr=Promise.reject(err); }
+    try{ var md=sm.value;
+      pr= md==="res"? exportByRes(sf.value,so.value,sk.checked,pg) : md==="metre"? exportMetrePdf(pg) : md==="csvm"? exportMetreCsv() : md==="csvr"? exportResCsv()
+        : exportPlans(sf.value,so.value,pg,smt.checked&&!smt.disabled); }catch(err){ pr=Promise.reject(err); }
     pr.then(function(f){ p.textContent="Fichier généré : "+f; b.disabled=false; })
       .catch(function(err){ p.textContent=""; b.disabled=false; note("Export impossible : "+(err&&err.message||err)); });
   };
@@ -2478,7 +2663,7 @@ document.addEventListener("keydown",function(e){
   var typing=/input|select|textarea/i.test(e.target.tagName)||e.target.isContentEditable;
   var mod=e.ctrlKey||e.metaKey, k=(e.key||"").toLowerCase();
   if(mod&&k==="s"){ e.preventDefault(); saveNow().then(function(){ note("Projet enregistré — l'enregistrement est de toute façon automatique.",2400); }); return; }
-  if(typing){ if(e.key==="Escape") e.target.blur(); return; }
+  if(typing){ if(e.key==="Escape"){ if(e.target.closest(".modal")){ e.preventDefault(); closeModals(); } else e.target.blur(); } return; }
   if(document.querySelector(".modal")){ if(e.key==="Escape"){ e.preventDefault(); closeModals(); } return; }
   if(e.key===" "){ e.preventDefault(); if(!spaceDown){ spaceDown=true; if(!drag) cv.style.cursor="grab"; } return; }
   if(mod){
