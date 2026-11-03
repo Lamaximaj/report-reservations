@@ -1080,6 +1080,7 @@ function draw(){
   if(S.under){ var u=S.levels.find(function(l){return l.id===S.under;});
     if(u&&u!==lv&&ready(u)&&ready(lv)) drawPlan(u,S.underOp); }
   drawPlan(lv,1);
+  drawMetre(lv);
   if(ready(lv)){
     var others=[],mine=[];
     S.shapes.forEach(function(sh){ if(shown(sh)) (onLevel(sh,lv.id)?mine:others).push(sh); });
@@ -1090,6 +1091,13 @@ function draw(){
   if(meas&&ready(lv)) drawMeas();
   if(drag&&drag.m==="draw"&&drag.prev) drawShape(drag.prev,true,false);
   if(S.tool==="stamp"&&cursor&&ready(lv)){ var gh=copyAt(cursor); if(gh) drawShape(gh,false,false); }
+  if(drag&&drag.m==="arect"){ var ra=w2s(drag.a.X,drag.a.Y), rb=w2s(drag.b.X,drag.b.Y), ri=itemFor("area");
+    ctx.save(); ctx.fillStyle=ri.c; ctx.globalAlpha=.2; ctx.fillRect(Math.min(ra.x,rb.x),Math.min(ra.y,rb.y),Math.abs(rb.x-ra.x),Math.abs(rb.y-ra.y));
+    ctx.globalAlpha=1; ctx.strokeStyle=ri.c; ctx.lineWidth=2; ctx.strokeRect(Math.min(ra.x,rb.x),Math.min(ra.y,rb.y),Math.abs(rb.x-ra.x),Math.abs(rb.y-ra.y));
+    var rs=pxm(lv); if(rs){ var wq=Math.abs(drag.b.X-drag.a.X), hq=Math.abs(drag.b.Y-drag.a.Y), k=ready(lv)?1:1/rs;
+      pill(nf(wq*k,2)+" × "+nf(hq*k,2)+" m  ·  "+qTxt(wq*hq*k*k,"m²"),rb.x,rb.y-20,ri.c); }
+    ctx.restore(); }
+  drawDraft(lv);
   status();
 }
 function emptyStage(){
@@ -1123,10 +1131,10 @@ function note(msg,ms){
   var h=document.createElement("div"); h.className="hint auto"; h.textContent=msg; stage.appendChild(h);
   setTimeout(function(){ h.remove(); }, ms||3600);
 }
-function hint(msg){
+function hint(msg,mt){
   var old=document.querySelector(".hint.live"); if(old) old.remove();
   if(!msg) return;
-  var h=document.createElement("div"); h.className="hint live"; h.textContent=msg; stage.appendChild(h);
+  var h=document.createElement("div"); h.className="hint live"+(mt?" mt":""); h.textContent=msg; stage.appendChild(h);
 }
 
 /* ============ outils ============ */
@@ -1138,20 +1146,30 @@ function setTool(t){
   Array.prototype.forEach.call(document.querySelectorAll("#tools .tool"),function(b){ b.classList.toggle("on",b.dataset.tool===t); });
   cv.style.cursor = t==="pan"?"grab" : t==="select"?"default":"crosshair";
   if(t!=="meas") meas=null;
+  if(draft&&(!isMtTool(t)||kindOfTool(t)!==draft.kind)) draft=null;
+  snapAt=null;
+  if(isMtTool(t)){ itemFor(kindOfTool(t)); S.selId=null; if(S.ui.lst!=="mt"&&!booting){ setListView("mt"); savePrefs(); } if(!booting) renderShapes(); }
   closeDock();
   if(t==="scale"){ openDock(); hint(""); }
   else if(t==="stamp") stampHint();
   else if(t==="org"){ hint("Cliquez le point de repère du plan — il devient l'origine (0,0) de ce niveau."); }
+  else if(isMtTool(t)) draftHint();
   else hint(t==="rect"?"Tracez le rectangle de la réservation.":t==="circle"?"Cliquez le centre puis tirez le rayon.":
        t==="meas"?"Tirez entre deux points — Maj pour contraindre à l'horizontale ou la verticale.":
        t==="real"?"Faites glisser la réservation jusqu'à sa position réelle sur le plan.":"");
   Array.prototype.forEach.call(document.querySelectorAll("#obList .ob"),function(r){
     r.classList.toggle("on",t==="stamp"&&!!objId&&r.dataset.id===objId); });
+  if(!booting){ renderMetre(); renderInsp(); }
   draw();
 }
 document.addEventListener("keydown",function(e){
   if(/input|select|textarea/i.test(e.target.tagName)) return;
   var k=e.key.toLowerCase();
+  if(draft&&e.key==="Enter"){ e.preventDefault(); finishDraft(); return; }
+  if(draft&&(e.key==="Backspace"||e.key==="Delete")){ e.preventDefault(); draft.pts.pop(); if(!draft.pts.length) draft=null; draftHint(); draw(); return; }
+  if(e.key==="Escape"&&draft){ cancelDraft(); return; }
+  if(e.key==="Escape"&&isMtTool(S.tool)){ setTool("select"); return; }
+  if((e.key==="Delete"||e.key==="Backspace")&&selM()){ e.preventDefault(); delMeas(S.selM); return; }
   if(e.ctrlKey||e.metaKey){ if(k==="d"&&sel()){ e.preventDefault(); startStamp(sel()); } return; }
   if(k==="v") setTool("select"); else if(k==="r") setTool("rect");
   else if(k==="c") setTool("circle"); else if(k==="e") setTool("scale");
@@ -1183,6 +1201,17 @@ cv.addEventListener("pointerdown",function(e){
     drag=null; return; }
   var p=evPos(e), lv=active(); if(!lv) return;
   var W=s2w(p.x,p.y);
+  closeMenu();
+  if(e.button===2) return;                       /* clic droit : menu contextuel */
+  if(spaceDown&&e.button===0){ drag={m:"pan",x:p.x,y:p.y,tx:S.view.tx,ty:S.view.ty}; cv.style.cursor="grabbing"; return; }
+  if(isMtTool(S.tool)&&e.button===0){
+    if(!metreReady(lv)) return;
+    if(S.tool==="arect"){ drag={m:"arect",a:W,b:W}; return; }
+    /* au doigt : le point est posé au relâcher, un glissé déplace la vue */
+    if(e.pointerType==="touch"){ drag={m:"tap",x:p.x,y:p.y,tx:S.view.tx,ty:S.view.ty,sh:e.shiftKey}; return; }
+    if(S.tool==="count") addCount(lv,p); else addDraftPt(lv,p,e.shiftKey);
+    return;
+  }
 
   if(S.tool==="real"){
     var sh=sel(); if(!sh){ setTool("select"); return; }
@@ -1221,7 +1250,14 @@ cv.addEventListener("pointerdown",function(e){
   if(S.tool==="rect"||S.tool==="circle"){
     drag={m:"draw",t:S.tool,sx:W.X,sy:W.Y,prev:null}; return;
   }
-  /* sélection */
+  /* sélection : poignées de la mesure sélectionnée (sommets, milieux pour ajouter un sommet) */
+  var ms=selM();
+  if(ms&&ms.lv===lv.id){
+    var hh=measHandle(lv,ms,p);
+    if(hh){ var ins=false;
+      if(hh.t==="m"){ var a0=ms.pts[hh.i], b0=ms.pts[(hh.i+1)%ms.pts.length]; ms.pts.splice(hh.i+1,0,{x:(a0.x+b0.x)/2,y:(a0.y+b0.y)/2}); hh={t:"v",i:hh.i+1}; ins=true; }
+      drag={m:"mvtx",id:ms.id,i:hh.i,moved:ins}; draw(); return; }
+  }
   var s=sel(), tol=7/S.view.s;
   if(s && onLevel(s,lv.id)){
     /* anomalie pointée : poignées rouges = dimensions réelles, intérieur = déplacer la position réelle */
@@ -1242,13 +1278,23 @@ cv.addEventListener("pointerdown",function(e){
   }
   var hit=pick(W,lv);
   if(hit){
-    var ha=at(hit,lv.id); S.selId=hit.id;
+    var ha=at(hit,lv.id); S.selId=hit.id; S.selM=null;
     /* position reprise d'un niveau inférieur : on la corrige par un pointage, pas en déplaçant le projet */
     if(ha.from){ renderAll(); if(hit.id!==(s&&s.id)) note("Position reprise de "+lvName(ha.from)+" — si elle est encore décalée ici : « Déplacer vers la position réelle »."); return; }
     drag={m:"move",id:hit.id,dx:W.X-hit.x,dy:W.Y-hit.y}; renderAll(); return; }
-  S.selId=null; renderAll();
+  var hm=pickMeas(lv,p);
+  if(hm){
+    var was=S.selM===hm.id; S.selM=hm.id; S.selId=null; S.activeItem=hm.it; renderAll();
+    /* une grande surface se sélectionne d'un clic ; on ne la déplace qu'une fois sélectionnée (sinon on déplace la vue) */
+    if(itemOf(hm).kind==="area"&&!was&&!measOnEdge(lv,hm,p)) drag={m:"pan",x:p.x,y:p.y,tx:S.view.tx,ty:S.view.ty};
+    else drag={m:"mmove",id:hm.id,last:w2p(lv,W.X,W.Y),sx:p.x,sy:p.y};
+    return;
+  }
+  S.selId=null; S.selM=null; renderAll();
   drag={m:"pan",x:p.x,y:p.y,tx:S.view.tx,ty:S.view.ty};
 });
+function measOnEdge(lv,m,p){ var ps=m.pts.map(function(q){ return p2s(lv,q); });
+  for(var j=0;j<ps.length;j++) if(distSeg(p,ps[j],ps[(j+1)%ps.length])<=6) return true; return false; }
 function pick(W,lv){
   for(var i=S.shapes.length-1;i>=0;i--){ var s=S.shapes[i];
     if(!onLevel(s,lv.id)||!shown(s)) continue;
@@ -1267,8 +1313,28 @@ cv.addEventListener("pointermove",function(e){
     pinch={d:d,c:c}; draw(); scheduleRefine(); return;
   }
   cursor=s2w(p.x,p.y);
-  if(!drag){ if(S.tool==="stamp") draw(); else status(); return; }
+  if(!drag){
+    var lvc=active();
+    if(isMtTool(S.tool)&&lvc){ if(S.tool!=="arect"&&pxm(lvc)){ var sq=snapPt(lvc,p,e.shiftKey); draftCur= draft? {x:sq.x,y:sq.y} : null; } draw(); }
+    else if(S.tool==="stamp") draw(); else status();
+    return;
+  }
   var W=cursor;
+  if(drag.m==="tap"){ if(Math.hypot(p.x-drag.x,p.y-drag.y)>8) drag={m:"pan",x:drag.x,y:drag.y,tx:drag.tx,ty:drag.ty}; else return; }
+  if(drag.m==="arect"){ drag.b=W; draw(); return; }
+  if(drag.m==="mvtx"){
+    var mv=S.meas.find(function(x){ return x.id===drag.id; }), lvv=active();
+    if(mv&&lvv){ var nb=mv.pts[drag.i-1]||null, q=snapPt(lvv,p,e.shiftKey,{id:mv.id,i:drag.i,prev:nb?p2s(lvv,nb):null});
+      mv.pts[drag.i]={x:q.x,y:q.y}; drag.moved=true; draw(); }
+    return;
+  }
+  if(drag.m==="mmove"){
+    if(!drag.moved&&Math.hypot(p.x-drag.sx,p.y-drag.sy)<3) return;
+    var mm=S.meas.find(function(x){ return x.id===drag.id; }), lvm=active();
+    if(mm&&lvm){ var np=w2p(lvm,W.X,W.Y), ddx=np.x-drag.last.x, ddy=np.y-drag.last.y;
+      mm.pts.forEach(function(pt){ pt.x+=ddx; pt.y+=ddy; }); drag.last=np; drag.moved=true; draw(); }
+    return;
+  }
   if(drag.m==="pan"){ S.view.tx=drag.tx+(p.x-drag.x); S.view.ty=drag.ty+(p.y-drag.y); draw(); return; }
   if(drag.m==="real"){
     var sr=S.shapes.find(function(x){return x.id===drag.id;}), lr=active();
@@ -1346,6 +1412,10 @@ function endPtr(e){
     if(sq&&lq){ var oq=obsOf(sq,lq.id), aq=at(sq,lq.id); note("Dimensions réelles : "+dimTxt(realShape(aq,oq))+" (prévu "+dimTxt(aq)+")."); }
     renderAll(); save(); return;
   }
+  if(drag.m==="tap"){ var lt=active(); drag=null; if(lt&&ptrs.size===0){ var pp=evPos(e); if(S.tool==="count") addCount(lt,pp); else addDraftPt(lt,pp,false); } return; }
+  if(drag.m==="arect"){ var la=active(), dr=drag; drag=null; if(la) addRect(la,dr.a,dr.b); draw(); return; }
+  if(drag.m==="mvtx"||drag.m==="mmove"){ var mvd=drag.moved; drag=null; snapAt=null;
+    if(mvd){ var mz=selM(); if(mz) mz.pts.forEach(function(pt){ pt.x=Math.round(pt.x*100)/100; pt.y=Math.round(pt.y*100)/100; }); renderAll(); save(); } else draw(); return; }
   if(drag.m==="draw"&&drag.prev){
     var s=drag.prev;
     var big = s.t==="rect" ? (s.w>.02&&s.h>.02) : s.r>.02;
@@ -1365,6 +1435,9 @@ function endPtr(e){
 }
 cv.addEventListener("pointerup",endPtr);
 cv.addEventListener("pointercancel",endPtr);
+cv.addEventListener("dblclick",function(e){ if(draft){ e.preventDefault(); finishDraft(); } });
+cv.addEventListener("pointerleave",function(){ if(snapAt||draftCur){ snapAt=null; draftCur=null; draw(); } });
+var spaceDown=false;
 cv.addEventListener("contextmenu",function(e){ e.preventDefault(); });
 cv.addEventListener("wheel",function(e){
   e.preventDefault(); var p=evPos(e), w=s2w(p.x,p.y);
@@ -1582,7 +1655,7 @@ function resRow(s){
     '<div class="dim">'+dimTxt(s)+' · '+nb+' niv.</div></div>'+
     '<button class="btn ghost sm" data-rm>✕</button>';
   el.onclick=function(e){ if(e.target.closest("[data-rm]")) return;
-    S.selId=s.id; if(L) L.vis=true;
+    S.selId=s.id; S.selM=null; if(L) L.vis=true;
     if(lv&&!onLevel(s,lv.id)){ var t=S.levels.find(function(l){ return onLevel(s,l.id)&&ready(l); }); if(t){ S.activeId=t.id; fit(); } }
     var cur=active(); centerOn(cur&&onLevel(s,cur.id)? at(s,cur.id) : s); renderAll(); save(); };
   el.querySelector("[data-rm]").onclick=function(){ delShape(s.id); };
@@ -1684,8 +1757,11 @@ function centerOn(s){
 function delShape(id){ S.shapes=S.shapes.filter(function(s){return s.id!==id;}); if(S.selId===id) S.selId=null; renderAll(); save(); }
 
 function renderInsp(){
-  var box=document.getElementById("insp"), s=sel();
-  if(!s){ box.innerHTML='<div class="empty">Aucune réservation sélectionnée. Cliquez une réservation sur le plan, dans les calques ou dans les objets.</div>'; return; }
+  var box=document.getElementById("insp"), s=sel(), mm=selM(), pt=document.getElementById("prTitle");
+  if(mm&&itemOf(mm)){ pt.textContent="Métré"; renderMeasInsp(box,mm); return; }
+  if(!s&&isMtTool(S.tool)){ pt.textContent="Poste en cours"; renderItemInsp(box,itemFor(kindOfTool(S.tool))); return; }
+  pt.textContent=s?"Réservation":"Propriétés";
+  if(!s){ box.innerHTML='<div class="empty">Rien de sélectionné. Cliquez une réservation ou un métré sur le plan, ou dans les listes à gauche.<br><br>Clic droit sur le plan : actions rapides. Touche <kbd>?</kbd> : raccourcis.</div>'; return; }
   var isR=s.t==="rect";
   box.innerHTML='<div class="insp">'+
     '<div class="acts"><button class="btn sm" id="i_dup" title="Puis cliquez sur le plan pour poser les copies (Ctrl+D)">Dupliquer</button>'+
@@ -2592,9 +2668,439 @@ document.getElementById("projFile").onchange=function(e){
   }).catch(function(){ note("Ce fichier n'est pas un projet « Report & métré » lisible."); });
 };
 
-/* (provisoire) */
-function renderMetre(){} function addItemMenu(){} function fixItems(){ if(!Array.isArray(S.items)) S.items=[]; if(!Array.isArray(S.meas)) S.meas=[]; }
-function selM(){ return null; } var draft=null; function draftHint(){} function demoMetre(){}
+/* ============ métré : postes (surface, linéaire, comptage) et mesures ============ */
+/* un poste = une ligne du métré (ex. « Dalle BA ép. 20 », « Voiles h. 2,60 », « Prises ») ;
+   une mesure = un polygone, une polyligne ou un point de comptage sur un niveau, en pixels du plan :
+   elle reste collée au plan si l'on reprend le repère, et seule l'échelle du niveau compte pour les quantités */
+var KIND={
+  area:{t:"Surface",u:"m²",ku:"m³",kl:"Épaisseur (m)",kh:"donne un volume (m³) : surface × épaisseur",tool:"area",ic:"area",def:"Surface"},
+  line:{t:"Linéaire",u:"ml",ku:"m²",kl:"Hauteur (m)",kh:"donne une surface (m²) : longueur × hauteur",tool:"line",ic:"line",def:"Linéaire"},
+  count:{t:"Comptage",u:"u",tool:"count",ic:"count",def:"Comptage"}
+};
+var MT_PAL=["#1f6f8b","#2d7a4f","#8a5bbf","#c8492a","#9d7312","#1f8b7e","#b8406f","#4a6fd1"];
+function isMtTool(t){ return t==="area"||t==="arect"||t==="line"||t==="count"; }
+function kindOfTool(t){ return t==="arect"?"area":t; }
+function fixItems(){
+  if(!Array.isArray(S.items)) S.items=[]; if(!Array.isArray(S.meas)) S.meas=[];
+  S.items=S.items.filter(function(it){ return it&&it.id&&KIND[it.kind]; });
+  S.items.forEach(function(it,i){
+    if(!/^#[0-9a-f]{6}$/i.test(it.c||"")) it.c=MT_PAL[i%MT_PAL.length];
+    it.name=String(it.name||KIND[it.kind].def); it.ref=String(it.ref||"");
+    it.k= it.kind!=="count"&&it.k>0? +it.k : 0; it.pu= it.pu>0? +it.pu : 0;
+  });
+  S.meas=S.meas.filter(function(m){ return m&&m.id&&itemById(m.it)&&Array.isArray(m.pts)&&m.pts.length; });
+  if(!itemById(S.activeItem)) S.activeItem=null;
+}
+function itemById(id){ return S.items.find(function(it){ return it.id===id; })||null; }
+function itemOf(m){ return itemById(m.it); }
+function selM(){ return S.meas.find(function(m){ return m.id===S.selM; })||null; }
+function lvById(id){ return S.levels.find(function(l){ return l.id===id; })||null; }
+function itemVis(it){ return it&&it.vis!==false; }
+function pxm(lv){ return lv&&lv.scale&&lv.scale.s>0? lv.scale.s : 0; }
+function plen(pts,closed){ var L=0; for(var i=1;i<pts.length;i++) L+=Math.hypot(pts[i].x-pts[i-1].x,pts[i].y-pts[i-1].y);
+  if(closed&&pts.length>2) L+=Math.hypot(pts[0].x-pts[pts.length-1].x,pts[0].y-pts[pts.length-1].y); return L; }
+function parea(pts){ var a=0; for(var i=0,j=pts.length-1;i<pts.length;j=i++) a+=(pts[j].x+pts[i].x)*(pts[j].y-pts[i].y); return Math.abs(a/2); }
+function pcentroid(pts){ var a=0,cx=0,cy=0; for(var i=0,j=pts.length-1;i<pts.length;j=i++){ var f=pts[j].x*pts[i].y-pts[i].x*pts[j].y; a+=f; cx+=(pts[j].x+pts[i].x)*f; cy+=(pts[j].y+pts[i].y)*f; }
+  if(Math.abs(a)<1e-9){ var sx=0,sy=0; pts.forEach(function(p){ sx+=p.x; sy+=p.y; }); return {x:sx/pts.length,y:sy/pts.length}; }
+  return {x:cx/(3*a),y:cy/(3*a)}; }
+/* quantités d'une mesure : q dans l'unité du type (m², ml, u), q2 avec épaisseur / hauteur (m³, m²) ; une déduction compte en négatif */
+function mq(m){
+  var it=itemOf(m), lv=lvById(m.lv), s=pxm(lv); if(!it) return null;
+  if(it.kind==="count") return {q:1,q2:null,ok:true};
+  if(!s) return {q:0,q2:null,ok:false};
+  var q= it.kind==="area"? parea(m.pts)/(s*s)*(m.neg?-1:1) : plen(m.pts,false)/s;
+  return {q:q, q2:it.k>0? q*it.k : null, ok:true, per:it.kind==="area"? plen(m.pts,true)/s : null};
+}
+function unitOf(it){ return it.k>0? KIND[it.kind].ku : KIND[it.kind].u; }   /* unité retenue (prix, total) */
+function retQ(it,r){ return it.k>0&&r.q2!=null? r.q2 : r.q; }
+function nf(v,d){ return (Math.abs(v)<1e-9?0:v).toLocaleString("fr-FR",{minimumFractionDigits:d,maximumFractionDigits:d}); }
+function qTxt(v,u){ return nf(v,u==="u"?0:2)+" "+u; }
+function eur(v){ return v.toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2})+" €"; }
+/* totaux par poste et par niveau (niveaux supprimés exclus) */
+function totals(){
+  var T={};
+  S.items.forEach(function(it){ T[it.id]={q:0,q2:0,n:0,bad:0,lv:{}}; });
+  S.meas.forEach(function(m){
+    var it=itemOf(m); if(!it||lvIndex(m.lv)<0) return;
+    var r=mq(m), t=T[it.id]; if(!r.ok){ t.bad++; return; }
+    var L=t.lv[m.lv]||(t.lv[m.lv]={q:0,q2:0,n:0});
+    t.q+=r.q; L.q+=r.q; t.n++; L.n++; if(r.q2!=null){ t.q2+=r.q2; L.q2+=r.q2; }
+  });
+  return T;
+}
+function itemRet(it,t){ return it.k>0? t.q2 : t.q; }
+function newItem(kind,name){
+  var n=S.items.filter(function(x){ return x.kind===kind; }).length, base=name||KIND[kind].def;
+  var nm=base, k=1; while(S.items.some(function(x){ return x.name===nm; })) nm=base+" "+(++k);
+  var it={id:uid(),name:nm,kind:kind,c:MT_PAL[S.items.length%MT_PAL.length],vis:true,open:true,k:0,pu:0,ref:""};
+  S.items.push(it); S.activeItem=it.id; return it;
+}
+/* poste utilisé par un outil : le poste actif s'il est du bon type, sinon le dernier de ce type, sinon un nouveau */
+function itemFor(kind){
+  var a=itemById(S.activeItem); if(a&&a.kind===kind) return a;
+  var l=S.items.filter(function(x){ return x.kind===kind; }); if(l.length){ S.activeItem=l[l.length-1].id; return l[l.length-1]; }
+  var it=newItem(kind); save(); return it;
+}
+function setActiveItem(id,tool){
+  S.activeItem=id; var it=itemById(id);
+  if(tool&&it) setTool(KIND[it.kind].tool==="area"&&S.tool==="arect"? "arect" : KIND[it.kind].tool);
+  else { renderMetre(); if(isMtTool(S.tool)) draftHint(); renderInsp(); }
+  save();
+}
+
+/* ---------- conversion plan ↔ écran ---------- */
+function p2s(lv,pt){ var w=p2w(lv,pt.x,pt.y); return w2s(w.X,w.Y); }
+function s2p(lv,x,y){ var w=s2w(x,y); return w2p(lv,w.X,w.Y); }
+
+/* ---------- aimantation : sommets des métrés du niveau, points du tracé en cours ; Maj = angles de 45° ---------- */
+var SNAP_PX=9, snapAt=null;
+function snapPt(lv,p,shift,excl){
+  var prev= draft&&draft.pts.length? p2s(lv,draft.pts[draft.pts.length-1]) : (excl&&excl.prev? excl.prev : null);
+  var q={x:p.x,y:p.y};
+  if(shift&&prev){ var dx=q.x-prev.x, dy=q.y-prev.y, L=Math.hypot(dx,dy), an=Math.round(Math.atan2(dy,dx)/(Math.PI/4))*(Math.PI/4);
+    q={x:prev.x+L*Math.cos(an), y:prev.y+L*Math.sin(an)}; }
+  var best=null, bd=SNAP_PX;
+  function tryP(pt){ var s=p2s(lv,pt), d=Math.hypot(s.x-p.x,s.y-p.y); if(d<bd){ bd=d; best=pt; } }
+  S.meas.forEach(function(m){ if(m.lv!==lv.id||!itemVis(itemOf(m))) return;
+    m.pts.forEach(function(pt,i){ if(excl&&excl.id===m.id&&excl.i===i) return; tryP(pt); }); });
+  if(draft) draft.pts.forEach(function(pt,i){ if(i<draft.pts.length-1||draft.kind==="line") tryP(pt); });
+  if(best){ snapAt=p2s(lv,best); return {x:best.x,y:best.y,snap:true}; }
+  snapAt=null; var r=s2p(lv,q.x,q.y); return {x:r.x,y:r.y,snap:false};
+}
+
+/* ---------- tracé en cours (surface polygone, linéaire) ---------- */
+var draft=null, draftCur=null;
+function metreReady(lv){
+  if(!lv) return false;
+  if(!pxm(lv)){ note("Définissez d'abord l'échelle de ce plan (outil Échelle, E) : le métré en dépend."); return false; }
+  return true;
+}
+function draftHint(){
+  var t=S.tool; if(!isMtTool(t)){ return; }
+  var it=itemFor(kindOfTool(t)), nm="« "+it.name+" »";
+  var msg= t==="area"? (draft? "Surface "+nm+" : "+draft.pts.length+" point"+(draft.pts.length>1?"s":"")+" — double-clic, Entrée ou clic sur le 1er point pour fermer · Retour arrière : enlever le dernier"
+                              : "Surface "+nm+" : cliquez chaque angle de la surface. Maj : angles droits.")
+         : t==="arect"? "Surface "+nm+" : tirez un rectangle."
+         : t==="line"? (draft? "Linéaire "+nm+" : "+draft.pts.length+" point"+(draft.pts.length>1?"s":"")+" — double-clic ou Entrée pour terminer · Retour arrière : enlever le dernier"
+                              : "Linéaire "+nm+" : cliquez le départ puis chaque point. Maj : angles droits.")
+         : "Comptage "+nm+" : un clic par élément à compter. Échap pour finir.";
+  hint(msg,true);
+}
+function addDraftPt(lv,p,shift){
+  var kind=kindOfTool(S.tool), q=snapPt(lv,p,shift);
+  if(!draft) draft={kind:kind,lv:lv.id,it:itemFor(kind).id,pts:[]};
+  if(draft.lv!==lv.id){ draft=null; return; }
+  /* clic sur le premier point : on ferme la surface */
+  if(kind==="area"&&draft.pts.length>=3){ var f=p2s(lv,draft.pts[0]); if(Math.hypot(f.x-p.x,f.y-p.y)<SNAP_PX+2){ finishDraft(); return; } }
+  var last=draft.pts[draft.pts.length-1];
+  if(last){ var ls=p2s(lv,last), ns=p2s(lv,q); if(Math.hypot(ls.x-ns.x,ls.y-ns.y)<3) { draw(); return; } }
+  draft.pts.push({x:q.x,y:q.y}); draftHint(); draw();
+}
+function finishDraft(){
+  if(!draft) return false;
+  var d=draft, min=d.kind==="area"?3:2; draft=null; snapAt=null;
+  if(d.pts.length<min){ draw(); draftHint(); if(d.pts.length) note(d.kind==="area"?"Une surface demande au moins 3 points.":"Un linéaire demande au moins 2 points."); return false; }
+  var m={id:uid(),it:d.it,lv:d.lv,pts:d.pts.map(function(p){ return {x:Math.round(p.x*100)/100,y:Math.round(p.y*100)/100}; })};
+  S.meas.push(m); var it=itemOf(m), r=mq(m);
+  note(it.name+" : "+qTxt(r.q,KIND[it.kind].u)+(r.q2!=null?" · "+qTxt(r.q2,KIND[it.kind].ku):"")+" ajouté.",2600);
+  renderMetre(); draw(); draftHint(); save(); return true;
+}
+function cancelDraft(){ if(!draft) return false; draft=null; snapAt=null; draw(); draftHint(); return true; }
+function addCount(lv,p){
+  var it=itemFor("count"), q=snapPt(lv,p,false);
+  var m={id:uid(),it:it.id,lv:lv.id,pts:[{x:Math.round(q.x*100)/100,y:Math.round(q.y*100)/100}]};
+  S.meas.push(m); renderMetre(); draw(); save();
+  var n=S.meas.filter(function(x){ return x.it===it.id&&x.lv===lv.id; }).length;
+  hint("Comptage « "+it.name+" » : "+n+" sur "+lv.name+" — un clic par élément, Échap pour finir.",true);
+}
+function addRect(lv,a,b){
+  var x0=Math.min(a.X,b.X), x1=Math.max(a.X,b.X), y0=Math.min(a.Y,b.Y), y1=Math.max(a.Y,b.Y);
+  if((x1-x0)*S.view.s<4||(y1-y0)*S.view.s<4) return;
+  draft={kind:"area",lv:lv.id,it:itemFor("area").id,pts:[[x0,y0],[x1,y0],[x1,y1],[x0,y1]].map(function(c){ return w2p(lv,c[0],c[1]); })};
+  finishDraft();
+}
+
+/* ---------- sélection / édition ---------- */
+function distSeg(p,a,b){ var dx=b.x-a.x, dy=b.y-a.y, L=dx*dx+dy*dy, t=L? Math.max(0,Math.min(1,((p.x-a.x)*dx+(p.y-a.y)*dy)/L)) : 0;
+  return Math.hypot(p.x-a.x-t*dx,p.y-a.y-t*dy); }
+function inPoly(p,ps){ var c=false; for(var i=0,j=ps.length-1;i<ps.length;j=i++){
+  if(((ps[i].y>p.y)!==(ps[j].y>p.y))&&(p.x<(ps[j].x-ps[i].x)*(p.y-ps[i].y)/(ps[j].y-ps[i].y)+ps[i].x)) c=!c; } return c; }
+/* mesure sous le pointeur (écran) : un point de comptage ou un trait touché passe avant l'intérieur d'une surface,
+   et parmi les surfaces qui contiennent le point, la plus petite (une trémie dans une dalle) */
+function pickMeas(lv,p){
+  var best=null, bs=Infinity;
+  S.meas.forEach(function(m){
+    if(m.lv!==lv.id||!itemVis(itemOf(m))) return;
+    var k=itemOf(m).kind, ps=m.pts.map(function(q){ return p2s(lv,q); }), sc=Infinity;
+    if(k==="count"){ var d=Math.hypot(ps[0].x-p.x,ps[0].y-p.y); if(d<=10) sc=d; }
+    else{
+      var n=k==="area"? ps.length : ps.length-1;
+      for(var j=0;j<n;j++){ var d2=distSeg(p,ps[j],ps[(j+1)%ps.length]); if(d2<=6) sc=Math.min(sc,100+d2); }
+      if(sc===Infinity&&k==="area"&&inPoly(p,ps)) sc=1000+Math.sqrt(parea(ps));
+    }
+    if(m.id===S.selM&&sc<Infinity&&sc<1000) sc-=.5;
+    if(sc<bs){ bs=sc; best=m; }
+  });
+  return best;
+}
+/* poignées de la mesure sélectionnée : sommets, puis milieux des côtés (tirer pour ajouter un sommet) */
+function measHandle(lv,m,p){
+  var k=itemOf(m).kind, ps=m.pts.map(function(q){ return p2s(lv,q); });
+  for(var i=0;i<ps.length;i++) if(Math.hypot(ps[i].x-p.x,ps[i].y-p.y)<=8) return {t:"v",i:i};
+  if(k==="count") return null;
+  var n=k==="area"? ps.length : ps.length-1;
+  for(var j=0;j<n;j++){ var a=ps[j], b=ps[(j+1)%ps.length], mx=(a.x+b.x)/2, my=(a.y+b.y)/2;
+    if(Math.hypot(a.x-b.x,a.y-b.y)>26&&Math.hypot(mx-p.x,my-p.y)<=7) return {t:"m",i:j}; }
+  return null;
+}
+function selectMeas(m){ S.selM=m?m.id:null; if(m){ S.selId=null; S.activeItem=m.it; } renderAll(); }
+function delMeas(id){ S.meas=S.meas.filter(function(m){ return m.id!==id; }); if(S.selM===id) S.selM=null; renderAll(); save(); }
+function delVertex(m,i){
+  var min=itemOf(m).kind==="area"?3:2;
+  if(m.pts.length<=min){ note("Il faut au moins "+min+" points : supprimez plutôt la mesure."); return; }
+  m.pts.splice(i,1); renderAll(); save();
+}
+function dupMeas(m,dx,dy){
+  var lv=lvById(m.lv), off=lv? 14/S.view.s*(cal(lv).raw?1:cal(lv).s) : 10;
+  var c=JSON.parse(JSON.stringify(m)); c.id=uid(); c.pts=c.pts.map(function(p){ return {x:p.x+(dx!==undefined?dx:off),y:p.y+(dy!==undefined?dy:off)}; });
+  S.meas.push(c); S.selM=c.id; S.selId=null; renderAll(); save(); return c;
+}
+
+/* ---------- rendu sur le plan ---------- */
+var hatchC={};
+function hatch(col){ if(hatchC[col]) return hatchC[col];
+  var c=document.createElement("canvas"); c.width=c.height=9; var g=c.getContext("2d");
+  g.strokeStyle=col; g.lineWidth=1.3; g.beginPath(); g.moveTo(0,9); g.lineTo(9,0); g.moveTo(-3,3); g.lineTo(3,-3); g.moveTo(6,12); g.lineTo(12,6); g.stroke();
+  return (hatchC[col]=ctx.createPattern(c,"repeat")); }
+function pill(txt,x,y,bg,fg,font){
+  ctx.font=font||"600 11.5px 'IBM Plex Mono', monospace";
+  var w=ctx.measureText(txt).width+12;
+  ctx.globalAlpha=.94; ctx.fillStyle=bg; ctx.beginPath();
+  if(ctx.roundRect) ctx.roundRect(x-w/2,y-9,w,18,9); else ctx.rect(x-w/2,y-9,w,18); ctx.fill();
+  ctx.globalAlpha=1; ctx.fillStyle=fg||"#fff"; ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.fillText(txt,x,y+.5);
+  ctx.textAlign="left"; ctx.textBaseline="alphabetic";
+}
+function drawMetre(lv){
+  var list=S.meas.filter(function(m){ return m.lv===lv.id&&itemVis(itemOf(m)); });
+  var order={area:0,line:1,count:2}, idx={};
+  list.sort(function(a,b){ return order[itemOf(a).kind]-order[itemOf(b).kind]; });
+  ctx.save();
+  list.forEach(function(m){
+    var it=itemOf(m), on=m.id===S.selM, ps=m.pts.map(function(q){ return p2s(lv,q); }), r=mq(m);
+    ctx.lineJoin="round"; ctx.lineCap="round"; ctx.setLineDash([]);
+    if(it.kind==="area"){
+      ctx.beginPath(); ps.forEach(function(p,i){ if(i) ctx.lineTo(p.x,p.y); else ctx.moveTo(p.x,p.y); }); ctx.closePath();
+      if(m.neg){ ctx.fillStyle=hatch(it.c); ctx.globalAlpha=.9; ctx.fill(); ctx.setLineDash([6,4]); }
+      else { ctx.globalAlpha=on?.32:.22; ctx.fillStyle=it.c; ctx.fill(); }
+      ctx.globalAlpha=1; ctx.strokeStyle=it.c; ctx.lineWidth=on?2.6:1.6; ctx.stroke(); ctx.setLineDash([]);
+      var c=p2s(lv,pcentroid(m.pts));
+      if(S.view.s>2||on) pill((m.neg?"− ":"")+(r.ok? qTxt(Math.abs(r.q),"m²") : "échelle ?"),c.x,c.y,it.c);
+    }else if(it.kind==="line"){
+      ctx.beginPath(); ps.forEach(function(p,i){ if(i) ctx.lineTo(p.x,p.y); else ctx.moveTo(p.x,p.y); });
+      ctx.strokeStyle="rgba(255,255,255,.75)"; ctx.lineWidth=on?7:5.5; ctx.stroke();
+      ctx.strokeStyle=it.c; ctx.lineWidth=on?4:3; ctx.stroke();
+      var bi=1, bl=0; for(var j=1;j<ps.length;j++){ var L=Math.hypot(ps[j].x-ps[j-1].x,ps[j].y-ps[j-1].y); if(L>bl){ bl=L; bi=j; } }
+      if(ps.length>1&&(S.view.s>2||on)) pill(r.ok? qTxt(r.q,"ml") : "échelle ?",(ps[bi].x+ps[bi-1].x)/2,(ps[bi].y+ps[bi-1].y)/2-12,it.c);
+    }else{
+      var n=(idx[it.id]=(idx[it.id]||0)+1), p=ps[0];
+      ctx.beginPath(); ctx.arc(p.x,p.y,on?9.5:8,0,6.2832); ctx.fillStyle=it.c; ctx.fill();
+      ctx.lineWidth=on?2.5:1.6; ctx.strokeStyle="#fff"; ctx.stroke();
+      ctx.fillStyle="#fff"; ctx.font="700 "+(n>99?8:9.5)+"px 'Archivo', sans-serif"; ctx.textAlign="center"; ctx.textBaseline="middle";
+      ctx.fillText(String(n),p.x,p.y+.5); ctx.textAlign="left"; ctx.textBaseline="alphabetic";
+    }
+    if(on&&it.kind!=="count"){
+      ctx.fillStyle="#fff"; ctx.strokeStyle=it.c; ctx.lineWidth=1.6;
+      ps.forEach(function(p){ ctx.beginPath(); ctx.rect(p.x-4.5,p.y-4.5,9,9); ctx.fill(); ctx.stroke(); });
+      var nseg= it.kind==="area"? ps.length : ps.length-1;
+      for(var k=0;k<nseg;k++){ var a=ps[k], b=ps[(k+1)%ps.length]; if(Math.hypot(a.x-b.x,a.y-b.y)<=26) continue;
+        ctx.beginPath(); ctx.arc((a.x+b.x)/2,(a.y+b.y)/2,3.5,0,6.2832); ctx.globalAlpha=.85; ctx.fill(); ctx.stroke(); ctx.globalAlpha=1; }
+    }
+  });
+  ctx.restore();
+}
+/* tracé en cours, avec la quantité qui se met à jour sous le pointeur */
+function drawDraft(lv){
+  if(snapAt&&isMtTool(S.tool)){ ctx.save(); ctx.strokeStyle="#ffd34d"; ctx.lineWidth=2; ctx.beginPath(); ctx.rect(snapAt.x-6,snapAt.y-6,12,12); ctx.stroke(); ctx.restore(); }
+  if(!draft||draft.lv!==lv.id) return;
+  var it=itemById(draft.it); if(!it) return;
+  var ps=draft.pts.map(function(q){ return p2s(lv,q); }), cur=draftCur? p2s(lv,draftCur) : null, all=cur? ps.concat([cur]) : ps;
+  ctx.save(); ctx.lineJoin="round"; ctx.lineCap="round";
+  if(draft.kind==="area"&&all.length>2){ ctx.beginPath(); all.forEach(function(p,i){ if(i) ctx.lineTo(p.x,p.y); else ctx.moveTo(p.x,p.y); }); ctx.closePath();
+    ctx.globalAlpha=.18; ctx.fillStyle=it.c; ctx.fill(); ctx.globalAlpha=1; }
+  ctx.beginPath(); all.forEach(function(p,i){ if(i) ctx.lineTo(p.x,p.y); else ctx.moveTo(p.x,p.y); });
+  ctx.strokeStyle=it.c; ctx.lineWidth=draft.kind==="line"?3:2; ctx.stroke();
+  if(draft.kind==="area"&&all.length>2){ ctx.setLineDash([5,5]); ctx.beginPath(); ctx.moveTo(all[all.length-1].x,all[all.length-1].y); ctx.lineTo(all[0].x,all[0].y); ctx.stroke(); ctx.setLineDash([]); }
+  ps.forEach(function(p,i){ ctx.beginPath(); ctx.arc(p.x,p.y,i===0&&draft.kind==="area"?5.5:3.5,0,6.2832); ctx.fillStyle="#fff"; ctx.fill(); ctx.strokeStyle=it.c; ctx.lineWidth=2; ctx.stroke(); });
+  var s=pxm(lv), pts=draft.pts.concat(draftCur?[draftCur]:[]);
+  if(s&&cur&&pts.length>1){
+    var seg=Math.hypot(pts[pts.length-1].x-pts[pts.length-2].x,pts[pts.length-1].y-pts[pts.length-2].y)/s;
+    var tot= draft.kind==="area"&&pts.length>2? qTxt(parea(pts)/(s*s),"m²") : qTxt(plen(pts,false)/s,"ml");
+    pill(tot+"  ·  "+nf(seg,2)+" m",cur.x,cur.y-22,it.c);
+  }
+  ctx.restore();
+}
+
+/* ---------- liste des postes (onglet Métré) ---------- */
+function renderMetre(){
+  var box=document.getElementById("mtList"), foot=document.getElementById("mtFoot"); if(!box) return;
+  var T=totals(), lv=active(); box.innerHTML="";
+  if(!S.items.length){
+    box.innerHTML='<div class="empty"><b>Métré</b> : choisissez un outil <b>Surface</b>, <b>Linéaire</b> ou <b>Comptage</b> dans la barre du haut et cliquez sur le plan, '+
+      'ou créez d\'abord vos postes avec <b>+</b> (ex. « Dalle BA ép. 20 », « Voiles h. 2,60 », « Prises de courant »).<br><br>Le plan doit avoir son échelle (outil Échelle).</div>';
+    foot.innerHTML=""; return;
+  }
+  var tot=0, anyPu=false;
+  S.items.forEach(function(it,ii){
+    var t=T[it.id], open=!!it.open, vis=itemVis(it), u=unitOf(it), ret=itemRet(it,t);
+    if(it.pu>0){ tot+=ret*it.pu; anyPu=true; }
+    var hd=document.createElement("div");
+    hd.className="ly it"+(it.id===S.activeItem?" on":"")+(vis?"":" off"); hd.dataset.id=it.id;
+    hd.style.gridTemplateColumns="18px 22px 14px minmax(0,1fr) auto auto";
+    hd.title="Poste actif : les prochains métrés de ce type y sont rangés";
+    hd.innerHTML='<button class="chev" data-ch title="'+(open?"Replier":"Réglages et détail par niveau")+'">'+(open?"▼":"▶")+'</button>'+
+      '<button class="eye" data-eye title="'+(vis?"Masquer":"Afficher")+' sur le plan">'+(vis?EYE:EYE_OFF)+'</button>'+
+      '<label class="lsw" style="background:'+it.c+'" title="Couleur"><input type="color" value="'+it.c+'"></label>'+
+      '<div style="min-width:0;overflow:hidden"><input class="lnm" value="'+esc(it.name)+'" spellcheck="false" title="Renommer le poste">'+
+        '<div style="display:flex;gap:5px;align-items:center;font-size:10.5px;color:var(--muted);margin-top:1px;white-space:nowrap">'+ic(KIND[it.kind].ic,"s")+'<span title="'+KIND[it.kind].t+'">'+plural(t.n,"mes.","mes.")+'</span>'+
+        (t.bad?' · <span style="color:var(--accent)">'+t.bad+' sans échelle</span>':'')+'<span class="tot" style="margin-left:auto;color:var(--ink)">'+qTxt(ret,u)+'</span></div></div>'+
+      '<button class="btn sm" data-go title="Métrer ce poste sur le plan">'+ic(KIND[it.kind].ic,"s")+'</button>'+
+      '<button class="btn ghost sm" data-rm title="Supprimer le poste">✕</button>';
+    hd.onclick=function(e){ if(e.target.closest("button,input,label")) return; setActiveItem(it.id,false); };
+    hd.querySelector("[data-ch]").onclick=function(){ it.open=!open; renderMetre(); };
+    hd.querySelector("[data-eye]").onclick=function(){ it.vis=!vis; renderMetre(); draw(); save(); };
+    hd.querySelector("[data-go]").onclick=function(){ setActiveItem(it.id,true); };
+    var ci=hd.querySelector("input[type=color]");
+    ci.oninput=function(){ it.c=this.value; hd.querySelector(".lsw").style.background=this.value; draw(); };
+    ci.onchange=function(){ save(); };
+    var ni=hd.querySelector(".lnm");
+    ni.onfocus=function(){ if(S.activeItem!==it.id){ S.activeItem=it.id; Array.prototype.forEach.call(box.querySelectorAll(".it"),function(r){ r.classList.toggle("on",r.dataset.id===it.id); }); } };
+    ni.oninput=function(){ it.name=this.value; save(); };
+    ni.onkeydown=function(e){ if(e.key==="Enter") this.blur(); };
+    ni.onchange=function(){ if(!it.name.trim()){ it.name=KIND[it.kind].def; } renderInsp(); draftHint(); };
+    hd.querySelector("[data-rm]").onclick=function(){ removeItem(it); };
+    box.appendChild(hd);
+    if(!open) return;
+    var ed=document.createElement("div"); ed.className="obed";
+    ed.innerHTML=(it.kind!=="count"?'<div class="fld"><label>'+KIND[it.kind].kl+'</label><input type="number" min="0" step="0.01" data-k="k" value="'+(it.k||"")+'" placeholder="—"></div>':'')+
+      '<div class="fld'+(it.kind==="count"?" full":"")+'"><label>Prix unit. (€ HT / '+u+')</label><input type="number" min="0" step="0.01" data-k="pu" value="'+(it.pu||"")+'" placeholder="—"></div>'+
+      '<div class="fld full"><label>Réf. / article (optionnel)</label><input type="text" data-k="ref" value="'+esc(it.ref||"")+'" placeholder="ex. 3.2.1 — n° de prix du DPGF"></div>'+
+      (it.kind!=="count"?'<p class="full" style="margin:0;font-size:11px;color:var(--muted)">'+KIND[it.kind].kl.replace(/ \(m\)/,"")+' : '+KIND[it.kind].kh+'.</p>':'');
+    Array.prototype.forEach.call(ed.querySelectorAll("[data-k]"),function(inp){
+      var k=inp.dataset.k;
+      inp.oninput=function(){ if(k==="ref") it.ref=this.value; else { var v=parseFloat(String(this.value).replace(",",".")); it[k]=v>0? v : 0; } save(); draw(); renderInsp(); updTot(); };
+      inp.onchange=function(){ renderMetre(); };
+    });
+    box.appendChild(ed);
+    /* détail par niveau, et mesures du niveau affiché */
+    var lvs=S.levels.filter(function(l){ return t.lv[l.id]; });
+    if(!lvs.length){ var em=document.createElement("div"); em.className="res sub none"; em.textContent="aucun métré — bouton à droite du nom, puis cliquez sur le plan"; box.appendChild(em); }
+    lvs.forEach(function(l){
+      var L=t.lv[l.id], row=document.createElement("div"); row.className="sub2"+(lv&&l.id===lv.id?" cur":"");
+      row.innerHTML='<span>'+esc(l.name)+' · '+plural(L.n,"mesure")+'</span><b>'+qTxt(it.k>0?L.q2:L.q,u)+'</b>'; box.appendChild(row);
+      row.style.cursor="pointer"; row.onclick=function(){ if(!lv||l.id!==lv.id){ S.activeId=l.id; S.selId=null; S.selM=null; fit(); renderAll(); } };
+      if(lv&&l.id===lv.id){
+        var k=0; S.meas.forEach(function(m){ if(m.it!==it.id||m.lv!==l.id) return; k++;
+          var r=mq(m), el=document.createElement("div"); el.className="res sub"+(m.id===S.selM?" on":"");
+          el.style.paddingLeft="42px";
+          el.innerHTML='<span class="swatch" style="background:'+it.c+'"></span><div class="nm">'+esc(KIND[it.kind].t+" "+k+(m.neg?" (déduction)":"")+(m.note?" — "+m.note:""))+'</div>'+
+            '<span style="display:flex;gap:6px;align-items:center"><span class="q">'+(it.kind==="count"?"":qTxt(it.k>0&&r.q2!=null?r.q2:r.q,u))+'</span><button class="btn ghost sm" data-rm>✕</button></span>';
+          el.onclick=function(e){ if(e.target.closest("[data-rm]")) return; selectMeas(m); centerOnMeas(m); draw(); };
+          el.querySelector("[data-rm]").onclick=function(){ delMeas(m.id); };
+          box.appendChild(el);
+        });
+      }
+    });
+  });
+  function updTot(){ var T2=totals(), s=0, a=false; S.items.forEach(function(it){ if(it.pu>0){ a=true; s+=itemRet(it,T2[it.id])*it.pu; } });
+    foot.innerHTML= a? '<span>Total HT (postes chiffrés)</span><b>'+eur(s)+'</b>' : '<span>'+plural(S.items.length,"poste")+' · '+plural(S.meas.filter(function(m){ return lvIndex(m.lv)>=0; }).length,"mesure")+'</span><span style="color:var(--muted)">prix : ▶ d\'un poste</span>'; }
+  updTot();
+}
+function removeItem(it){
+  var n=S.meas.filter(function(m){ return m.it===it.id; }).length;
+  S.items=S.items.filter(function(x){ return x!==it; }); S.meas=S.meas.filter(function(m){ return m.it!==it.id; });
+  if(S.activeItem===it.id) S.activeItem=null; if(S.selM&&!selM()) S.selM=null; draft=null;
+  if(isMtTool(S.tool)) setTool("select");
+  renderAll(); save(); note("Poste « "+it.name+" » supprimé"+(n?" avec ses "+n+" mesure"+(n>1?"s":""):"")+" — Ctrl+Z pour revenir.");
+}
+function centerOnMeas(m){ var lv=lvById(m.lv); if(!lv) return; var c=pcentroid(m.pts), w=p2w(lv,c.x,c.y);
+  S.view.tx=stage.clientWidth/2-w.X*S.view.s; S.view.ty=stage.clientHeight/2-w.Y*S.view.s; }
+function addItemMenu(btn){
+  var b=btn.getBoundingClientRect();
+  openMenu(b.left,b.bottom+4,[{h:"Nouveau poste de métré"},
+    {t:"Surface (m², m³)",i:"area",fn:function(){ newItemUI("area"); }},
+    {t:"Linéaire (ml, m²)",i:"line",fn:function(){ newItemUI("line"); }},
+    {t:"Comptage (u)",i:"count",fn:function(){ newItemUI("count"); }}]);
+}
+function newItemUI(kind){
+  var it=newItem(kind); it.open=true; setListView("mt"); renderAll(); save();
+  var i=document.querySelector('#mtList .it[data-id="'+it.id+'"] .lnm'); if(i){ i.focus(); i.select(); }
+}
+
+/* ---------- propriétés d'une mesure ---------- */
+function renderMeasInsp(box,m){
+  var it=itemOf(m), lv=lvById(m.lv), r=mq(m), K=KIND[it.kind], same=S.items.filter(function(x){ return x.kind===it.kind; });
+  var num=S.meas.filter(function(x){ return x.it===it.id&&x.lv===m.lv; }).indexOf(m)+1;
+  box.innerHTML='<div class="insp">'+
+    '<div class="acts"><button class="btn sm" id="m_dup" title="Copie décalée (Ctrl+D)">'+ic("copy","s")+'Dupliquer</button>'+
+    '<button class="btn sm danger" id="m_del" style="margin-left:auto">'+ic("trash","s")+'Supprimer</button></div>'+
+    '<div class="big"><b>'+(r.ok? (m.neg?"− ":"")+nf(Math.abs(r.q),it.kind==="count"?0:2) : "—")+'</b><span>'+K.u+(r.q2!=null?" · "+qTxt(Math.abs(r.q2),K.ku):"")+'</span></div>'+
+    (!r.ok?'<p class="inh" style="color:var(--accent)">Échelle du plan à définir : la quantité n\'est pas encore calculée.</p>':'')+
+    '<div class="fld"><label>Poste</label><select id="m_it">'+same.map(function(x){ return '<option value="'+x.id+'"'+(x.id===it.id?" selected":"")+'>'+esc(x.name)+'</option>'; }).join("")+
+      '<option value="_new">+ Nouveau poste…</option></select></div>'+
+    '<div class="row"><div class="fld"><label>Niveau</label><input type="text" value="'+esc(lv?lv.name:"?")+'" disabled></div>'+
+      '<div class="fld"><label>N°</label><input type="text" value="'+K.t+" "+num+'" disabled></div></div>'+
+    (it.kind==="area"?'<label class="ck"><input type="checkbox" id="m_neg"'+(m.neg?" checked":"")+'> Déduction (trémie, vide… retirée du total)</label>'+
+      (r.ok?'<p class="inh" style="color:var(--muted)">Périmètre '+nf(r.per,2)+' m · '+m.pts.length+' sommets</p>':''):'')+
+    (it.kind==="line"&&r.ok?'<p class="inh" style="color:var(--muted)">'+(m.pts.length-1)+' segment'+(m.pts.length>2?"s":"")+'</p>':'')+
+    '<div class="fld"><label>Observation</label><input type="text" id="m_note" value="'+esc(m.note||"")+'" placeholder="ex. local technique, zone B"></div>'+
+    (it.kind!=="count"?'<p style="margin:0;font-size:11px;color:var(--muted);line-height:1.45">Sur le plan : tirez les carrés pour déplacer un sommet, les ronds pour en ajouter un ; clic droit sur un sommet pour le supprimer.</p>':'')+
+    '</div>';
+  box.querySelector("#m_dup").onclick=function(){ dupMeas(m); };
+  box.querySelector("#m_del").onclick=function(){ delMeas(m.id); };
+  box.querySelector("#m_it").onchange=function(){
+    if(this.value==="_new"){ var n=newItem(it.kind); m.it=n.id; n.open=true; setListView("mt"); }
+    else { m.it=this.value; S.activeItem=m.it; }
+    renderAll(); save(); };
+  var ng=box.querySelector("#m_neg"); if(ng) ng.onchange=function(){ m.neg=this.checked; renderAll(); save(); };
+  box.querySelector("#m_note").oninput=function(){ m.note=this.value; renderMetre(); save(); };
+}
+/* outil de métré actif sans sélection : réglages du poste en cours */
+function renderItemInsp(box,it){
+  var T=totals()[it.id], u=unitOf(it), same=S.items.filter(function(x){ return x.kind===it.kind; });
+  box.innerHTML='<div class="insp">'+
+    '<div class="fld"><label>Poste en cours ('+KIND[it.kind].t.toLowerCase()+')</label><select id="p_it">'+same.map(function(x){ return '<option value="'+x.id+'"'+(x.id===it.id?" selected":"")+'>'+esc(x.name)+'</option>'; }).join("")+
+      '<option value="_new">+ Nouveau poste…</option></select></div>'+
+    '<div class="big"><b>'+nf(itemRet(it,T),u==="u"?0:2)+'</b><span>'+u+' au total · '+plural(T.n,"mesure")+'</span></div>'+
+    '<div class="fld"><label>Désignation</label><input type="text" id="p_nm" value="'+esc(it.name)+'"></div>'+
+    '<div class="row">'+(it.kind!=="count"?'<div class="fld"><label>'+KIND[it.kind].kl+'</label><input type="number" min="0" step="0.01" id="p_k" value="'+(it.k||"")+'" placeholder="—"></div>':'')+
+      '<div class="fld"'+(it.kind==="count"?' style="grid-column:1/-1"':'')+'><label>Prix (€ HT / '+u+')</label><input type="number" min="0" step="0.01" id="p_pu" value="'+(it.pu||"")+'" placeholder="—"></div></div>'+
+    '<p style="margin:0;font-size:11.5px;color:var(--muted);line-height:1.5">'+
+      (it.kind==="count"? "Un clic par élément. Clic droit sur un point pour le supprimer." :
+       it.kind==="area"? "Clic à chaque angle ; double-clic, Entrée ou clic sur le premier point pour fermer. Retour arrière enlève le dernier point, Échap abandonne. Maj : angles droits. Les points s'aimantent aux sommets existants (carré jaune)." :
+       "Clic à chaque point ; double-clic ou Entrée pour terminer. Retour arrière enlève le dernier point, Échap abandonne. Maj : angles droits.")+'</p>'+
+    '</div>';
+  box.querySelector("#p_it").onchange=function(){ if(this.value==="_new"){ newItem(it.kind); } else S.activeItem=this.value; renderAll(); draftHint(); save(); };
+  box.querySelector("#p_nm").oninput=function(){ it.name=this.value||KIND[it.kind].def; renderMetre(); draftHint(); save(); };
+  var k=box.querySelector("#p_k"); if(k) k.oninput=function(){ var v=parseFloat(this.value); it.k=v>0?v:0; renderMetre(); draw(); save(); };
+  box.querySelector("#p_pu").oninput=function(){ var v=parseFloat(this.value); it.pu=v>0?v:0; renderMetre(); save(); };
+}
+
+/* ---------- exemple ---------- */
+function demoMetre(ids){
+  var L=function(i){ return S.levels[i]; }, P=function(i,X,Y){ var p=w2p(L(i),X,Y); return {x:Math.round(p.x*100)/100,y:Math.round(p.y*100)/100}; };
+  S.items=[]; S.meas=[];
+  var dal=newItem("area","Dalle BA ép. 20 cm"); dal.k=.2; dal.pu=165; dal.open=false;
+  var voi=newItem("line","Voiles BA h. 2,60 m"); voi.k=2.6; voi.pu=92; voi.open=false;
+  var pc=newItem("count","Prises de courant"); pc.pu=48; pc.open=false;
+  var poly=[[0,0],[24,0],[24,16],[0,16]];
+  [0,1,2].forEach(function(i){
+    S.meas.push({id:uid(),it:dal.id,lv:ids[i],pts:poly.map(function(c){ return P(i,c[0],c[1]); })});
+    S.meas.push({id:uid(),it:dal.id,lv:ids[i],neg:true,note:"trémie monte-charge",pts:[[9.8,8.6],[11.2,8.6],[11.2,10.2],[9.8,10.2]].map(function(c){ return P(i,c[0],c[1]); })});
+    S.meas.push({id:uid(),it:voi.id,lv:ids[i],note:"noyau",pts:[[9.6,5.2],[13.4,5.2],[13.4,10.4],[9.6,10.4],[9.6,5.2]].map(function(c){ return P(i,c[0],c[1]); })});
+  });
+  [[2,2],[6,2],[2,12],[7,14],[17,3],[21,12],[16,14]].forEach(function(c){ S.meas.push({id:uid(),it:pc.id,lv:ids[1],pts:[P(1,c[0],c[1])]}); });
+  S.activeItem=dal.id;
+}
 /* ============ démarrage ============ */
 var hasPrefs=loadPrefs();
 fixLayers(); fixItems(); setListView(S.ui.lst); layout(); resize();
