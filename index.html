@@ -1162,30 +1162,7 @@ function setTool(t){
   if(!booting){ renderMetre(); renderInsp(); }
   draw();
 }
-document.addEventListener("keydown",function(e){
-  if(/input|select|textarea/i.test(e.target.tagName)) return;
-  var k=e.key.toLowerCase();
-  if(draft&&e.key==="Enter"){ e.preventDefault(); finishDraft(); return; }
-  if(draft&&(e.key==="Backspace"||e.key==="Delete")){ e.preventDefault(); draft.pts.pop(); if(!draft.pts.length) draft=null; draftHint(); draw(); return; }
-  if(e.key==="Escape"&&draft){ cancelDraft(); return; }
-  if(e.key==="Escape"&&isMtTool(S.tool)){ setTool("select"); return; }
-  if((e.key==="Delete"||e.key==="Backspace")&&selM()){ e.preventDefault(); delMeas(S.selM); return; }
-  if(e.ctrlKey||e.metaKey){ if(k==="d"&&sel()){ e.preventDefault(); startStamp(sel()); } return; }
-  if(k==="v") setTool("select"); else if(k==="r") setTool("rect");
-  else if(k==="c") setTool("circle"); else if(k==="e") setTool("scale");
-  else if(k==="p") setTool("org");
-  else if(k==="h") setTool("pan"); else if(k==="m") setTool("meas");
-  else if(e.key==="Escape"){ if(S.tool==="stamp"){ setTool("select"); return; }
-    meas=null; calLine=null; closeDock(); hint(""); S.selId=null; renderAll(); }
-  else if(e.key==="Delete"||e.key==="Backspace"){ if(sel()){ delShape(S.selId); e.preventDefault(); } }
-  else if(e.key.indexOf("Arrow")===0){
-    var s=sel(); if(!s) return; e.preventDefault();
-    var d=e.shiftKey?.10:.01;
-    if(e.key==="ArrowLeft")s.x-=d; if(e.key==="ArrowRight")s.x+=d;
-    if(e.key==="ArrowUp")s.y-=d; if(e.key==="ArrowDown")s.y+=d;
-    round(s); renderAll(); save();
-  }
-});
+
 function round(s){
   s.x=Math.round(s.x*1000)/1000; s.y=Math.round(s.y*1000)/1000;
   if(s.t==="rect"){ s.w=Math.round(s.w*1000)/1000; s.h=Math.round(s.h*1000)/1000; }
@@ -1438,7 +1415,6 @@ cv.addEventListener("pointercancel",endPtr);
 cv.addEventListener("dblclick",function(e){ if(draft){ e.preventDefault(); finishDraft(); } });
 cv.addEventListener("pointerleave",function(){ if(snapAt||draftCur){ snapAt=null; draftCur=null; draw(); } });
 var spaceDown=false;
-cv.addEventListener("contextmenu",function(e){ e.preventDefault(); });
 cv.addEventListener("wheel",function(e){
   e.preventDefault(); var p=evPos(e), w=s2w(p.x,p.y);
   var k=Math.pow(1.0016,-e.deltaY);
@@ -1659,6 +1635,7 @@ function resRow(s){
     if(lv&&!onLevel(s,lv.id)){ var t=S.levels.find(function(l){ return onLevel(s,l.id)&&ready(l); }); if(t){ S.activeId=t.id; fit(); } }
     var cur=active(); centerOn(cur&&onLevel(s,cur.id)? at(s,cur.id) : s); renderAll(); save(); };
   el.querySelector("[data-rm]").onclick=function(){ delShape(s.id); };
+  el.oncontextmenu=function(e){ e.preventDefault(); S.selId=s.id; S.selM=null; renderAll(); openMenu(e.clientX,e.clientY,resMenuItems(s,active())); };
   return el;
 }
 /* onglet Objets : un type par rangée ; clic = poser ce type sur le plan */
@@ -2494,6 +2471,207 @@ function demo(inNew){
 }
 
 
+/* ============ clavier ============ */
+var IS_MAC=/Mac|iPhone|iPad/.test(navigator.platform||navigator.userAgent||"");
+function kk(t){ return IS_MAC? t.replace(/Ctrl\+/g,"⌘").replace(/Maj\+/g,"⇧") : t; }
+document.addEventListener("keydown",function(e){
+  var typing=/input|select|textarea/i.test(e.target.tagName)||e.target.isContentEditable;
+  var mod=e.ctrlKey||e.metaKey, k=(e.key||"").toLowerCase();
+  if(mod&&k==="s"){ e.preventDefault(); saveNow().then(function(){ note("Projet enregistré — l'enregistrement est de toute façon automatique.",2400); }); return; }
+  if(typing){ if(e.key==="Escape") e.target.blur(); return; }
+  if(document.querySelector(".modal")){ if(e.key==="Escape"){ e.preventDefault(); closeModals(); } return; }
+  if(e.key===" "){ e.preventDefault(); if(!spaceDown){ spaceDown=true; if(!drag) cv.style.cursor="grab"; } return; }
+  if(mod){
+    if(k==="z"&&!e.shiftKey){ e.preventDefault(); undo(); }
+    else if((k==="z"&&e.shiftKey)||k==="y"){ e.preventDefault(); redo(); }
+    else if(k==="c"){ if(copySel()) e.preventDefault(); }
+    else if(k==="x"){ if(copySel()){ e.preventDefault(); delSel(); note("Coupé — Ctrl+V pour coller.",1800); } }
+    else if(k==="v"){ e.preventDefault(); paste(); }
+    else if(k==="d"){ e.preventDefault(); dupSel(); }
+    else if(k==="e"){ e.preventDefault(); document.getElementById("repBtn").click(); }
+    else if(k==="o"){ e.preventDefault(); openProjects(); }
+    else if(k==="i"){ e.preventDefault(); document.getElementById("file").click(); }
+    else if(k==="0"){ e.preventDefault(); fit(); }
+    else if(k==="="||k==="+"){ e.preventDefault(); zoomBy(1.35); }
+    else if(k==="-"){ e.preventDefault(); zoomBy(1/1.35); }
+    return;
+  }
+  if(e.altKey) return;
+  if(draft&&e.key==="Enter"){ e.preventDefault(); finishDraft(); return; }
+  if(draft&&(e.key==="Backspace"||e.key==="Delete")){ e.preventDefault(); draft.pts.pop(); if(!draft.pts.length) draft=null; draftHint(); draw(); return; }
+  if(e.key==="Escape"){
+    closeMenu();
+    if(draft){ cancelDraft(); return; }
+    if(S.tool!=="select"){ setTool("select"); return; }
+    meas=null; calLine=null; closeDock(); hint(""); S.selId=null; S.selM=null; renderAll(); return;
+  }
+  if(e.key==="Delete"||e.key==="Backspace"){ if(delSel()) e.preventDefault(); return; }
+  if(e.key.indexOf("Arrow")===0){ if(nudge(e.key,e.shiftKey)) e.preventDefault(); return; }
+  if(e.key==="PageUp"||e.key==="PageDown"){ e.preventDefault(); levelStep(e.key==="PageUp"?1:-1); return; }
+  if(e.key==="?"||e.key==="F1"){ e.preventDefault(); openHelp(); return; }
+  if(e.key==="+"||e.key==="="){ zoomBy(1.35); return; }
+  if(e.key==="-"||e.key==="_"){ zoomBy(1/1.35); return; }
+  var map={v:"select",h:"pan",r:"rect",c:"circle",s:e.shiftKey?"arect":"area",l:"line",n:"count",m:"meas",e:"scale",p:"org"};
+  if(map[k]){ e.preventDefault(); setTool(map[k]); return; }
+  if(k==="f"){ fit(); return; }
+  if(k==="g"){ setGrid(!S.grid); return; }
+});
+document.addEventListener("keyup",function(e){ if(e.key===" "){ spaceDown=false; if(!drag) cv.style.cursor= S.tool==="pan"?"grab" : S.tool==="select"?"default":"crosshair"; } });
+window.addEventListener("blur",function(){ spaceDown=false; });
+
+/* niveau du dessus (+1) ou du dessous (−1), en gardant le même endroit à l'écran quand les deux niveaux sont calés */
+function levelStep(dir){
+  var i=lvIndex(S.activeId); if(i<0) return;
+  var j= i+(S.asc? dir : -dir); if(j<0||j>=S.levels.length){ note(dir>0?"Pas de niveau au-dessus.":"Pas de niveau en dessous.",1600); return; }
+  var a=S.levels[i], b=S.levels[j]; S.activeId=b.id; S.selId=null; S.selM=null; draft=null;
+  if(!(ready(a)&&ready(b))) fit();
+  renderAll(); scheduleRefine(); note(b.name,1200);
+}
+/* décalage au clavier : 1 cm, 10 cm avec Maj */
+function nudge(key,big){
+  var d=big?.10:.01, dx=key==="ArrowLeft"?-d:key==="ArrowRight"?d:0, dy=key==="ArrowUp"?-d:key==="ArrowDown"?d:0;
+  var s=sel(); if(s){ s.x+=dx; s.y+=dy; round(s); renderAll(); save(); return true; }
+  var m=selM(), lv=m&&lvById(m.lv);
+  if(m&&lv){ var o=w2p(lv,0,0), q, sc=ready(lv)? 1 : (pxm(lv)||1);
+    q=w2p(lv,dx*sc,dy*sc); m.pts.forEach(function(p){ p.x+=q.x-o.x; p.y+=q.y-o.y; }); renderAll(); save(); return true; }
+  return false;
+}
+
+/* ============ copier / coller / dupliquer / supprimer la sélection ============ */
+var clip=null;
+function copySel(){
+  var s=sel(), m=selM();
+  if(s){ clip={t:"res",d:JSON.parse(JSON.stringify(s))}; note("« "+s.n+" » copiée.",1400); return true; }
+  if(m){ clip={t:"m",d:JSON.parse(JSON.stringify(m))}; note("Métré copié.",1400); return true; }
+  return false;
+}
+function delSel(){ if(sel()){ delShape(S.selId); return true; } if(selM()){ delMeas(S.selM); return true; } return false; }
+function dupSel(){ var s=sel(), m=selM(); if(s){ startStamp(s); return true; } if(m){ dupMeas(m); note("Copie décalée — déplacez-la à sa place.",2000); return true; } return false; }
+function paste(at){
+  var lv=active(); if(!clip||!lv){ note(clip?"Aucun niveau ouvert.":"Rien à coller : sélectionnez puis Ctrl+C."); return; }
+  var W=at||cursor;
+  if(clip.t==="res"){
+    if(!ready(lv)){ note("Définissez l'échelle et le repère de ce plan."); return; }
+    var c=JSON.parse(JSON.stringify(clip.d)); c.id=uid(); c.n=nextName(clip.d.n); delete c.obs;
+    var cc=centerOf(c), tx=W? W.X : cc.X+.5, ty=W? W.Y : cc.Y+.5;
+    if(c.t==="rect"){ c.x=tx-c.w/2; c.y=ty-c.h/2; } else { c.x=tx; c.y=ty; }
+    if(!onLevel(c,lv.id)){ c.levels=idsFrom(lv.id,true); c.origin=lv.id; }
+    round(c); S.shapes.push(c); S.selId=c.id; S.selM=null; var L=layerOf(c); if(L) L.vis=true;
+    renderAll(); save(); note("« "+c.n+" » collée.",1600); return;
+  }
+  var src=lvById(clip.d.lv), m=JSON.parse(JSON.stringify(clip.d)); m.id=uid(); m.lv=lv.id;
+  if(!itemById(m.it)){ note("Le poste de ce métré n'existe plus."); return; }
+  /* changement de niveau : on passe par les mètres si les deux plans sont calés */
+  if(src&&src!==lv&&ready(src)&&ready(lv)) m.pts=m.pts.map(function(p){ var w=p2w(src,p.x,p.y); return w2p(lv,w.X,w.Y); });
+  var c0=pcentroid(m.pts), tgt= W? w2p(lv,W.X,W.Y) : {x:c0.x+20,y:c0.y+20};
+  if(itemOf(m).kind==="count"&&m.pts.length===1) c0=m.pts[0];
+  m.pts=m.pts.map(function(p){ return {x:p.x+tgt.x-c0.x,y:p.y+tgt.y-c0.y}; });
+  S.meas.push(m); S.selM=m.id; S.selId=null; renderAll(); save(); note("Métré collé.",1400);
+}
+
+/* ============ clic droit sur le plan (appui long au doigt) ============ */
+function setObs(s,lv,st){ var o=obs(s,lv.id); o.st=(o.st===st?"":st); renderAll(); save(); }
+function resMenuItems(s,lv){
+  var o=lv&&onLevel(s,lv.id)? obsOf(s,lv.id) : null, here=lv&&onLevel(s,lv.id);
+  var it=[{h:s.n+" · "+dimTxt(s)}];
+  if(here){
+    it.push({t:"Conforme sur "+lv.name,i:"ok",on:!!(o&&o.st==="ok"),fn:function(){ setObs(s,lv,"ok"); }});
+    it.push({t:"Anomalie sur "+lv.name,i:"ko",on:!!(o&&o.st==="ko"),fn:function(){ setObs(s,lv,"ko"); }});
+    it.push({t:"Déplacer vers la position réelle",i:"move",fn:function(){ S.selId=s.id; S.selM=null; renderAll(); setTool("real"); }});
+    it.push("-");
+  }
+  it.push({t:"Dupliquer (tampon)",i:"stamp",k:kk("Ctrl+D"),fn:function(){ S.selId=s.id; startStamp(s); }});
+  it.push({t:"Copier",i:"copy",k:kk("Ctrl+C"),fn:function(){ S.selId=s.id; S.selM=null; copySel(); }});
+  it.push({t:"Centrer la vue",i:"center",fn:function(){ centerOn(lv&&here? at(s,lv.id) : s); draw(); scheduleRefine(); }});
+  if(S.layers.length>1&&S.layers.length<=8){ it.push("-"); it.push({h:"Ranger dans le calque"});
+    S.layers.forEach(function(L){ it.push({t:L.name,on:L.id===s.ly,fn:function(){ s.ly=L.id; L.vis=true; renderAll(); save(); }}); }); }
+  it.push("-");
+  it.push({t:"Supprimer",i:"trash",k:"Suppr",dg:true,fn:function(){ delShape(s.id); }});
+  return it;
+}
+function measMenuItems(m,vtx){
+  var t=itemOf(m), r=mq(m), lv=lvById(m.lv), it=[{h:t.name+(r&&r.ok&&t.kind!=="count"?" · "+qTxt(Math.abs(r.q),KIND[t.kind].u):"")}];
+  if(vtx!=null) it.push({t:"Supprimer ce sommet",i:"minus",fn:function(){ delVertex(m,vtx); }});
+  if(t.kind==="area") it.push({t:"Déduction (retirée du total)",i:"neg",on:!!m.neg,fn:function(){ m.neg=!m.neg; renderAll(); save(); }});
+  var same=S.items.filter(function(x){ return x.kind===t.kind; });
+  if(same.length>1&&same.length<=10){ it.push("-"); it.push({h:"Ranger dans le poste"});
+    same.forEach(function(x){ it.push({t:x.name,on:x.id===m.it,fn:function(){ m.it=x.id; S.activeItem=x.id; renderAll(); save(); }}); }); }
+  it.push("-");
+  it.push({t:"Dupliquer",i:"copy",k:kk("Ctrl+D"),fn:function(){ dupMeas(m); }});
+  it.push({t:"Copier",i:"copy",k:kk("Ctrl+C"),fn:function(){ S.selM=m.id; S.selId=null; copySel(); }});
+  it.push({t:"Continuer ce poste",i:KIND[t.kind].ic,fn:function(){ setActiveItem(t.id,true); }});
+  it.push({t:"Masquer le poste « "+t.name+" »",i:"eye",fn:function(){ t.vis=false; S.selM=null; renderAll(); save(); }});
+  it.push("-");
+  it.push({t:"Supprimer",i:"trash",k:"Suppr",dg:true,fn:function(){ delMeas(m.id); }});
+  return it;
+}
+function canvasMenu(cx,cy,p){
+  var lv=active(); if(!lv) return;
+  if(draft){ finishDraft(); return; }                 /* clic droit pendant un tracé : terminer */
+  if(S.tool==="stamp"){ setTool("select"); return; }  /* fin de la pose en série */
+  var W=s2w(p.x,p.y), items;
+  var ms=selM(), vtx=null;
+  if(ms&&ms.lv===lv.id){ var h=measHandle(lv,ms,p); if(h&&h.t==="v") vtx=h.i; }
+  var hr= vtx==null&&ready(lv)? pick(W,lv) : null, hm= vtx!=null? ms : pickMeas(lv,p);
+  if(hr){ S.selId=hr.id; S.selM=null; renderAll(); items=resMenuItems(hr,lv); }
+  else if(hm){ S.selM=hm.id; S.selId=null; S.activeItem=hm.it; renderAll(); items=measMenuItems(hm,vtx); }
+  else {
+    var up=lvIndex(lv.id)+(S.asc?1:-1), dn=lvIndex(lv.id)+(S.asc?-1:1), U=S.levels[up], D=S.levels[dn];
+    items=[{h:lv.name+(ready(lv)?" · X "+nf(W.X,2)+"  Y "+nf(W.Y,2)+" m":"")},
+      {t:"Coller ici",i:"paste",k:kk("Ctrl+V"),off:!clip,fn:function(){ paste(W); }},
+      "-",
+      {t:"Surface",i:"area",k:"S",fn:function(){ setTool("area"); }},
+      {t:"Linéaire",i:"line",k:"L",fn:function(){ setTool("line"); }},
+      {t:"Comptage",i:"count",k:"N",fn:function(){ setTool("count"); }},
+      {t:"Réservation rectangulaire",i:"rect",k:"R",fn:function(){ setTool("rect"); }},
+      {t:"Mesurer une distance",i:"meas",k:"M",fn:function(){ setTool("meas"); }},
+      "-",
+      {t:"Poser le repère 0,0 ici",i:"org",fn:function(){ var q=w2p(lv,W.X,W.Y); keepView(lv,q,function(){ lv.org={x:q.x,y:q.y}; lv.rot=lv.rot||0; });
+        renderAll(); save(); note("Repère posé sur "+lv.name+(lv.scale?"":" — il reste l'échelle à définir.")); }},
+      {t:"Recadrer la vue",i:"fit",k:"F",fn:fit},
+      {t:"Trame de 1 m",i:"grid",k:"G",on:S.grid,fn:function(){ setGrid(!S.grid); }},
+      D&&ready(D)&&ready(lv)? {t:"Superposer "+D.name+" (dessous)",i:"under",on:S.under===D.id,fn:function(){ S.under=S.under===D.id?"":D.id; renderUnder(); draw(); }} : null,
+      "-",
+      {t:U?"Niveau au-dessus : "+U.name:"Pas de niveau au-dessus",i:"chev",k:"Pg↑",off:!U,fn:function(){ levelStep(1); }},
+      {t:D?"Niveau en dessous : "+D.name:"Pas de niveau en dessous",i:"chev",k:"Pg↓",off:!D,fn:function(){ levelStep(-1); }},
+      "-",
+      {t:"Exporter…",i:"export",k:kk("Ctrl+E"),fn:function(){ document.getElementById("repBtn").click(); }}];
+  }
+  openMenu(cx,cy,items);
+}
+cv.addEventListener("contextmenu",function(e){ e.preventDefault(); var r=cv.getBoundingClientRect(); canvasMenu(e.clientX,e.clientY,{x:e.clientX-r.left,y:e.clientY-r.top}); });
+/* appui long au doigt = clic droit */
+var lpT=null, lpAt=null;
+cv.addEventListener("pointerdown",function(e){
+  clearTimeout(lpT); lpAt=null; if(e.pointerType!=="touch") return;
+  var r=cv.getBoundingClientRect(); lpAt={x:e.clientX,y:e.clientY,p:{x:e.clientX-r.left,y:e.clientY-r.top}};
+  lpT=setTimeout(function(){ if(!lpAt||ptrs.size>1) return;
+    if(drag&&(drag.m==="move"||drag.m==="mmove"||drag.m==="size")) return;   /* déjà en train de déplacer */
+    drag=null; canvasMenu(lpAt.x,lpAt.y,lpAt.p); lpAt=null; },550);
+});
+cv.addEventListener("pointermove",function(e){ if(lpAt&&Math.hypot(e.clientX-lpAt.x,e.clientY-lpAt.y)>9){ clearTimeout(lpT); lpAt=null; } });
+["pointerup","pointercancel"].forEach(function(t){ cv.addEventListener(t,function(){ clearTimeout(lpT); lpAt=null; }); });
+
+/* ============ aide : raccourcis ============ */
+function openHelp(){
+  var d=document.createElement("div"); d.className="sheet wide";
+  function row(a,b){ return '<div><span>'+a+'</span><span>'+b.split(" / ").map(function(x){ return '<kbd>'+esc(kk(x))+'</kbd>'; }).join(" ")+'</span></div>'; }
+  d.innerHTML='<h3>Raccourcis et gestes</h3>'+
+    '<div class="keys">'+
+    '<h4>Outils</h4>'+row("Sélection","V")+row("Main (déplacer la vue)","H / Espace")+row("Réservation rectangulaire","R")+row("Réservation ronde","C")+
+      row("Surface (polygone)","S")+row("Surface rectangulaire","Maj+S")+row("Linéaire","L")+row("Comptage","N")+row("Mesurer une distance","M")+row("Échelle du plan","E")+row("Repère 0,0","P")+
+    '<h4>Pendant un tracé de métré</h4>'+row("Poser un point","Clic")+row("Terminer","Double-clic / Entrée")+row("Fermer la surface","Clic sur le 1er point")+row("Enlever le dernier point","Retour arrière")+
+      row("Angles droits / 45°","Maj")+row("Terminer (menu)","Clic droit")+row("Abandonner","Échap")+row("Aimantation","sommets existants")+
+    '<h4>Édition</h4>'+row("Annuler","Ctrl+Z")+row("Rétablir","Ctrl+Maj+Z / Ctrl+Y")+row("Copier / Coller sous le pointeur","Ctrl+C / Ctrl+V")+row("Couper","Ctrl+X")+
+      row("Dupliquer","Ctrl+D")+row("Supprimer","Suppr")+row("Décaler de 1 cm (10 cm)","Flèches / Maj")+row("Désélectionner, quitter l'outil","Échap")+
+    '<h4>Vue et niveaux</h4>'+row("Recadrer","F / Ctrl+0")+row("Zoom","+ / − / molette")+row("Trame 1 m","G")+row("Niveau au-dessus / en dessous","Pg↑ / Pg↓")+
+    '<h4>Projet</h4>'+row("Projets","Ctrl+O")+row("Importer des plans","Ctrl+I")+row("Exporter","Ctrl+E")+row("Enregistrer (automatique)","Ctrl+S")+row("Cette aide","?")+
+    '<h4>Souris et tactile</h4>'+row("Menu d\'actions","Clic droit")+row("Menu au doigt","Appui long")+row("Zoom et déplacement au doigt","Deux doigts")+row("Ajouter un sommet","Tirer le rond d\'un côté")+
+    '</div><div class="acts"><button class="btn primary" id="hk">Fermer</button></div>';
+  openModal(d); d.querySelector("#hk").onclick=function(){ d.remove(); };
+}
+document.getElementById("helpBtn").onclick=openHelp;
+
 /* ============ fenêtres, thème, préférences de l'appareil ============ */
 function openModal(sheet){
   var w=document.createElement("div"); w.className="modal";
@@ -3006,6 +3184,7 @@ function renderMetre(){
             '<span style="display:flex;gap:6px;align-items:center"><span class="q">'+(it.kind==="count"?"":qTxt(it.k>0&&r.q2!=null?r.q2:r.q,u))+'</span><button class="btn ghost sm" data-rm>✕</button></span>';
           el.onclick=function(e){ if(e.target.closest("[data-rm]")) return; selectMeas(m); centerOnMeas(m); draw(); };
           el.querySelector("[data-rm]").onclick=function(){ delMeas(m.id); };
+          el.oncontextmenu=function(e){ e.preventDefault(); selectMeas(m); openMenu(e.clientX,e.clientY,measMenuItems(m,null)); };
           box.appendChild(el);
         });
       }
