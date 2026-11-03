@@ -486,7 +486,8 @@ try{ if(window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.c
 var S={ levels:[], shapes:[], activeId:null, selId:null, tool:"select",
         view:{s:1,tx:0,ty:0}, under:"", underOp:.45, grid:false, seq:1,
         asc:true,            /* true : le 1er de la liste est le niveau le plus bas */
-        title:"", layers:[], activeLayer:null, types:undefined, ui:{lv:true,ly:true,pr:true,lst:"ly",exp:{fmt:"orig",ori:"auto"}} };
+        title:"", layers:[], activeLayer:null, types:undefined, ui:{lv:true,ly:true,pr:true,lst:"ly",exp:{fmt:"orig",ori:"auto"}},
+        items:[], meas:[], activeItem:null, selM:null };
 var PAL=["#c8492a","#1f6f8b","#2d7a4f","#8a5bbf","#9d7312","#1f8b7e"];
 var cv=document.getElementById("cv"), ctx=cv.getContext("2d"), dpr=1;
 var stage=document.getElementById("stage");
@@ -600,24 +601,136 @@ function pxPerMm(lv,paper){
   return lv.w/(land?P[0]:P[1]);
 }
 
-/* ============ persistance (IndexedDB) ============ */
-function db(){ return new Promise(function(res,rej){
+/* ============ persistance (IndexedDB) : plusieurs projets ============ */
+/* clés : "projects" = liste des projets (nom, date, compteurs), "cur" = projet ouvert, "p:<id>" = contenu d'un projet.
+   L'ancienne clé "project" (un seul projet) est reprise au premier démarrage, sans être effacée. */
+var DBP=null;
+function db(){ if(DBP) return DBP; DBP=new Promise(function(res,rej){
   try{ var r=indexedDB.open("resa-plans",1);
     r.onupgradeneeded=function(){ r.result.createObjectStore("kv"); };
-    r.onsuccess=function(){ res(r.result); }; r.onerror=function(){ rej(r.error); };
-  }catch(err){ rej(err); } }); }
+    r.onsuccess=function(){ res(r.result); }; r.onerror=function(){ DBP=null; rej(r.error); };
+  }catch(err){ DBP=null; rej(err); } }); return DBP; }
+function kvGet(k){ return db().then(function(d){ return new Promise(function(res){
+    var r=d.transaction("kv","readonly").objectStore("kv").get(k);
+    r.onsuccess=function(){ res(r.result===undefined?null:r.result); }; r.onerror=function(){ res(null); }; }); })
+  .catch(function(){ return null; }); }
+function kvPut(k,v){ return db().then(function(d){ return new Promise(function(res,rej){
+    var t=d.transaction("kv","readwrite"); t.objectStore("kv").put(v,k);
+    t.oncomplete=function(){ res(true); }; t.onerror=t.onabort=function(){ rej(t.error||new Error("écriture impossible")); }; }); }); }
+function kvDel(k){ return db().then(function(d){ return new Promise(function(res){
+    var t=d.transaction("kv","readwrite"); t.objectStore("kv").delete(k); t.oncomplete=function(){ res(true); }; t.onerror=function(){ res(false); }; }); })
+  .catch(function(){ return false; }); }
+
+var PID=null, PROJS=[];
+function projMeta(id){ return PROJS.find(function(p){ return p.id===id; })||null; }
 function pack(){ return { levels:S.levels.map(function(l){
     return {id:l.id,name:l.name,src:l.src,w:l.w,h:l.h,scale:l.scale,org:l.org,rot:l.rot,pdf:l.pdf}; }),
     shapes:S.shapes, activeId:S.activeId, seq:S.seq, demo:S.demo, asc:S.asc, title:S.title,
-    layers:S.layers, activeLayer:S.activeLayer, types:S.types, ui:S.ui }; }
-var saveT=null;
-function save(){ clearTimeout(saveT); saveT=setTimeout(function(){
-  db().then(function(d){ var t=d.transaction("kv","readwrite"); t.objectStore("kv").put(pack(),"project"); })
-      .catch(function(){}); },400); }
-function load(){ return db().then(function(d){ return new Promise(function(res){
-    var r=d.transaction("kv","readonly").objectStore("kv").get("project");
-    r.onsuccess=function(){ res(r.result||null); }; r.onerror=function(){ res(null); }; }); })
-  .catch(function(){ return null; }); }
+    layers:S.layers, activeLayer:S.activeLayer, types:S.types, items:S.items, meas:S.meas, activeItem:S.activeItem, ui:S.ui }; }
+function counts(p){ return {nl:(p.levels||[]).length, nr:(p.shapes||[]).length, nm:(p.meas||[]).length}; }
+var saveT=null, saveErr=false;
+function persist(){
+  if(!PID) return Promise.resolve();
+  var p=pack(), m=projMeta(PID);
+  if(m){ m.name=S.title||m.name; m.upd=Date.now(); Object.assign(m,counts(p)); }
+  return kvPut("p:"+PID,p).then(function(){ saveErr=false; return kvPut("projects",PROJS); })
+    .catch(function(){ if(!saveErr) note("Enregistrement impossible dans ce navigateur (mémoire pleine ou navigation privée ?) — exportez le projet en fichier.",7000); saveErr=true; });
+}
+/* chaque modification : enregistrement différé + étape d'annulation */
+function save(){ clearTimeout(saveT); saveT=setTimeout(persist,400); histLater(); projLabel(); }
+function saveNow(){ if(saveT){ clearTimeout(saveT); saveT=null; return persist(); } return Promise.resolve(); }
+window.addEventListener("pagehide",function(){ saveNow(); });
+document.addEventListener("visibilitychange",function(){ if(document.visibilityState==="hidden") saveNow(); });
+
+/* ============ annuler / rétablir ============ */
+/* instantanés du projet sans les images ; les niveaux supprimés restent en mémoire pour pouvoir revenir */
+var H={u:[],r:[],cur:null,t:null,lock:false}, lvPool={};
+function snapState(){
+  S.levels.forEach(function(l){ lvPool[l.id]=l; });
+  function noOpen(a){ return (a||[]).map(function(x){ var c=Object.assign({},x); delete c.open; return c; }); }
+  return JSON.stringify({lv:S.levels.map(function(l){ return {id:l.id,name:l.name,scale:l.scale,org:l.org,rot:l.rot}; }),
+    shapes:S.shapes, layers:noOpen(S.layers), types:noOpen(S.types), items:noOpen(S.items), meas:S.meas,
+    asc:S.asc, seq:S.seq, title:S.title, activeLayer:S.activeLayer});
+}
+function histReset(){ clearTimeout(H.t); H.u=[]; H.r=[]; H.cur=snapState(); updUndo(); }
+function histLater(){ if(H.lock) return; clearTimeout(H.t); H.t=setTimeout(histCommit,300); }
+function histCommit(){ clearTimeout(H.t); if(H.lock||H.cur===null) return; var n=snapState(); if(n===H.cur) return;
+  H.u.push(H.cur); if(H.u.length>150) H.u.shift(); H.cur=n; H.r=[]; updUndo(); }
+function updUndo(){ var u=document.getElementById("undoBtn"), r=document.getElementById("redoBtn");
+  if(u) u.disabled=!H.u.length; if(r) r.disabled=!H.r.length; }
+function restoreSnap(js){
+  var o=JSON.parse(js), keep={};
+  [S.layers,S.types||[],S.items].forEach(function(a){ a.forEach(function(x){ if(x.open!==undefined) keep[x.id]=x.open; }); });
+  function reopen(a){ (a||[]).forEach(function(x){ if(keep[x.id]!==undefined) x.open=keep[x.id]; }); return a; }
+  H.lock=true;
+  S.levels=o.lv.map(function(x){ var l=lvPool[x.id]; if(!l) return null; l.name=x.name; l.scale=x.scale; l.org=x.org; l.rot=x.rot; return l; }).filter(Boolean);
+  S.shapes=o.shapes; S.layers=reopen(o.layers); S.types=reopen(o.types); S.items=reopen(o.items||[]); S.meas=o.meas||[];
+  S.asc=o.asc; S.seq=o.seq; S.title=o.title; S.activeLayer=o.activeLayer;
+  fixLayers(); fixItems();
+  if(!S.levels.some(function(l){ return l.id===S.activeId; })) S.activeId=S.levels.length?S.levels[0].id:null;
+  if(!sel()) S.selId=null; if(!selM()) S.selM=null;
+  renderAll(); clearTimeout(saveT); saveT=setTimeout(persist,400); projLabel();
+  H.lock=false;
+}
+function undo(){
+  if(draft&&draft.pts.length){ draft.pts.pop(); if(!draft.pts.length) draft=null; draw(); draftHint(); return; }
+  histCommit(); if(!H.u.length){ note("Rien à annuler."); return; }
+  H.r.push(H.cur); H.cur=H.u.pop(); restoreSnap(H.cur); updUndo(); note("Annulé.",1400);
+}
+function redo(){
+  histCommit(); if(!H.r.length){ note("Rien à rétablir."); return; }
+  H.u.push(H.cur); H.cur=H.r.pop(); restoreSnap(H.cur); updUndo(); note("Rétabli.",1400);
+}
+document.getElementById("undoBtn").onclick=undo;
+document.getElementById("redoBtn").onclick=redo;
+
+/* ============ ouverture / création de projets ============ */
+function blank(){
+  S.levels=[]; S.shapes=[]; S.items=[]; S.meas=[]; S.layers=[]; S.types=undefined; S.activeLayer=null; S.activeItem=null;
+  S.activeId=null; S.selId=null; S.selM=null; S.seq=1; S.asc=true; S.demo=false; S.under=""; S.title="";
+  S.view={s:0,tx:0,ty:0}; meas=null; calLine=null; drag=null; draft=null; lvPool={};
+  fixLayers(); fixItems();
+}
+function applyPack(p){
+  blank(); if(!p) return Promise.resolve();
+  S.title=p.title||""; S.levels=(p.levels||[]).map(migrate); S.shapes=p.shapes||[];
+  S.activeId=p.activeId&&S.levels.some(function(l){ return l.id===p.activeId; })? p.activeId : (S.levels[0]&&S.levels[0].id)||null;
+  S.seq=p.seq||(S.shapes.length+1); S.demo=!!p.demo; if(p.asc!==undefined) S.asc=p.asc;
+  S.layers=p.layers||[]; S.activeLayer=p.activeLayer||null; S.types=p.types; S.items=p.items||[]; S.meas=p.meas||[]; S.activeItem=p.activeItem||null;
+  fixLayers(); fixItems();
+  if(!hasPrefs&&p.ui){ ["lv","ly","pr"].forEach(function(k){ if(typeof p.ui[k]==="boolean") S.ui[k]=p.ui[k]; }); if(p.ui.lst) S.ui.lst=p.ui.lst;
+    if(p.ui.exp&&(PAPER_PT[p.ui.exp.fmt]||p.ui.exp.fmt==="orig")) S.ui.exp={fmt:p.ui.exp.fmt,ori:/^(auto|p|l)$/.test(p.ui.exp.ori)?p.ui.exp.ori:"auto",mode:p.ui.exp.mode==="res"?"res":"plans",ko:!!p.ui.exp.ko}; }
+  return Promise.all(S.levels.map(loadImg));
+}
+function projLabel(){ var e=document.getElementById("projName"); if(e) e.textContent=S.title||(projMeta(PID)||{}).name||"Projet"; document.title=(S.title?S.title+" — ":"")+"Report & métré"; }
+function afterOpen(){ closeMenu(); setTool("select"); setListView(S.ui.lst); layout(); fit(); histReset(); renderAll(); projLabel(); }
+function openProject(id){
+  return saveNow().then(function(){ return kvGet("p:"+id); }).then(function(p){
+    PID=id; var m=projMeta(id); return applyPack(p||{title:m?m.name:""});
+  }).then(function(){ if(!S.title){ var m=projMeta(id); if(m) S.title=m.name; } kvPut("cur",id).catch(function(){}); afterOpen(); });
+}
+function newProject(name,withDemo){
+  return saveNow().then(function(){
+    var id=uid(); PROJS.push({id:id,name:name||"Nouveau projet",upd:Date.now(),nl:0,nr:0,nm:0});
+    PID=id; blank(); S.title=name||"Nouveau projet";
+    if(withDemo) return demo(true);
+  }).then(function(){ kvPut("cur",PID).catch(function(){}); afterOpen(); return persist(); });
+}
+/* démarrage : liste des projets, reprise de l'ancien projet unique, sinon projet d'exemple */
+function boot(){
+  return Promise.all([kvGet("projects"),kvGet("cur")]).then(function(r){
+    PROJS=Array.isArray(r[0])? r[0] : [];
+    if(PROJS.length) return openProject(PROJS.some(function(p){ return p.id===r[1]; })? r[1] : PROJS[0].id);
+    return kvGet("project").then(function(old){
+      if(old&&old.levels&&old.levels.length){
+        var id=uid(); PROJS=[Object.assign({id:id,name:old.title||"Projet 1",upd:Date.now()},counts(old))];
+        return kvPut("p:"+id,old).then(function(){ return kvPut("projects",PROJS); }).then(function(){ return openProject(id); })
+          .catch(function(){ PID=id; return applyPack(old).then(afterOpen); });
+      }
+      return newProject("Exemple — 3 niveaux",true);
+    });
+  });
+}
 
 function loadImg(lv){ return new Promise(function(res){
   var i=new Image(); i.onload=function(){ lv.img=i; lv.w=i.naturalWidth; lv.h=i.naturalHeight; res(); };
@@ -990,7 +1103,7 @@ function emptyStage(){
    '<span><b>3.</b> Dessiner la réservation — elle apparaît partout</span></div>';
   stage.appendChild(d);
   d.querySelector("#d1").onclick=function(){ document.getElementById("file").click(); };
-  d.querySelector("#d2").onclick=demo;
+  d.querySelector("#d2").onclick=function(){ demo(false); };
 }
 function status(){
   var lv=active(), c=lv?cal(lv):null, out=[];
@@ -1407,7 +1520,7 @@ document.getElementById("zoomIn").onclick=function(){ zoomBy(1.35); };
 document.getElementById("zoomOut").onclick=function(){ zoomBy(1/1.35); };
 document.getElementById("zoomVal").onclick=function(){ fit(); };
 /* échelle d'affichage : 1 m du plan = N px à l'écran, exprimée comme une échelle 1/N sur un écran ≈ 96 dpi */
-function zoomTxt(){ var lv=active(); if(!lv||!ready(lv)&&!(lv.scale&&lv.scale.s)) return Math.round(S.view.s*100)+" %";
+function zoomTxt(){ var lv=active(); if(!lv) return "—"; if(!ready(lv)&&!(lv.scale&&lv.scale.s)) return Math.round(S.view.s*100)+" %";
   var pxm=ready(lv)? S.view.s : S.view.s*lv.scale.s, N=1000/(pxm*25.4/96);
   return N>=1? "1/"+(N<20?N.toFixed(1).replace(".",","):Math.round(N)) : Math.round(1/N)+"/1"; }
 
@@ -2277,7 +2390,8 @@ function planPNG(kind,ppm,rot){
   }
   return {src:c.toDataURL("image/jpeg",.92), A:A, B:B};
 }
-function demo(){
+/* exemple : dans le projet ouvert, ou dans un projet tout juste créé (inNew : l'appelant recadre et affiche) */
+function demo(inNew){
   var specs=[[0,72,0.012],[1,58,0],[2,46,-0.021]];   /* RDC, R+1, R+2 — échelles et orientations différentes */
   S.levels=specs.map(function(sp){
     var p=planPNG(sp[0],sp[1],sp[2]);
@@ -2297,8 +2411,10 @@ function demo(){
   ];
   S.types=undefined; fixLayers();
   S.seq=4; S.asc=true; S.activeId=S.levels[1].id; S.selId=S.shapes[0].id; S.demo=true; S.under=S.levels[0].id;
-  Promise.all(S.levels.map(loadImg)).then(function(){ fit(); renderAll(); save();
-    note("Exemple chargé : 3 niveaux à échelles différentes, déjà calés."); });
+  demoMetre(ids);
+  return Promise.all(S.levels.map(loadImg)).then(function(){
+    if(inNew){ note("Exemple chargé : 3 niveaux à échelles différentes, déjà calés, avec réservations et métré.",5000); return; }
+    fit(); renderAll(); save(); note("Exemple chargé : 3 niveaux déjà calés, avec réservations et métré.",5000); });
 }
 
 
@@ -2309,7 +2425,7 @@ function openModal(sheet){
   /* la fenêtre se ferme quand la feuille est retirée, ou par un clic à côté */
   new MutationObserver(function(){ if(!w.firstChild) w.remove(); }).observe(w,{childList:true});
   w.addEventListener("pointerdown",function(e){ if(e.target===w) w.remove(); });
-  var f=sheet.querySelector("input:not([type=checkbox]),select,button.primary"); if(f&&!mobQ.matches) setTimeout(function(){ try{ f.focus(); }catch(e){} },30);
+  var f=sheet.querySelector("input:not([type=checkbox]),select,button.primary"); if(f&&!mobQ.matches) try{ f.focus({preventScroll:true}); }catch(e){}
   return w;
 }
 function closeModals(){ var m=document.querySelectorAll(".modal"); if(!m.length) return false; m[m.length-1].remove(); return true; }
@@ -2328,27 +2444,162 @@ document.getElementById("themeBtn").onclick=function(){
 try{ applyTheme(localStorage.getItem("rr-theme")||"auto"); }catch(e){ applyTheme("auto"); }
 
 
+/* ============ menu contextuel (clic droit, appui long, menus ⋯) ============ */
+/* items : {t:libellé, i:icône, k:raccourci, fn, dg:danger, off:désactivé, on:coché} | "-" | {h:titre} */
+function ic(n,cls){ return '<svg class="i'+(cls?" "+cls:"")+'"><use href="#i-'+n+'"/></svg>'; }
+var menuEl=null;
+function closeMenu(){ if(menuEl){ menuEl.remove(); menuEl=null; } }
+function openMenu(x,y,items){
+  closeMenu();
+  var m=document.createElement("div"); m.className="menu"; m.setAttribute("role","menu");
+  items.forEach(function(it){
+    if(!it) return;
+    if(it==="-"){ if(m.lastChild&&m.lastChild.tagName!=="HR") m.appendChild(document.createElement("hr")); return; }
+    if(it.h){ var h=document.createElement("div"); h.className="h"; h.textContent=it.h; m.appendChild(h); return; }
+    var b=document.createElement("button"); b.type="button"; b.setAttribute("role","menuitem");
+    if(it.dg) b.className="dg"; if(it.on) b.className+=" on"; if(it.off) b.disabled=true;
+    b.innerHTML=(it.i?ic(it.i):'<span style="width:16px;flex:none"></span>')+'<span>'+esc(it.t)+'</span>'+(it.k?'<kbd>'+esc(it.k)+'</kbd>':'');
+    b.onclick=function(e){ e.stopPropagation(); closeMenu(); it.fn&&it.fn(); };
+    m.appendChild(b);
+  });
+  if(m.lastChild&&m.lastChild.tagName==="HR") m.lastChild.remove();
+  document.body.appendChild(m); menuEl=m;
+  var r=m.getBoundingClientRect(), W=window.innerWidth, Hh=window.innerHeight;
+  m.style.left=Math.max(6,Math.min(x,W-r.width-6))+"px";
+  m.style.top=Math.max(6,(y+r.height>Hh-6? Math.max(6,y-r.height) : y))+"px";
+  var f=m.querySelector("button:not([disabled])"); if(f&&!mobQ.matches) f.focus({preventScroll:true});
+  return m;
+}
+document.addEventListener("pointerdown",function(e){ if(menuEl&&!menuEl.contains(e.target)) closeMenu(); },true);
+window.addEventListener("resize",closeMenu);
+window.addEventListener("blur",closeMenu);
+document.addEventListener("keydown",function(e){
+  if(!menuEl) return;
+  var bs=Array.prototype.slice.call(menuEl.querySelectorAll("button:not([disabled])")), i=bs.indexOf(document.activeElement);
+  if(e.key==="Escape"){ e.preventDefault(); e.stopImmediatePropagation(); closeMenu(); }
+  else if(e.key==="ArrowDown"){ e.preventDefault(); e.stopImmediatePropagation(); (bs[(i+1)%bs.length]||bs[0]).focus(); }
+  else if(e.key==="ArrowUp"){ e.preventDefault(); e.stopImmediatePropagation(); (bs[(i-1+bs.length)%bs.length]||bs[0]).focus(); }
+},true);
+
+/* ============ fenêtre Projets ============ */
+function dateTxt(t){ if(!t) return ""; var d=new Date(t), n=new Date();
+  var hm=d.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"});
+  return d.toDateString()===n.toDateString()? "aujourd'hui "+hm : d.toLocaleDateString("fr-FR")+" "+hm; }
+function plural(n,s,p){ return n+" "+(n>1?(p||s+"s"):s); }
+function openProjects(){
+  closeMenu(); var old=document.getElementById("projSheet"); if(old) old.remove();
+  var d=document.createElement("div"); d.className="sheet wide"; d.id="projSheet";
+  d.innerHTML='<h3>Projets</h3>'+
+    '<p>Chaque projet garde ses plans, ses réservations et son métré. Ils sont enregistrés dans ce navigateur, sur cet appareil.</p>'+
+    '<div class="acts" style="justify-content:flex-start;margin:0 0 10px"><button class="btn primary" id="pNew">'+ic("plus","s")+'Nouveau projet</button>'+
+      '<button class="btn" id="pOpen">'+ic("file","s")+'Ouvrir un fichier projet…</button></div>'+
+    '<div class="plist" id="pList"></div>'+
+    '<p style="margin:10px 0 0;font-size:11.5px">Pour passer sur un autre appareil ou garder une copie : ⋯ → <b>Enregistrer le fichier</b> (plans compris), puis « Ouvrir un fichier projet » sur l\'autre appareil.</p>'+
+    '<div class="acts"><button class="btn ghost" id="pTxt" title="Calage et réservations en texte, sans les images">Sauvegarde texte…</button><span class="sp"></span><button class="btn" id="pClose">Fermer</button></div>';
+  openModal(d);
+  function rows(){
+    var box=d.querySelector("#pList"); box.innerHTML="";
+    PROJS.slice().sort(function(a,b){ return (b.upd||0)-(a.upd||0); }).forEach(function(p){
+      var r=document.createElement("div"); r.className="prow"+(p.id===PID?" on":"");
+      r.innerHTML='<div><b>'+esc(p.name||"Sans nom")+'</b><small>'+(p.id===PID?"ouvert · ":"")+"modifié "+dateTxt(p.upd)+" · "+
+        plural(p.nl||0,"niveau","niveaux")+" · "+plural(p.nr||0,"réservation")+" · "+plural(p.nm||0,"métré")+'</small></div>'+
+        '<div style="display:flex;gap:4px">'+(p.id===PID?'':'<button class="btn sm" data-o>Ouvrir</button>')+'<button class="btn ghost sm" data-m title="Plus d\'actions">⋯</button></div>';
+      r.onclick=function(e){ if(e.target.closest("button,input")) return; if(p.id!==PID){ d.remove(); openProject(p.id); } };
+      var o=r.querySelector("[data-o]"); if(o) o.onclick=function(){ d.remove(); openProject(p.id); };
+      r.querySelector("[data-m]").onclick=function(e){ var b=this.getBoundingClientRect();
+        openMenu(b.right-220,b.bottom+4,[
+          {t:"Renommer",i:"edit",fn:function(){ rename(r,p); }},
+          {t:"Dupliquer",i:"copy",fn:function(){ dupProj(p).then(rows); }},
+          {t:"Enregistrer le fichier",i:"export",fn:function(){ exportProjectFile(p.id); }},
+          "-",
+          {t:"Supprimer…",i:"trash",dg:true,fn:function(){ askDel(r,p); }}]); };
+      box.appendChild(r);
+    });
+  }
+  function rename(r,p){
+    var nm=r.querySelector("b"), inp=document.createElement("input"); inp.value=p.name||""; nm.replaceWith(inp); inp.focus(); inp.select();
+    function ok(){ var v=inp.value.trim()||p.name; p.name=v; if(p.id===PID){ S.title=v; save(); } else kvPut("projects",PROJS).catch(function(){});
+      kvGet("p:"+p.id).then(function(pk){ if(pk&&p.id!==PID){ pk.title=v; kvPut("p:"+p.id,pk); } }); projLabel(); rows(); }
+    inp.onkeydown=function(e){ if(e.key==="Enter"){ e.preventDefault(); ok(); } if(e.key==="Escape"){ e.stopPropagation(); rows(); } };
+    inp.onblur=ok;
+  }
+  function askDel(r,p){
+    var sm=r.querySelector("small"); sm.innerHTML='<b style="color:var(--bad);display:inline">Supprimer définitivement ce projet et ses plans ?</b>';
+    var a=r.lastChild; a.innerHTML='<button class="btn sm" data-n>Annuler</button><button class="btn sm primary" data-y style="background:var(--bad);border-color:var(--bad)">Supprimer</button>';
+    a.querySelector("[data-n]").onclick=rows;
+    a.querySelector("[data-y]").onclick=function(){
+      PROJS=PROJS.filter(function(x){ return x.id!==p.id; });
+      kvDel("p:"+p.id); kvPut("projects",PROJS).catch(function(){});
+      if(p.id===PID){ PID=null; (PROJS.length? openProject(PROJS.slice().sort(function(a,b){ return (b.upd||0)-(a.upd||0); })[0].id) : newProject("Nouveau projet",false)).then(rows); }
+      else rows();
+      note("Projet « "+(p.name||"")+" » supprimé.");
+    };
+  }
+  d.querySelector("#pNew").onclick=function(){
+    var nm="Nouveau projet", n=1; while(PROJS.some(function(p){ return p.name===nm; })) nm="Nouveau projet "+(++n);
+    d.remove(); newProject(nm,false).then(openProjects);
+  };
+  d.querySelector("#pOpen").onclick=function(){ var f=document.getElementById("projFile"); f.value=""; f.click(); };
+  d.querySelector("#pTxt").onclick=function(){ d.remove(); openJsonSheet(); };
+  d.querySelector("#pClose").onclick=function(){ d.remove(); };
+  rows();
+  /* nouveau projet : proposer le nom tout de suite */
+  if(S.levels.length===0&&!S.shapes.length&&/^Nouveau projet/.test(S.title||"")){
+    var r=d.querySelector(".prow.on"); var p=projMeta(PID); if(r&&p) rename(r,p);
+  }
+}
+function dupProj(p){
+  var pr= p.id===PID? saveNow().then(function(){ return kvGet("p:"+p.id); }) : kvGet("p:"+p.id);
+  return pr.then(function(pk){ if(!pk) return;
+    var id=uid(), nm=(p.name||"Projet")+" (copie)"; pk.title=nm;
+    PROJS.push(Object.assign({id:id,name:nm,upd:Date.now()},counts(pk)));
+    return kvPut("p:"+id,pk).then(function(){ return kvPut("projects",PROJS); }).then(function(){ note("Copie créée : « "+nm+" »."); });
+  }).catch(function(){ note("Copie impossible (mémoire du navigateur pleine ?)."); });
+}
+document.getElementById("projBtn").onclick=openProjects;
+
+/* fichier projet : tout le projet, plans compris (PDF en base64, partagés entre les pages d'un même PDF) */
+function b64(bytes){ var s="", CH=0x8000; for(var i=0;i<bytes.length;i+=CH) s+=String.fromCharCode.apply(null,bytes.subarray(i,i+CH)); return btoa(s); }
+function unb64(t){ var s=atob(t), a=new Uint8Array(s.length); for(var i=0;i<s.length;i++) a[i]=s.charCodeAt(i); return a; }
+function exportProjectFile(id){
+  var pr= id===PID? saveNow().then(function(){ return pack(); }) : kvGet("p:"+id);
+  pr.then(function(pk){ if(!pk) return;
+    var files=[], seen=new Map();
+    var out=Object.assign({},pk,{levels:(pk.levels||[]).map(function(l){
+      var c=Object.assign({},l);
+      if(l.pdf&&l.pdf.bytes){ var k=seen.get(l.pdf.bytes); if(k===undefined){ k=files.length; files.push(b64(l.pdf.bytes)); seen.set(l.pdf.bytes,k); }
+        c.pdf={file:k,page:l.pdf.page,base:l.pdf.base}; }
+      return c; })});
+    delete out.ui;
+    var blob=new Blob([JSON.stringify({format:"report-reservations",version:2,saved:new Date().toISOString(),project:out,pdfs:files})],{type:"application/json"});
+    var nm=((pk.title||"Projet").replace(/[^\w\-À-ÿ]+/g,"_").slice(0,50))+"_"+new Date().toISOString().slice(0,10)+".json";
+    var a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=nm; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function(){ URL.revokeObjectURL(a.href); },60000);
+    note("Fichier projet enregistré : "+nm,5000);
+  });
+}
+document.getElementById("projFile").onchange=function(e){
+  var f=e.target.files&&e.target.files[0]; if(!f) return;
+  f.text().then(function(t){
+    var o=JSON.parse(t); if(!o||o.format!=="report-reservations"||!o.project) throw new Error("format");
+    var bins=(o.pdfs||[]).map(unb64), pk=o.project;
+    (pk.levels||[]).forEach(function(l){ if(l.pdf&&typeof l.pdf.file==="number") l.pdf={bytes:bins[l.pdf.file],page:l.pdf.page,base:l.pdf.base}; });
+    var id=uid(), nm=pk.title||f.name.replace(/\.json$/i,""); if(PROJS.some(function(p){ return p.name===nm; })) nm+=" (importé)"; pk.title=nm;
+    PROJS.push(Object.assign({id:id,name:nm,upd:Date.now()},counts(pk)));
+    return kvPut("p:"+id,pk).then(function(){ return kvPut("projects",PROJS); }).then(function(){
+      var s=document.getElementById("projSheet"); if(s) s.remove(); return openProject(id); })
+      .then(function(){ note("Projet « "+nm+" » ouvert.",4000); });
+  }).catch(function(){ note("Ce fichier n'est pas un projet « Report & métré » lisible."); });
+};
+
 /* (provisoire) */
-function renderMetre(){} function addItemMenu(){} function closeMenu(){}
+function renderMetre(){} function addItemMenu(){} function fixItems(){ if(!Array.isArray(S.items)) S.items=[]; if(!Array.isArray(S.meas)) S.meas=[]; }
+function selM(){ return null; } var draft=null; function draftHint(){} function demoMetre(){}
 /* ============ démarrage ============ */
 var hasPrefs=loadPrefs();
-fixLayers(); setListView(S.ui.lst); layout(); resize();
-load().then(function(p){
-  if(p && p.levels && p.levels.length){
-    S.levels=p.levels.map(migrate); S.shapes=p.shapes||[]; S.activeId=p.activeId||p.levels[0].id;
-    S.seq=p.seq||(S.shapes.length+1); S.demo=!!p.demo;
-    if(p.asc!==undefined) S.asc=p.asc; S.title=p.title||"";
-    S.layers=p.layers||[]; S.activeLayer=p.activeLayer||null; S.types=p.types; fixLayers();
-    if(!hasPrefs&&p.ui) ["lv","ly","pr"].forEach(function(k){ if(typeof p.ui[k]==="boolean") S.ui[k]=p.ui[k]; });
-    setListView(hasPrefs? S.ui.lst : (p.ui&&p.ui.lst)||"ly");
-    if(!hasPrefs&&(p.ui&&p.ui.exp&&PAPER_PT[p.ui.exp.fmt]||p.ui&&p.ui.exp&&p.ui.exp.fmt==="orig")) S.ui.exp={fmt:p.ui.exp.fmt,ori:/^(auto|p|l)$/.test(p.ui.exp.ori)?p.ui.exp.ori:"auto",
-      mode:p.ui.exp.mode==="res"?"res":"plans",ko:!!p.ui.exp.ko};
-    layout();
-    return Promise.all(S.levels.map(loadImg)).then(function(){ fit(); });
-  }
-  return demo();
-}).then(function(){ booting=false; renderAll(); })
-  .catch(function(){ booting=false; renderAll(); });
+fixLayers(); fixItems(); setListView(S.ui.lst); layout(); resize();
+boot().catch(function(err){ console.error(err); blank(); afterOpen(); })
+  .then(function(){ booting=false; renderAll(); });
 })();
 </script>
 
