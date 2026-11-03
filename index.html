@@ -1608,6 +1608,32 @@ function win(s){
 }
 
 /* page de sortie d'un niveau ; k = points PDF par pixel de l'image de travail */
+/* fond d'un niveau incorporé une seule fois dans le PDF de sortie : draw(page) le pose en coordonnées du niveau (Wd × Hd, origine en bas à gauche) */
+function levelBase(out,l,cache){
+  var L=window.PDFLib;
+  if(l.pdf){
+    return pdfPage(l).then(function(pg){
+      var view=pg.view, rot=((pg.rotate||0)%360+360)%360, W=view[2]-view[0], H=view[3]-view[1];
+      var src=cache.get(l.pdf.bytes);
+      if(!src){ src=L.PDFDocument.load(l.pdf.bytes.slice(),{ignoreEncryption:true}); cache.set(l.pdf.bytes,src); }
+      return src.then(function(doc){
+        return out.embedPage(doc.getPage(l.pdf.page-1),{left:view[0],bottom:view[1],right:view[2],top:view[3]});
+      }).then(function(emb){
+        var Wd=rot%180===0?W:H, Hd=rot%180===0?H:W;
+        var o= rot===90? {x:0,y:W,rotate:L.degrees(-90)} : rot===180? {x:W,y:H,rotate:L.degrees(180)} : rot===270? {x:H,y:0,rotate:L.degrees(90)} : {x:0,y:0};
+        return {Wd:Wd,Hd:Hd,k:1/l.pdf.base,draw:function(page){ page.drawPage(emb,o); }};
+      });
+    });
+  }
+  var k=72/150, jpg=/^data:image\/jpe?g/i.test(l.src||""), data=l.src;
+  if(!jpg&&!/^data:image\/png/i.test(l.src||"")){
+    var c=document.createElement("canvas"); c.width=l.w; c.height=l.h; c.getContext("2d").drawImage(l.img,0,0); data=c.toDataURL("image/png");
+  }
+  return (jpg? out.embedJpg(data) : out.embedPng(data)).then(function(im){
+    var Wd=l.w*k, Hd=l.h*k;
+    return {Wd:Wd,Hd:Hd,k:k,draw:function(page){ page.drawImage(im,{x:0,y:0,width:Wd,height:Hd}); }};
+  });
+}
 function levelPage(out,l,cache){
   var L=window.PDFLib;
   if(l.pdf){
@@ -1642,8 +1668,10 @@ function levelPage(out,l,cache){
 var HEAD_S=[1.3,.8,.8,.85,.72,.72];
 function bandH(Tz){ return HEAD_S.reduce(function(h,s){ return h+Tz*s*1.22; },0)+Tz*.35*1.4+Tz*1.2; }
 /* Tz : taille du texte en points sur la page d'origine, choisie pour qu'il s'imprime à ≈ 9 pt */
-function annotate(info,l,rows,F,title,Tz,scaleLine){
+/* opt.clip {x,y,w,h} (coordonnées du niveau, bas → haut) : vue zoomée, étiquettes gardées dans la fenêtre, sans cartouche */
+function annotate(info,l,rows,F,title,Tz,scaleLine,opt){
   var L=window.PDFLib, page=info.page, Wd=info.Wd, Hd=info.Hd, k=info.k, ppm=cal(l).s*k;
+  var CL=opt&&opt.clip, BX=CL?CL.x:0, BY=CL?CL.y:0, BW=CL?CL.x+CL.w:Wd, BH=CL?CL.y+CL.h:Hd, BM=CL?Tz*.3:3;
   var lw=Math.max(.15,Tz/10), pad=Tz*.35;
   var RED=L.rgb(.78,.16,.12), WHITE=L.rgb(1,1,1), GREY=L.rgb(.45,.45,.45), boxes=[];
   function col(hex){ var c=hexRGB(hex); return L.rgb(c[0]/255,c[1]/255,c[2]/255); }
@@ -1690,12 +1718,12 @@ function annotate(info,l,rows,F,title,Tz,scaleLine){
       var c=[[px,py],[px,-py],[-px,py],[-px,-py]];
       for(var i=0;i<4;i++){
         var x=c[i][0]>0? ax+gap*m : ax-gap*m-w, y=c[i][1]>0? ay+gap*m : ay-gap*m-h, b={x:x,y:y,w:w,h:h};
-        if(x<3||y<3||x+w>Wd-3||y+h>Hd-3) continue;
+        if(x<BX+BM||y<BY+BM||x+w>BW-BM||y+h>BH-BM) continue;
         if(boxes.some(function(o){ return overlap(o,b); })) continue;
         boxes.push(b); return b;
       }
     }
-    var f={x:Math.min(Math.max(3,ax+gap),Wd-w-3),y:Math.min(Math.max(3,ay+gap),Hd-h-3),w:w,h:h}; boxes.push(f); return f;
+    var f={x:Math.min(Math.max(BX+BM,ax+gap),BW-w-BM),y:Math.min(Math.max(BY+BM,ay+gap),BH-h-BM),w:w,h:h}; boxes.push(f); return f;
   }
   function leader(from,b){
     var to={x:Math.min(Math.max(from.x,b.x),b.x+b.w), y:Math.min(Math.max(from.y,b.y),b.y+b.h)};
@@ -1711,10 +1739,11 @@ function annotate(info,l,rows,F,title,Tz,scaleLine){
     {t:win("Trait plein : position attendue  ·  Pointillé rouge : position réelle"),s:Tz*HEAD_S[4],c:GREY},
     {t:win("Écart X + vers la droite, Y + vers le bas du plan"),s:Tz*HEAD_S[5],c:GREY}];
   /* le cartouche va dans un bandeau ajouté au-dessus du plan : rien du plan n'est masqué */
-  var hm=measure(head), band=bandH(Tz);
-  page.setSize(Wd,Hd+band);
-  var hb={x:Tz*.6,y:Hd+Tz*.6,w:hm.w,h:hm.h};
-  page.drawLine({start:{x:0,y:Hd},end:{x:Wd,y:Hd},thickness:lw*.6,color:GREY});
+  var hm=measure(head), hb={x:Tz*.6,y:Hd+Tz*.6,w:hm.w,h:hm.h};
+  if(!CL){
+    page.setSize(Wd,Hd+bandH(Tz));
+    page.drawLine({start:{x:0,y:Hd},end:{x:Wd,y:Hd},thickness:lw*.6,color:GREY});
+  }
 
   /* contours : projet d'origine (si correction reprise), position attendue, position réelle */
   rows.forEach(function(r){
@@ -1737,7 +1766,7 @@ function annotate(info,l,rows,F,title,Tz,scaleLine){
     if(r.ko) return;
     var s=r.sh, tl=bu(s.t==="rect"?s.x:s.x-s.r, s.t==="rect"?s.y:s.y-s.r);
     var t=win(s.n+(s.from?" (repris de "+lvName(s.from)+")":"")), sz=Tz*.7, w=F.b.widthOfTextAtSize(t,sz)+pad, h=sz*1.3;
-    var b={x:Math.min(Math.max(3,tl.x),Wd-w-3), y:Math.min(tl.y+lw,Hd-h-3), w:w, h:h};
+    var b={x:Math.min(Math.max(BX+BM,tl.x),BW-w-BM), y:Math.min(tl.y+lw,BH-h-BM), w:w, h:h};
     page.drawRectangle({x:b.x,y:b.y,width:b.w,height:b.h,color:WHITE,opacity:.8});
     page.drawText(t,{x:b.x+pad/2,y:b.y+sz*.3,size:sz,font:F.b,color:col(colOf(r.orig))});
     boxes.push(b);
@@ -1757,7 +1786,7 @@ function annotate(info,l,rows,F,title,Tz,scaleLine){
     var b=place(mz.w,mz.h,anchor.x,anchor.y,px,py,Tz*2.5);
     leader(anchor,b); drawBox(b,lines,RED);
   });
-  drawBox(hb,head,null);
+  if(!CL) drawBox(hb,head,null);
 }
 
 /* formats ISO portrait, en points */
@@ -1825,44 +1854,168 @@ function exportPlans(fmt,ori,prog){
   });
 }
 
+/* ============ export réservation par réservation : une page par réservation, ses niveaux zoomés côte à côte ============ */
+var STD_N=[5,10,20,25,50,75,100,125,150,200,250,500,1000,2000];
+function resList(koOnly){
+  return S.shapes.filter(shown).map(function(sh){
+    var lvs=levelsUp().filter(function(l){ return onLevel(sh,l.id); });
+    return {sh:sh, lvs:lvs, kos:lvs.filter(function(l){ var o=obsOf(sh,l.id); return o&&o.st==="ko"; }).length};
+  }).filter(function(r){ return r.lvs.length&&(!koOnly||r.kos); })
+    .sort(function(a,b){ return String(a.sh.n||"").localeCompare(String(b.sh.n||""),"fr",{numeric:true}); });
+}
+/* emprise de la réservation sur un niveau (attendue, réelle, projet d'origine), en points du niveau, bas → haut */
+function resBox(sh,l,base){
+  var k=base.k, xs=[], ys=[], sa=at(sh,l.id), o=obsOf(sh,l.id), list=[sa];
+  if(sa.from) list.push(sh);
+  if(o&&o.st==="ko"&&o.real) list.push(realShape(sa,o));
+  list.forEach(function(s){ corners(s).forEach(function(q){ var p=w2p(l,q[0],q[1]); xs.push(p.x*k); ys.push(base.Hd-p.y*k); }); });
+  var x0=Math.min.apply(null,xs), x1=Math.max.apply(null,xs), y0=Math.min.apply(null,ys), y1=Math.max.apply(null,ys);
+  return {cx:(x0+x1)/2, cy:(y0+y1)/2, w:x1-x0, h:y1-y0};
+}
+var RES_HEAD=62, RES_CAP=26, RES_GAP=10;
+/* grille des vues sur la feuille : nombre de colonnes et échelle (pt de papier par mètre) donnant le plus grand zoom */
+function resGrid(t,n,needW,needH){
+  var aw=t.w-2*EXP_MARGIN, ah=t.h-2*EXP_MARGIN-RES_HEAD, best=null;
+  for(var c=1;c<=n;c++){
+    var r=Math.ceil(n/c), pw=(aw-(c-1)*RES_GAP)/c, ph=(ah-r*RES_CAP-(r-1)*RES_GAP)/r;
+    if(pw<=0||ph<=0) continue;
+    var s=Math.min(pw/needW,ph/needH);
+    if(!best||s>best.s) best={c:c,r:r,pw:pw,ph:ph,s:s};
+  }
+  /* échelle ronde (1/20, 1/50…) juste en dessous du zoom maximal */
+  var Nmin=72000/(25.4*best.s), N=STD_N.find(function(v){ return v>=Nmin*.999; })||Math.ceil(Nmin);
+  best.N=N; best.s=72000/(25.4*N);
+  return best;
+}
+function exportByRes(fmt,ori,koOnly,prog){
+  var L=window.PDFLib;
+  if(!L) return Promise.reject(new Error("module PDF non chargé"));
+  if(!levelsUp().length) return Promise.reject(new Error("aucun niveau calé (échelle + repère)"));
+  var list=resList(koOnly);
+  if(!list.length) return Promise.reject(new Error(koOnly?"aucune réservation en anomalie":"aucune réservation sur les niveaux calés"));
+  if(!PAPER_PT[fmt]) fmt="a3";
+  var out, F={}, cache=new Map(), bases=new Map(), title=S.title||"";
+  var GREY=L.rgb(.45,.45,.45), RED=L.rgb(.78,.16,.12), GREEN=L.rgb(.1,.5,.25), BLACK=L.rgb(0,0,0);
+  function base(l){ if(!bases.has(l.id)) bases.set(l.id,levelBase(out,l,cache)); return bases.get(l.id); }
+  function fitTxt(t,font,size,maxW){ t=win(t); while(t.length>1&&font.widthOfTextAtSize(t,size)>maxW) t=t.slice(0,-2)+"…"; return win(t); }
+  var chain=L.PDFDocument.create().then(function(d){ out=d;
+    return Promise.all([out.embedFont(L.StandardFonts.Helvetica),out.embedFont(L.StandardFonts.HelveticaBold)]); })
+    .then(function(f){ F.r=f[0]; F.b=f[1]; });
+  list.forEach(function(it,ri){ chain=chain.then(function(){
+    var sh=it.sh, lvs=it.lvs;
+    prog("Réservation "+(ri+1)+" / "+list.length+" — "+(sh.n||"")+"…");
+    return Promise.all(lvs.map(base)).then(function(bs){
+      /* même emprise réelle (en mètres) sur tous les niveaux, avec du plan autour pour se repérer */
+      var boxes=lvs.map(function(l,i){ return resBox(sh,l,bs[i]); }), needW=0, needH=0;
+      boxes.forEach(function(b,i){ var ppm=cal(lvs[i]).s*bs[i].k; needW=Math.max(needW,b.w/ppm); needH=Math.max(needH,b.h/ppm); });
+      var marg=Math.max(1.5,.75*Math.max(needW,needH)); needW+=2*marg; needH+=2*marg;
+      var t, g;
+      if(ori==="auto"){
+        var tp=paperFor(fmt,"p",1,1), tl=paperFor(fmt,"l",1,1), gp=resGrid(tp,lvs.length,needW,needH), gl=resGrid(tl,lvs.length,needW,needH);
+        if(gl.s>=gp.s){ t=tl; g=gl; } else { t=tp; g=gp; }
+      }else{ t=paperFor(fmt,ori,1,1); g=resGrid(t,lvs.length,needW,needH); }
+      var page=out.addPage([t.w,t.h]), M=EXP_MARGIN, top=t.h-M;
+      /* en-tête */
+      var ly=layerOf(sh), ty=sh.ty&&typeOf(sh.ty);
+      page.drawText(fitTxt(sh.n||"Réservation",F.b,14,t.w-2*M-90),{x:M,y:top-14,size:14,font:F.b,color:BLACK});
+      page.drawText(win((ri+1)+" / "+list.length),{x:t.w-M-F.r.widthOfTextAtSize(win((ri+1)+" / "+list.length),9),y:top-12,size:9,font:F.r,color:GREY});
+      var l2=[sh.t==="rect"?"Rectangulaire":"Ronde",dimTxt(sh),ty?"objet "+ty.code:"",ly?"calque "+ly.name:"",
+        lvs.length+" niveau"+(lvs.length>1?"x":"")+" : "+lvs.map(function(l){ return l.name; }).join(", "),
+        it.kos?it.kos+" anomalie"+(it.kos>1?"s":""):"aucune anomalie"].filter(Boolean).join("  ·  ");
+      page.drawText(fitTxt(l2,F.b,9,t.w-2*M),{x:M,y:top-29,size:9,font:F.b,color:it.kos?RED:BLACK});
+      page.drawText(fitTxt([title,today(),"Échelle à l'impression : "+ratioTxt(g.N)+" — "+t.name+", imprimer à 100 % (taille réelle)"].filter(Boolean).join("  ·  "),F.r,8.5,t.w-2*M),
+        {x:M,y:top-42,size:8.5,font:F.r,color:BLACK});
+      page.drawText(win("Seule cette réservation est affichée  ·  Trait plein : position attendue  ·  Pointillé rouge : position réelle  ·  Écart X + vers la droite, Y + vers le bas du plan"),
+        {x:M,y:top-54,size:7.5,font:F.r,color:GREY});
+      /* une vue par niveau, de gauche à droite du bas vers le haut du bâtiment */
+      lvs.forEach(function(l,i){
+        var b=bs[i], bx=boxes[i], ppm=cal(l).s*b.k, f=g.s/ppm;
+        var col=i%g.c, row=Math.floor(i/g.c);
+        var px=M+col*(g.pw+RES_GAP), yTop=top-RES_HEAD-row*(RES_CAP+g.ph+RES_GAP), py=yTop-RES_CAP-g.ph;
+        var cw=g.pw/f, ch=g.ph/f, wx=bx.cx-cw/2, wy=bx.cy-ch/2;
+        /* légende de la vue */
+        var o=obsOf(sh,l.id), sa=at(sh,l.id), ec=o&&o.st==="ko"? ecart(sa,o) : null;
+        var st= o&&o.st==="ko"? (ec?"Anomalie — écart "+Math.round(ec.d*100)+" cm (X "+cm(ec.dx)+", Y "+cm(ec.dy)+")":"Anomalie — position réelle non pointée")
+              : o&&o.st==="ok"? "Conforme" : "Non contrôlée";
+        if(sa.from) st+="  ·  position reprise de "+lvName(sa.from);
+        page.drawText(fitTxt(l.name,F.b,10.5,g.pw),{x:px,y:yTop-11,size:10.5,font:F.b,color:BLACK});
+        page.drawText(fitTxt(st,F.r,8,g.pw),{x:px,y:yTop-22,size:8,font:F.r,color:o&&o.st==="ko"?RED:o&&o.st==="ok"?GREEN:GREY});
+        /* plan d'origine recadré, zoomé, avec la seule réservation annotée */
+        page.pushOperators(L.pushGraphicsState(), L.rectangle(px,py,g.pw,g.ph), L.clip(), L.endPath(),
+          L.concatTransformationMatrix(f,0,0,f,px-wx*f,py-wy*f));
+        b.draw(page);
+        var rows=exportRows(l).filter(function(r){ return r.orig===sh; });
+        annotate({page:page,Wd:b.Wd,Hd:b.Hd,k:b.k},l,rows,F,title,PRINT_PT/f,"",{clip:{x:wx,y:wy,w:cw,h:ch}});
+        page.pushOperators(L.popGraphicsState());
+        page.drawRectangle({x:px,y:py,width:g.pw,height:g.ph,borderColor:GREY,borderWidth:.6});
+      });
+    });
+  }); });
+  return chain.then(function(){ prog("Écriture du PDF…"); return out.save(); }).then(function(bytes){
+    var f=fname("Reservations_"+fmt.toUpperCase()), a=document.createElement("a");
+    a.href=URL.createObjectURL(new Blob([bytes],{type:"application/pdf"})); a.download=f;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function(){ URL.revokeObjectURL(a.href); },60000);
+    return f;
+  });
+}
+
 document.getElementById("repBtn").onclick=function(){
   var old=document.getElementById("expSheet"); if(old) old.remove();
   var lvs=levelsUp(), skip=S.levels.length-lvs.length, h=hiddenLayers(), imgs=lvs.filter(function(l){ return !l.pdf; }).length;
   var d=document.createElement("div"); d.className="sheet"; d.id="expSheet";
-  var ex=S.ui.exp||{fmt:"orig",ori:"auto"};
+  var ex=S.ui.exp||{fmt:"orig",ori:"auto"}, mode=ex.mode==="res"?"res":"plans";
   var fmts=[["orig","Format d'origine du plan (100 %)"],["a0","A0 — 841 × 1189 mm"],["a1","A1 — 594 × 841 mm"],["a2","A2 — 420 × 594 mm"],["a3","A3 — 297 × 420 mm"],["a4","A4 — 210 × 297 mm"]];
-  d.innerHTML='<h3>Exporter les plans</h3>'+
-    '<p>Un PDF, une page par niveau : le plan d\'origine en vectoriel (net à tout zoom) avec les réservations et les écarts annotés par-dessus.</p>'+
+  d.innerHTML='<h3>Exporter</h3>'+
+    '<div class="fld"><label>Contenu</label><select id="r_m">'+
+      '<option value="plans"'+(mode==="plans"?" selected":"")+'>Plans de tous les niveaux — une page par niveau</option>'+
+      '<option value="res"'+(mode==="res"?" selected":"")+'>Réservation par réservation — vue zoomée de ses niveaux</option></select></div>'+
+    '<p id="r_d" style="margin:6px 0 9px"></p>'+
     '<div class="fld"><label>Chantier</label><input id="r_t" type="text" value="'+esc(S.title||"")+'" placeholder="ex. Résidence Les Tilleuls — lot gros œuvre"></div>'+
     '<div style="display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:7px;margin-top:9px">'+
       '<div class="fld"><label>Format de sortie</label><select id="r_fmt">'+fmts.map(function(f){ return '<option value="'+f[0]+'"'+(f[0]===ex.fmt?" selected":"")+'>'+f[1]+'</option>'; }).join("")+'</select></div>'+
       '<div class="fld"><label>Orientation</label><select id="r_ori">'+
         [["auto","Automatique"],["p","Portrait"],["l","Paysage"]].map(function(o){ return '<option value="'+o[0]+'"'+(o[0]===ex.ori?" selected":"")+'>'+o[1]+'</option>'; }).join("")+'</select></div>'+
     '</div>'+
+    '<label class="ck" id="r_kow" style="display:flex;gap:7px;align-items:center;margin-top:8px;font-size:12px"><input type="checkbox" id="r_ko"'+(ex.ko?" checked":"")+'> Uniquement les réservations en anomalie</label>'+
     '<p id="r_sc" style="margin:7px 0 0;font-size:11.5px;color:var(--muted);line-height:1.5"></p>'+
     '<p style="margin:9px 0 0;font-size:12px">'+lvs.length+' niveau'+(lvs.length>1?"x":"")+
       (skip?' · <b>'+skip+' niveau'+(skip>1?"x":"")+' non calé'+(skip>1?"s":"")+'</b>, ignoré'+(skip>1?"s":""):'')+
       (h.length?' · calque'+(h.length>1?"s":"")+' masqué'+(h.length>1?"s":"")+' non inclus : <b>'+h.map(function(l){ return esc(l.name); }).join(", ")+'</b>':'')+'</p>'+
     (imgs?'<p style="margin:6px 0 0;font-size:12px;color:var(--muted)">'+imgs+' plan'+(imgs>1?"s":"")+' importé'+(imgs>1?"s":"")+' en image : repris à la résolution de l\'image. Importez le PDF pour un rendu net.</p>':'')+
     '<p id="r_p" style="margin:6px 0 0;font-size:12px;color:var(--blue);min-height:16px"></p>'+
-    '<div class="acts"><button class="btn" id="ko">Fermer</button><button class="btn primary" id="goP">Exporter les plans</button></div>';
+    '<div class="acts"><button class="btn" id="ko">Fermer</button><button class="btn primary" id="goP">Exporter</button></div>';
   stage.appendChild(d);
-  var sf=d.querySelector("#r_fmt"), so=d.querySelector("#r_ori");
+  var sf=d.querySelector("#r_fmt"), so=d.querySelector("#r_ori"), sm=d.querySelector("#r_m"), sk=d.querySelector("#r_ko"), lastFmt=ex.fmt;
   /* aperçu : échelle à laquelle chaque niveau sortira sur la feuille choisie */
   function preview(){
+    var res=sm.value==="res", oo=sf.querySelector('option[value="orig"]');
+    /* la vue zoomée se pose sur une feuille A0 à A4 : pas de « format d'origine » */
+    oo.disabled=res;
+    sf.value= res&&lastFmt==="orig"? "a3" : lastFmt;
     so.disabled=sf.value==="orig";
-    S.ui.exp={fmt:sf.value,ori:so.value}; save();
+    d.querySelector("#r_kow").style.display=res?"flex":"none";
+    S.ui.exp={fmt:lastFmt,ori:so.value,mode:sm.value,ko:sk.checked}; save();
+    if(res){
+      var rl=resList(sk.checked);
+      d.querySelector("#r_d").textContent="Un PDF, une page par réservation : tous les niveaux où elle passe, zoomés côte à côte (du bas vers le haut du bâtiment), à la même échelle. Seule cette réservation est affichée, avec son écart éventuel.";
+      d.querySelector("#r_sc").innerHTML=rl.length+" réservation"+(rl.length>1?"s":"")+" → "+rl.length+" page"+(rl.length>1?"s":"")+
+        ". Échelle choisie pour chaque réservation (1/20, 1/50…), la plus grande qui tient sur la feuille.<br>Étiquettes imprimées à 9 pt.";
+      return;
+    }
+    d.querySelector("#r_d").textContent="Un PDF, une page par niveau : le plan d'origine en vectoriel (net à tout zoom) avec les réservations et les écarts annotés par-dessus.";
     d.querySelector("#r_sc").innerHTML=lvs.length? "Échelle imprimée : "+lvs.map(function(l){
       var p=levelPt(l), ly=layoutFor(l,p.W,p.H,p.k,sf.value,so.value);
       return esc(l.name)+" <b>"+esc(ratioTxt(ly.N))+"</b>"+(ly.paper?" ("+esc(ly.paper.name)+")":"");
     }).join(" · ")+(sf.value==="orig"?"":"<br>Étiquettes imprimées à 9 pt quel que soit le format.") : "";
   }
-  sf.onchange=preview; so.onchange=preview; preview();
+  sf.onchange=function(){ lastFmt=sf.value; preview(); }; so.onchange=preview; sm.onchange=preview; sk.onchange=preview; preview();
   d.querySelector("#ko").onclick=function(){ d.remove(); };
   d.querySelector("#goP").onclick=function(){
     var b=this, p=d.querySelector("#r_p");
     S.title=d.querySelector("#r_t").value; save(); b.disabled=true;
-    var pr; try{ pr=exportPlans(sf.value,so.value,function(t){ p.textContent=t; }); }catch(err){ pr=Promise.reject(err); }
+    var pg=function(t){ p.textContent=t; }, pr;
+    try{ pr= sm.value==="res"? exportByRes(sf.value,so.value,sk.checked,pg) : exportPlans(sf.value,so.value,pg); }catch(err){ pr=Promise.reject(err); }
     pr.then(function(f){ p.textContent="Fichier généré : "+f; b.disabled=false; })
       .catch(function(err){ p.textContent=""; b.disabled=false; note("Export impossible : "+(err&&err.message||err)); });
   };
@@ -1959,7 +2112,8 @@ load().then(function(p){
     S.layers=p.layers||[]; S.activeLayer=p.activeLayer||null; S.types=p.types; fixLayers();
     if(p.ui) ["lv","ly","pr"].forEach(function(k){ if(typeof p.ui[k]==="boolean") S.ui[k]=p.ui[k]; });
     if(p.ui&&p.ui.lst) setListView(p.ui.lst);
-    if(p.ui&&p.ui.exp&&PAPER_PT[p.ui.exp.fmt]||p.ui&&p.ui.exp&&p.ui.exp.fmt==="orig") S.ui.exp={fmt:p.ui.exp.fmt,ori:/^(auto|p|l)$/.test(p.ui.exp.ori)?p.ui.exp.ori:"auto"};
+    if(p.ui&&p.ui.exp&&PAPER_PT[p.ui.exp.fmt]||p.ui&&p.ui.exp&&p.ui.exp.fmt==="orig") S.ui.exp={fmt:p.ui.exp.fmt,ori:/^(auto|p|l)$/.test(p.ui.exp.ori)?p.ui.exp.ori:"auto",
+      mode:p.ui.exp.mode==="res"?"res":"plans",ko:!!p.ui.exp.ko};
     layout();
     return Promise.all(S.levels.map(loadImg)).then(function(){ fit(); });
   }

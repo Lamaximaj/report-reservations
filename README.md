@@ -47,6 +47,14 @@ Ou ouvrir `index.html` dans un navigateur, ou le servir depuis un NAS.
    placées sans se chevaucher. Le cartouche est dans un bandeau ajouté au-dessus du plan,
    qui reste entièrement visible. Un plan importé en image est repris à sa résolution
    native. Les calques masqués et les niveaux non calés ne sont pas exportés.
+8. **Exporter réservation par réservation** (même fenêtre, Contenu « Réservation par
+   réservation ») : un PDF, une page par réservation. Chaque page montre tous les niveaux
+   où passe la réservation, zoomés et placés côte à côte (du bas vers le haut du
+   bâtiment ; sur plusieurs rangées s'il y en a beaucoup), tous à la même échelle ronde
+   (1/20, 1/50…), la plus grande qui tient sur la feuille A0 à A4 choisie. Seule cette
+   réservation est dessinée, avec son état par niveau (conforme, anomalie et écart, non
+   contrôlée), sa position réelle et la correction reprise des niveaux inférieurs. Option
+   « Uniquement les réservations en anomalie ». Le plan reste vectoriel.
 
 ## Panneaux et calques
 
