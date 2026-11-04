@@ -87,7 +87,14 @@ button{cursor:pointer}
 .ib[disabled]{opacity:.32;pointer-events:none}
 .vsep{width:1px;height:24px;background:var(--line);margin:0 4px;flex:none}
 
-#main{min-height:0;display:grid;grid-template-columns:280px minmax(0,1fr) 300px;gap:10px;
+/* poignées de redimensionnement des panneaux */
+.vsplit{position:absolute;width:10px;cursor:col-resize;z-index:6;touch-action:none}
+.hsplit{position:relative;flex:none;height:8px;margin:-9px 0;cursor:row-resize;z-index:6;touch-action:none}
+.vsplit::after,.hsplit::after{content:"";position:absolute;border-radius:2px;background:var(--blue);opacity:0;transition:opacity .12s}
+.vsplit::after{left:4px;top:0;bottom:0;width:2px}
+.hsplit::after{top:3px;left:0;right:0;height:2px}
+.vsplit:hover::after,.vsplit.on::after,.hsplit:hover::after,.hsplit.on::after{opacity:.8}
+#main{position:relative;min-height:0;display:grid;grid-template-columns:280px minmax(0,1fr) 300px;gap:10px;
   padding:10px max(10px,env(safe-area-inset-right,0px)) max(10px,env(safe-area-inset-bottom,0px)) max(10px,env(safe-area-inset-left,0px))}
 
 /* ---------- panneaux ---------- */
@@ -178,6 +185,13 @@ button.tag:hover{text-decoration:underline}
 .inh{margin:0;font-size:11.5px;color:var(--blue);line-height:1.4}
 .res.sub{padding-left:30px}
 .res.hide{opacity:.45}
+.res .ra{display:flex;align-items:center}
+.res .ra [data-eye]{padding:3px 4px;opacity:.55}
+.res:hover .ra [data-eye],.res.hide .ra [data-eye]{opacity:1}
+.hidbar{display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;padding:6px 8px;font-size:11.5px;color:var(--muted);border-bottom:1px solid var(--line-soft);background:var(--panel-2)}
+.hidbar span{flex:1 1 auto;min-width:0}
+.hidbar span:empty{display:none}
+.hidbar [data-show]{margin-left:auto}
 .res.none{cursor:default;color:var(--muted);font-size:11.5px;font-style:italic}
 
 #cardLv{flex:0 1 auto;max-height:42%}
@@ -320,6 +334,8 @@ kbd{font-family:var(--f-num);font-size:10.5px;background:var(--panel-2);border:1
   .side{grid-row:3;max-height:40vh}
   .side .card{max-height:none!important}
   [data-hide]{display:none!important}
+  .vsplit,.hsplit{display:none!important}
+  #cardLv{height:auto!important}
   #themeBtn,#helpBtn,#lstSeg [data-v=mt]{display:none!important}
   .menu kbd{display:none}
   .menu button{padding:9px 10px}
@@ -374,6 +390,7 @@ kbd{font-family:var(--f-num);font-size:10.5px;background:var(--panel-2);border:1
   <symbol id="i-theme" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 0 0 16z" fill="currentColor"/></symbol>
   <symbol id="i-file" viewBox="0 0 24 24"><path d="M6 3.5h8l4 4v13H6z"/><path d="M14 3.5v4h4"/></symbol>
   <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-save" viewBox="0 0 24 24"><path d="M5 4h11.5L20 7.5V20H5z"/><path d="M8.5 4v5h7V4M8.5 20v-6h8v6"/></symbol>
   <symbol id="i-tiles" viewBox="0 0 24 24"><rect x="3.5" y="4" width="7.5" height="7" rx="1"/><rect x="13" y="4" width="7.5" height="7" rx="1"/><rect x="3.5" y="13" width="7.5" height="7" rx="1"/><rect x="13" y="13" width="7.5" height="7" rx="1"/></symbol>
   <symbol id="i-list" viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01"/></symbol>
 </svg>
@@ -407,6 +424,8 @@ kbd{font-family:var(--f-num);font-size:10.5px;background:var(--panel-2);border:1
     </nav>
     <span class="sp"></span>
     <div class="acts">
+      <button class="ib" id="saveBtn" title="Enregistrer le projet dans un fichier, plans compris (Ctrl+S) — Maj+clic : enregistrer sous…"><svg class="i"><use href="#i-save"/></svg></button>
+      <span class="vsep"></span>
       <button class="ib" id="undoBtn" title="Annuler (Ctrl+Z)" disabled><svg class="i"><use href="#i-undo"/></svg></button>
       <button class="ib" id="redoBtn" title="Rétablir (Ctrl+Maj+Z)" disabled><svg class="i"><use href="#i-redo"/></svg></button>
       <span class="vsep pn"></span>
@@ -432,6 +451,7 @@ kbd{font-family:var(--f-num);font-size:10.5px;background:var(--panel-2);border:1
         </header>
         <div class="scroll" id="lvList"></div>
       </section>
+      <div class="hsplit" id="splitLv" title="Glisser pour changer la hauteur — double-clic : taille par défaut"></div>
 
       <section class="card" id="cardLy">
         <header>
@@ -451,6 +471,7 @@ kbd{font-family:var(--f-num);font-size:10.5px;background:var(--panel-2);border:1
       <div class="vctl">
         <div class="gl">
           <button id="multiBtn" title="Tous les niveaux côte à côte, même zoom et même position (T)"><svg class="i s"><use href="#i-tiles"/></svg><span>Tous les niveaux</span></button>
+          <button id="lvPick" hidden title="Choisir les niveaux affichés côte à côte"><span id="lvPickTxt">Niveaux</span><svg class="i s"><use href="#i-chev"/></svg></button>
         </div>
         <div class="gl" id="nav" hidden title="Passer d'une réservation à l'autre sur tous les niveaux (Pg↑ / Pg↓)">
           <button id="navPrev" title="Réservation précédente (Pg↑)">◀</button>
@@ -490,6 +511,8 @@ kbd{font-family:var(--f-num);font-size:10.5px;background:var(--panel-2);border:1
       <button data-tab="mt">Métré</button>
       <button data-tab="pr">Propriétés</button>
     </div>
+    <div class="vsplit" id="splitL" title="Glisser pour changer la largeur — double-clic : taille par défaut"></div>
+    <div class="vsplit" id="splitR" title="Glisser pour changer la largeur — double-clic : taille par défaut"></div>
   </div>
 </div>
 
@@ -506,8 +529,9 @@ var S={ levels:[], shapes:[], activeId:null, selId:null, tool:"select",
         view:{s:1,tx:0,ty:0}, under:"", underOp:.45, grid:false, seq:1,
         asc:true,            /* true : le 1er de la liste est le niveau le plus bas */
         title:"", layers:[], activeLayer:null, types:undefined, ui:{lv:true,ly:true,pr:true,lst:"ly",exp:{fmt:"orig",ori:"auto"}},
-        items:[], meas:[], activeItem:null, selM:null, expOff:[] };
-var PAL=["#c8492a","#1f6f8b","#2d7a4f","#8a5bbf","#9d7312","#1f8b7e"];
+        items:[], meas:[], activeItem:null, selM:null, expOff:[], msel:[], multiOff:[] };
+/* couleurs des calques et objets : pas de rouge, réservé à la position réelle des anomalies */
+var PAL=["#1f6f8b","#2d7a4f","#8a5bbf","#9d7312","#1f8b7e","#4a6fd1"];
 var cv=document.getElementById("cv"), ctx=cv.getContext("2d"), dpr=1;
 var stage=document.getElementById("stage");
 var calLine=null;   // ligne de cote tracée pour l'échelle (px plan)
@@ -558,7 +582,29 @@ function renameType(t,old){
   S.shapes.forEach(function(s){ if(s.ty!==t.id) return; var m=String(s.n).trim().match(re); if(m){ s.n=t.code+m[1]; n++; } });
   return n;
 }
-function shown(sh){ var l=layerOf(sh); return !l||l.vis!==false; }
+function shown(sh){ var l=layerOf(sh); return !sh.hid&&(!l||l.vis!==false); }
+/* sélection multiple : S.msel (Ctrl/Maj+clic, Ctrl+A) ; valable tant qu'elle contient la réservation courante */
+function mselIds(){
+  var m=(S.msel||[]).filter(function(id){ return S.shapes.some(function(s){ return s.id===id; }); });
+  return m.length>1&&m.indexOf(S.selId)>=0? m : (S.selId&&sel()? [S.selId] : []);
+}
+function picked(id){ return mselIds().indexOf(id)>=0; }
+function toggleSel(id){
+  var m=mselIds().slice(), i=m.indexOf(id);
+  if(i>=0){ m.splice(i,1); S.selId=m.length? m[m.length-1] : null; } else { m.push(id); S.selId=id; }
+  S.msel=m; S.selM=null;
+}
+function selectAll(){
+  var ids=S.shapes.filter(function(s){ var l=layerOf(s); return !l||l.vis!==false; }).map(function(s){ return s.id; });
+  if(!ids.length) return;
+  S.msel=ids; S.selId=ids[ids.length-1]; S.selM=null; renderAll();
+  note(plural(ids.length,"réservation sélectionnée","réservations sélectionnées")+" — Propriétés : masquer, afficher, supprimer.",3000);
+}
+function setHidden(ids,hid){
+  var n=0; S.shapes.forEach(function(s){ if(ids.indexOf(s.id)>=0&&!!s.hid!==hid){ if(hid) s.hid=true; else delete s.hid; n++; } });
+  renderAll(); save();
+  if(n) note(plural(n,"réservation","réservations")+(hid?" masquée"+(n>1?"s":"")+" — Ctrl+Z ou « Tout afficher » pour revenir.":" affichée"+(n>1?"s":"")+"."),3000);
+}
 function newLayer(name){ var n=S.layers.length;
   var l={id:uid(), name:name||("Calque "+(n+1)), c:PAL[n%PAL.length], vis:true, open:true};
   S.layers.push(l); return l; }
@@ -651,7 +697,7 @@ function projMeta(id){ return PROJS.find(function(p){ return p.id===id; })||null
 function pack(){ return { levels:S.levels.map(function(l){
     return {id:l.id,name:l.name,src:l.src,w:l.w,h:l.h,scale:l.scale,org:l.org,rot:l.rot,pdf:l.pdf}; }),
     shapes:S.shapes, activeId:S.activeId, seq:S.seq, demo:S.demo, asc:S.asc, title:S.title,
-    layers:S.layers, activeLayer:S.activeLayer, types:S.types, items:S.items, meas:S.meas, activeItem:S.activeItem, ui:S.ui, expOff:S.expOff }; }
+    layers:S.layers, activeLayer:S.activeLayer, types:S.types, items:S.items, meas:S.meas, activeItem:S.activeItem, ui:S.ui, expOff:S.expOff, multiOff:S.multiOff }; }
 function counts(p){ return {nl:(p.levels||[]).length, nr:(p.shapes||[]).length, nm:(p.meas||[]).length}; }
 var saveT=null, saveErr=false;
 function persist(){
@@ -712,7 +758,7 @@ document.getElementById("redoBtn").onclick=redo;
 /* ============ ouverture / création de projets ============ */
 function blank(){
   S.levels=[]; S.shapes=[]; S.items=[]; S.meas=[]; S.layers=[]; S.types=undefined; S.activeLayer=null; S.activeItem=null;
-  S.activeId=null; S.selId=null; S.selM=null; S.seq=1; S.asc=true; S.demo=false; S.under=""; S.title=""; S.expOff=[];
+  S.activeId=null; S.selId=null; S.selM=null; S.seq=1; S.asc=true; S.demo=false; S.under=""; S.title=""; S.expOff=[]; S.multiOff=[]; S.msel=[];
   S.view={s:0,tx:0,ty:0}; meas=null; calLine=null; drag=null; draft=null; lvPool={};
   fixLayers(); fixItems();
 }
@@ -723,6 +769,7 @@ function applyPack(p){
   S.seq=p.seq||(S.shapes.length+1); S.demo=!!p.demo; if(p.asc!==undefined) S.asc=p.asc;
   S.layers=p.layers||[]; S.activeLayer=p.activeLayer||null; S.types=p.types; S.items=p.items||[]; S.meas=p.meas||[]; S.activeItem=p.activeItem||null;
   S.expOff=Array.isArray(p.expOff)? p.expOff.filter(function(x){ return typeof x==="string"; }) : [];
+  S.multiOff=Array.isArray(p.multiOff)? p.multiOff.filter(function(x){ return S.levels.some(function(l){ return l.id===x; }); }) : [];
   fixLayers(); fixItems();
   if(!hasPrefs&&p.ui){ ["lv","ly","pr"].forEach(function(k){ if(typeof p.ui[k]==="boolean") S.ui[k]=p.ui[k]; }); if(p.ui.lst) S.ui.lst=p.ui.lst;
     if(p.ui.exp&&(PAPER_PT[p.ui.exp.fmt]||p.ui.exp.fmt==="orig")) S.ui.exp={fmt:p.ui.exp.fmt,ori:/^(auto|p|l)$/.test(p.ui.exp.ori)?p.ui.exp.ori:"auto",mode:p.ui.exp.mode==="res"?"res":"plans",ko:!!p.ui.exp.ko}; }
@@ -829,11 +876,36 @@ function multiOn(){ return !!S.ui.multi && S.levels.length>1; }
 function layoutTiles(){
   tiles=[]; if(!multiOn()) return;
   var vc=document.querySelector(".vctl"), top=vc? vc.offsetTop+vc.offsetHeight+6 : 0, bot=30;
-  var W=stage.clientWidth, H=Math.max(60,stage.clientHeight-top-bot), n=S.levels.length, best=1, bs=-1;
+  var shownLv=tileLevels(), W=stage.clientWidth, H=Math.max(60,stage.clientHeight-top-bot), n=shownLv.length, best=1, bs=-1;
   /* nombre de colonnes qui donne les tuiles les plus grandes pour des plans ≈ 1,4:1 */
   for(var c=1;c<=n;c++){ var r=Math.ceil(n/c), sc=Math.min(W/c/1.4,H/r); if(sc>bs){ bs=sc; best=c; } }
   var rows=Math.ceil(n/best), tw=W/best, th=H/rows;
-  S.levels.forEach(function(l,i){ tiles.push({lv:l, x:(i%best)*tw, y:top+Math.floor(i/best)*th, w:tw, h:th}); });
+  shownLv.forEach(function(l,i){ tiles.push({lv:l, x:(i%best)*tw, y:top+Math.floor(i/best)*th, w:tw, h:th}); });
+}
+/* niveaux affichés en tuiles : tous sauf ceux décochés (au moins un) */
+function tileLevels(){
+  var off=S.multiOff||[], a=S.levels.filter(function(l){ return off.indexOf(l.id)<0; });
+  return a.length? a : S.levels.slice();
+}
+function levelsMenu(){
+  var b=document.getElementById("lvPick").getBoundingClientRect(), off=S.multiOff||[];
+  var items=[{h:"Niveaux affichés côte à côte"}];
+  S.levels.forEach(function(l){
+    var on=off.indexOf(l.id)<0;
+    items.push({t:l.name+(ready(l)?"":" (non calé)"),i:on?"ok":null,on:on,keep:true,fn:function(){
+      var o=(S.multiOff||[]).slice(), i=o.indexOf(l.id);
+      if(i>=0) o.splice(i,1); else if(S.levels.length-o.length>1) o.push(l.id); else { note("Il faut au moins un niveau affiché.",1800); levelsMenu(); return; }
+      setTileLevels(o); levelsMenu(); }});
+  });
+  items.push("-");
+  items.push({t:"Tous les niveaux",i:"tiles",fn:function(){ setTileLevels([]); }});
+  openMenu(b.left,b.bottom+4,items);
+}
+function setTileLevels(off){
+  S.multiOff=off; var vis=tileLevels();
+  if(!vis.some(function(l){ return l.id===S.activeId; })) S.activeId=vis[0].id;
+  layoutTiles(); var s=sel(); if(s) focusShape(s); else fit();
+  renderAll(); save();
 }
 function tileAt(p){ return tiles.find(function(t){ return p.x>=t.x&&p.x<t.x+t.w&&p.y>=t.y&&p.y<t.y+t.h; })||null; }
 function viewSize(){
@@ -870,7 +942,7 @@ document.getElementById("fitBtn").onclick=function(){ var s=sel(); if(multiOn()&
 function resize(){
   dpr=Math.max(1,Math.min(window.devicePixelRatio||1,3));
   cv.width=Math.round(stage.clientWidth*dpr); cv.height=Math.round(stage.clientHeight*dpr);
-  layoutTiles();
+  layoutTiles(); placeSplits();
   /* page chargée dans une fenêtre encore sans taille : recadrer dès qu'elle en a une */
   if(!(S.view.s>0)) fit();
   draw(); scheduleRefine();
@@ -1010,8 +1082,13 @@ function drawShape(sh,here,isSel){
   }
   var o=(here&&lvA)?obsOf(sh,lvA.id):null;
   var ko=!!(o&&o.st==="ko");
-  var col=ko? "#d8352a" : colOf(sh);
+  /* la position attendue garde la couleur de son objet / calque, même en anomalie ; le rouge est réservé à la position réelle */
+  var col=colOf(sh), hl=here&&sh.id!=="_"&&!isSel&&picked(sh.id);
   ctx.save();
+  if(hl){ ctx.save(); ctx.strokeStyle=css("--blue"); ctx.globalAlpha=.55; ctx.lineWidth=6; ctx.beginPath();
+    if(sh.t==="rect"){ var hp=corners(sh).map(function(q){ return w2s(q[0],q[1]); }); ctx.moveTo(hp[0].x,hp[0].y); for(var hi=1;hi<4;hi++) ctx.lineTo(hp[hi].x,hp[hi].y); ctx.closePath(); }
+    else{ var hc=w2s(sh.x,sh.y); ctx.arc(hc.x,hc.y,Math.max(sh.r*S.view.s,1),0,6.2832); }
+    ctx.stroke(); ctx.restore(); }
   ctx.lineWidth=isSel?2.5:(here?2:1.4);
   ctx.strokeStyle=col;
   ctx.globalAlpha=here?1:.55;
@@ -1339,8 +1416,9 @@ cv.addEventListener("pointerdown",function(e){
     }
   }
   var hit=pick(W,lv);
+  if(hit&&(e.ctrlKey||e.metaKey||e.shiftKey)){ toggleSel(hit.id); renderAll(); return; }   /* sélection multiple */
   if(hit){
-    var ha=at(hit,lv.id); S.selId=hit.id; S.selM=null;
+    var ha=at(hit,lv.id); S.selId=hit.id; S.selM=null; S.msel=[];
     /* position reprise d'un niveau inférieur : on la corrige par un pointage, pas en déplaçant le projet */
     if(ha.from){ renderAll(); if(hit.id!==(s&&s.id)) note("Position reprise de "+lvName(ha.from)+" — si elle est encore décalée ici : « Déplacer vers la position réelle »."); return; }
     drag={m:"move",id:hit.id,dx:W.X-hit.x,dy:W.Y-hit.y}; renderAll(); return; }
@@ -1352,7 +1430,7 @@ cv.addEventListener("pointerdown",function(e){
     else drag={m:"mmove",id:hm.id,last:w2p(lv,W.X,W.Y),sx:p.x,sy:p.y};
     return;
   }
-  S.selId=null; S.selM=null; renderAll();
+  S.selId=null; S.selM=null; S.msel=[]; renderAll();
   drag={m:"pan",x:p.x,y:p.y,tx:S.view.tx,ty:S.view.ty};
 });
 function measOnEdge(lv,m,p){ var ps=m.pts.map(function(q){ return p2s(lv,q); });
@@ -1653,6 +1731,7 @@ function zoomBy(k,px,py){
   S.view.tx=px-w.X*S.view.s; S.view.ty=py-w.Y*S.view.s; draw(); scheduleRefine();
 }
 document.getElementById("multiBtn").onclick=function(){ setMulti(!S.ui.multi); };
+document.getElementById("lvPick").onclick=function(e){ e.stopPropagation(); levelsMenu(); };
 document.getElementById("navPrev").onclick=function(){ navStep(-1); };
 document.getElementById("navNext").onclick=function(){ navStep(1); };
 document.getElementById("zoomIn").onclick=function(){ zoomBy(1.35); };
@@ -1673,6 +1752,17 @@ function renderShapes(){
   var box=document.getElementById("rsList");
   box.innerHTML="";
   var lv=active();
+  /* barre : tout sélectionner, réservations masquées */
+  if(S.shapes.length){
+    var nh=S.shapes.filter(function(s){ return s.hid; }).length, ns=mselIds().length;
+    var bar=document.createElement("div"); bar.className="hidbar";
+    bar.innerHTML='<button class="btn sm" data-all title="Tout sélectionner (Ctrl+A) — Ctrl+clic ou Maj+clic pour ajouter / retirer">Tout sélectionner</button>'+
+      '<span>'+(ns>1? plural(ns,"sélectionnée","sélectionnées") : "")+(nh? (ns>1?" · ":"")+plural(nh,"masquée","masquées") : "")+'</span>'+
+      (nh?'<button class="btn sm" data-show>Tout afficher</button>':'');
+    bar.querySelector("[data-all]").onclick=selectAll;
+    var sb=bar.querySelector("[data-show]"); if(sb) sb.onclick=function(){ setHidden(S.shapes.map(function(s){ return s.id; }),false); };
+    box.appendChild(bar);
+  }
   S.layers.forEach(function(ly,li){
     var items=S.shapes.filter(function(s){ return s.ly===ly.id; });
     var vis=ly.vis!==false, open=ly.open!==false;
@@ -1713,15 +1803,18 @@ function renderShapes(){
 function resRow(s){
   var L=layerOf(s), vis=!L||L.vis!==false, lv=active();
   var el=document.createElement("div");
-  el.className="res sub"+(s.id===S.selId?" on":"")+(vis?"":" hide");
+  el.className="res sub"+(picked(s.id)?" on":"")+(vis&&!s.hid?"":" hide");
   var nb=s.levels? s.levels.length : S.levels.length;
   var ko=koCount(s);
   el.innerHTML='<span class="swatch" style="background:'+(ko?"#d8352a":colOf(s))+'"></span>'+
     '<div><div class="nm">'+esc(s.n)+(ko?' <span class="bad">'+ko+' anomalie'+(ko>1?'s':'')+'</span>':'')+'</div>'+
-    '<div class="dim">'+dimTxt(s)+' · '+nb+' niv.</div></div>'+
-    '<button class="btn ghost sm" data-rm>✕</button>';
-  el.onclick=function(e){ if(e.target.closest("[data-rm]")) return;
-    S.selId=s.id; S.selM=null; if(L) L.vis=true;
+    '<div class="dim">'+dimTxt(s)+' · '+nb+' niv.'+(s.hid?' · masquée':'')+'</div></div>'+
+    '<div class="ra"><button class="btn ghost sm" data-eye title="'+(s.hid?"Afficher":"Masquer")+' la réservation">'+(s.hid?EYE_OFF:EYE)+'</button>'+
+    '<button class="btn ghost sm" data-rm title="Supprimer">✕</button></div>';
+  el.querySelector("[data-eye]").onclick=function(e){ e.stopPropagation(); var ids=picked(s.id)? mselIds() : [s.id]; setHidden(ids,!s.hid); };
+  el.onclick=function(e){ if(e.target.closest("[data-rm],[data-eye]")) return;
+    if(e.ctrlKey||e.metaKey||e.shiftKey){ toggleSel(s.id); renderAll(); return; }   /* sélection multiple */
+    S.selId=s.id; S.selM=null; S.msel=[]; if(L) L.vis=true;
     if(lv&&!onLevel(s,lv.id)){ var t=S.levels.find(function(l){ return onLevel(s,l.id)&&ready(l); }); if(t){ S.activeId=t.id; fit(); } }
     if(multiOn()){ renderAll(); focusShape(s); save(); return; }
     var cur=active(); centerOn(cur&&onLevel(s,cur.id)? at(s,cur.id) : s); renderAll(); save(); };
@@ -1843,6 +1936,8 @@ function navList(){ return S.shapes.filter(shown); }
 function renderNav(){
   var b=document.getElementById("multiBtn"), nv=document.getElementById("nav"), n=document.getElementById("navName"); if(!b) return;
   b.classList.toggle("on",multiOn()); nv.hidden=!multiOn();
+  var lp=document.getElementById("lvPick"), nt=tileLevels().length;
+  lp.hidden=!multiOn(); document.getElementById("lvPickTxt").textContent="Niveaux "+nt+"/"+S.levels.length;
   var s=sel(), L=navList(), i=s?L.indexOf(s):-1;
   n.textContent=s? s.n+"  ("+(i+1)+"/"+L.length+")" : plural(L.length,"réservation");
 }
@@ -1861,10 +1956,14 @@ function renderInsp(){
   if(!s&&isMtTool(S.tool)){ pt.textContent="Poste en cours"; renderItemInsp(box,itemFor(kindOfTool(S.tool))); return; }
   pt.textContent=s?"Réservation":"Propriétés";
   if(!s){ box.innerHTML='<div class="empty">Rien de sélectionné. Cliquez une réservation ou un métré sur le plan, ou dans les listes à gauche.<br><br>Clic droit sur le plan : actions rapides. Touche <kbd>?</kbd> : raccourcis.</div>'; return; }
+  var ms=mselIds();
+  if(ms.length>1){ renderMultiInsp(box,ms); pt.textContent=ms.length+" réservations"; return; }
   var isR=s.t==="rect";
   box.innerHTML='<div class="insp">'+
     '<div class="acts"><button class="btn sm" id="i_dup" title="Puis cliquez sur le plan pour poser les copies (Ctrl+D)">Dupliquer</button>'+
+    '<button class="btn sm" id="i_hid" title="'+(s.hid?"Afficher":"Masquer")+' cette réservation sur le plan et dans les exports">'+(s.hid?"Afficher":"Masquer")+'</button>'+
     '<button class="btn sm" id="i_del" style="margin-left:auto;color:var(--accent)">Supprimer</button></div>'+
+    (s.hid?'<p style="margin:0;font-size:12px;color:var(--muted)">Réservation masquée : elle n\'apparaît ni sur le plan ni dans les exports.</p>':'')+
     '<div class="fld"><label>Désignation</label><input id="i_n" type="text" value="'+esc(s.n)+'"></div>'+
     '<div class="fld"><label>Calque</label><select id="i_ly">'+
       S.layers.map(function(l){ return '<option value="'+l.id+'"'+(l.id===s.ly?" selected":"")+'>'+esc(l.name)+'</option>'; }).join("")+
@@ -1925,7 +2024,33 @@ function renderInsp(){
     renderAll(); save();
   });
   box.querySelector("#i_dup").onclick=function(){ startStamp(s); };
+  box.querySelector("#i_hid").onclick=function(){ setHidden([s.id],!s.hid); };
   box.querySelector("#i_del").onclick=function(){ delShape(s.id); };
+}
+/* Propriétés d'une sélection multiple : masquer / afficher / ranger / supprimer d'un coup */
+function renderMultiInsp(box,ids){
+  var list=S.shapes.filter(function(s){ return ids.indexOf(s.id)>=0; }), nh=list.filter(function(s){ return s.hid; }).length;
+  box.innerHTML='<div class="insp">'+
+    '<p style="margin:0;font-size:13px"><b>'+list.length+' réservations sélectionnées</b>'+(nh?' · '+plural(nh,"masquée","masquées"):'')+'</p>'+
+    '<div class="acts"><button class="btn sm" id="m_hide">Masquer</button><button class="btn sm" id="m_show">Afficher</button>'+
+      '<button class="btn sm" id="m_del" style="margin-left:auto;color:var(--accent)">Supprimer…</button></div>'+
+    '<div class="fld"><label>Ranger dans le calque</label><select id="m_ly"><option value="">—</option>'+
+      S.layers.map(function(l){ return '<option value="'+l.id+'">'+esc(l.name)+'</option>'; }).join("")+'</select></div>'+
+    '<div class="picks" style="max-height:260px">'+list.map(function(s){
+      return '<label style="padding-left:8px"><span class="swatch" style="background:'+colOf(s)+'"></span>'+esc(s.n)+(s.hid?' <small style="color:var(--muted)">(masquée)</small>':'')+'</label>'; }).join("")+'</div>'+
+    '<p style="margin:0;font-size:11.5px;color:var(--muted)">Ctrl+clic ou Maj+clic (plan ou liste) pour ajouter / retirer · Échap pour désélectionner.</p>'+
+    '<button class="btn sm" id="m_none">Désélectionner</button></div>';
+  box.querySelector("#m_hide").onclick=function(){ setHidden(ids,true); };
+  box.querySelector("#m_show").onclick=function(){ setHidden(ids,false); };
+  box.querySelector("#m_ly").onchange=function(){ var L=S.layers.find(function(l){ return l.id===this.value; },this); if(!L) return;
+    list.forEach(function(s){ s.ly=L.id; }); L.vis=true; renderAll(); save(); note(plural(list.length,"réservation rangée","réservations rangées")+" dans « "+L.name+" ».",2400); };
+  box.querySelector("#m_none").onclick=function(){ S.selId=null; S.msel=[]; renderAll(); };
+  var del=box.querySelector("#m_del");
+  del.onclick=function(){
+    if(del.dataset.ok){ var n=list.length; S.shapes=S.shapes.filter(function(s){ return ids.indexOf(s.id)<0; }); S.selId=null; S.msel=[];
+      renderAll(); save(); note(plural(n,"réservation supprimée","réservations supprimées")+" — Ctrl+Z pour revenir."); return; }
+    del.dataset.ok=1; del.textContent="Confirmer la suppression ("+list.length+")"; del.style.background="var(--bad)"; del.style.color="#fff";
+  };
 }
 /* « Gaine VMC » → « Gaine VMC 2 », « Gaine VMC 2 » → numéro libre suivant */
 function nextName(n){
@@ -2023,15 +2148,47 @@ function layout(){
   var v=mob? {lv:mobTab==="lv", ly:mobTab==="ly"||mobTab==="mt", pr:mobTab==="pr"} : S.ui;
   var $=function(id){ return document.getElementById(id); };
   $("cardLv").hidden=!v.lv; $("cardLy").hidden=!v.ly; $("cardPr").hidden=!v.pr;
-  $("cardLv").style.maxHeight=v.ly?"":"none";
+  /* hauteur de la liste des niveaux choisie à la poignée, sinon automatique */
+  var hl=v.ly&&S.ui.hLv>0;
+  $("cardLv").style.maxHeight=v.ly?(hl?"none":""):"none";
+  $("cardLv").style.height=hl? S.ui.hLv+"px" : ""; $("cardLv").style.flex=hl? "none" : "";
+  $("splitLv").hidden=!(v.lv&&v.ly);
   $("sideL").hidden=!(v.lv||v.ly); $("sideR").hidden=!v.pr;
-  $("main").style.gridTemplateColumns=mob?"":[(v.lv||v.ly)?"280px":"","minmax(0,1fr)",v.pr?"300px":""].filter(Boolean).join(" ");
+  $("main").style.gridTemplateColumns=mob?"":[(v.lv||v.ly)?(S.ui.wL||280)+"px":"","minmax(0,1fr)",v.pr?(S.ui.wR||300)+"px":""].filter(Boolean).join(" ");
+  $("splitL").hidden=mob||!(v.lv||v.ly); $("splitR").hidden=mob||!v.pr;
+  placeSplits();
   var pl=document.querySelector('#panes [data-pane="left"]'), pp=document.querySelector('#panes [data-pane="pr"]');
   pl.classList.toggle("on",!!(S.ui.lv||S.ui.ly)); pl.title=(S.ui.lv||S.ui.ly?"Masquer":"Afficher")+" le panneau de gauche (niveaux, listes)";
   pp.classList.toggle("on",!!S.ui.pr); pp.title=(S.ui.pr?"Masquer":"Afficher")+" le panneau Propriétés";
   Array.prototype.forEach.call(document.querySelectorAll(".tabs [data-tab]"),function(b){ b.classList.toggle("on",b.dataset.tab===mobTab); });
 }
 function setPane(k,on){ S.ui[k]=on; layout(); savePrefs(); resize(); }
+/* poignées : placées dans l'espace entre les panneaux et le plan */
+function placeSplits(){
+  var m=document.getElementById("main"), L=document.getElementById("sideL"), R=document.getElementById("sideR");
+  var sl=document.getElementById("splitL"), sr=document.getElementById("splitR"), st=document.getElementById("stage");
+  [sl,sr].forEach(function(s){ s.style.top=st.offsetTop+"px"; s.style.height=st.offsetHeight+"px"; });
+  if(!L.hidden) sl.style.left=(L.offsetLeft+L.offsetWidth)+"px";
+  if(!R.hidden) sr.style.left=(R.offsetLeft-10)+"px";
+}
+function dragSplit(el,start,move,reset){
+  el.addEventListener("pointerdown",function(e){
+    if(e.button!==0) return; e.preventDefault(); el.setPointerCapture(e.pointerId); el.classList.add("on");
+    var x0=e.clientX, y0=e.clientY, v0=start();
+    function mv(ev){ move(v0,ev.clientX-x0,ev.clientY-y0); layout(); }
+    function up(){ el.classList.remove("on"); el.removeEventListener("pointermove",mv); el.removeEventListener("pointerup",up); el.removeEventListener("pointercancel",up); savePrefs(); resize(); }
+    el.addEventListener("pointermove",mv); el.addEventListener("pointerup",up); el.addEventListener("pointercancel",up);
+  });
+  el.addEventListener("dblclick",function(){ reset(); layout(); savePrefs(); resize(); });
+}
+function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
+dragSplit(document.getElementById("splitL"),function(){ return S.ui.wL||280; },
+  function(v0,dx){ S.ui.wL=Math.round(clamp(v0+dx,200,Math.min(640,window.innerWidth*.45))); }, function(){ delete S.ui.wL; });
+dragSplit(document.getElementById("splitR"),function(){ return S.ui.wR||300; },
+  function(v0,dx){ S.ui.wR=Math.round(clamp(v0-dx,220,Math.min(640,window.innerWidth*.45))); }, function(){ delete S.ui.wR; });
+dragSplit(document.getElementById("splitLv"),function(){ return document.getElementById("cardLv").offsetHeight; },
+  function(v0,dx,dy){ var H=document.getElementById("sideL").clientHeight; S.ui.hLv=Math.round(clamp(v0+dy,70,Math.max(80,H-170))); }, function(){ delete S.ui.hLv; });
+window.addEventListener("resize",placeSplits);
 document.getElementById("panes").addEventListener("click",function(e){
   var b=e.target.closest("[data-pane]"); if(!b) return;
   if(b.dataset.pane==="left"){ var on=!(S.ui.lv||S.ui.ly); S.ui.lv=on; S.ui.ly=on; layout(); savePrefs(); resize(); }
@@ -2828,12 +2985,13 @@ function kk(t){ return IS_MAC? t.replace(/Ctrl\+/g,"⌘").replace(/Maj\+/g,"⇧"
 document.addEventListener("keydown",function(e){
   var typing=/input|select|textarea/i.test(e.target.tagName)||e.target.isContentEditable;
   var mod=e.ctrlKey||e.metaKey, k=(e.key||"").toLowerCase();
-  if(mod&&k==="s"){ e.preventDefault(); saveNow().then(function(){ note("Projet enregistré — l'enregistrement est de toute façon automatique.",2400); }); return; }
+  if(mod&&k==="s"){ e.preventDefault(); saveToFile(e.shiftKey); return; }
   if(typing){ if(e.key==="Escape"){ if(e.target.closest(".modal")){ e.preventDefault(); closeModals(); } else e.target.blur(); } return; }
   if(document.querySelector(".modal")){ if(e.key==="Escape"){ e.preventDefault(); closeModals(); } return; }
   if(e.key===" "){ e.preventDefault(); if(!spaceDown){ spaceDown=true; if(!drag) cv.style.cursor="grab"; } return; }
   if(mod){
-    if(k==="z"&&!e.shiftKey){ e.preventDefault(); undo(); }
+    if(k==="a"){ e.preventDefault(); selectAll(); }
+    else if(k==="z"&&!e.shiftKey){ e.preventDefault(); undo(); }
     else if((k==="z"&&e.shiftKey)||k==="y"){ e.preventDefault(); redo(); }
     else if(k==="c"){ if(copySel()) e.preventDefault(); }
     else if(k==="x"){ if(copySel()){ e.preventDefault(); delSel(); note("Coupé — Ctrl+V pour coller.",1800); } }
@@ -2854,7 +3012,7 @@ document.addEventListener("keydown",function(e){
     closeMenu();
     if(draft){ cancelDraft(); return; }
     if(S.tool!=="select"){ setTool("select"); return; }
-    meas=null; calLine=null; closeDock(); hint(""); S.selId=null; S.selM=null; renderAll(); return;
+    meas=null; calLine=null; closeDock(); hint(""); S.selId=null; S.selM=null; S.msel=[]; renderAll(); return;
   }
   if(e.key==="Delete"||e.key==="Backspace"){ if(delSel()) e.preventDefault(); return; }
   if(e.key.indexOf("Arrow")===0){ if(nudge(e.key,e.shiftKey)) e.preventDefault(); return; }
@@ -2900,7 +3058,11 @@ function copySel(){
   if(m){ clip={t:"m",d:JSON.parse(JSON.stringify(m))}; note("Métré copié.",1400); return true; }
   return false;
 }
-function delSel(){ if(sel()){ delShape(S.selId); return true; } if(selM()){ delMeas(S.selM); return true; } return false; }
+function delSel(){
+  var ms=mselIds();
+  if(ms.length>1){ S.shapes=S.shapes.filter(function(s){ return ms.indexOf(s.id)<0; }); S.selId=null; S.msel=[]; renderAll(); save();
+    note(plural(ms.length,"réservation supprimée","réservations supprimées")+" — Ctrl+Z pour revenir."); return true; }
+  if(sel()){ delShape(S.selId); return true; } if(selM()){ delMeas(S.selM); return true; } return false; }
 function dupSel(){ var s=sel(), m=selM(); if(s){ startStamp(s); return true; } if(m){ dupMeas(m); note("Copie décalée — déplacez-la à sa place.",2000); return true; } return false; }
 function paste(at){
   var lv=active(); if(!clip||!lv){ note(clip?"Aucun niveau ouvert.":"Rien à coller : sélectionnez puis Ctrl+C."); return; }
@@ -2938,6 +3100,9 @@ function resMenuItems(s,lv){
   it.push({t:"Dupliquer (tampon)",i:"stamp",k:kk("Ctrl+D"),fn:function(){ S.selId=s.id; startStamp(s); }});
   it.push({t:"Copier",i:"copy",k:kk("Ctrl+C"),fn:function(){ S.selId=s.id; S.selM=null; copySel(); }});
   it.push({t:"Centrer la vue",i:"center",fn:function(){ centerOn(lv&&here? at(s,lv.id) : s); draw(); scheduleRefine(); }});
+  var grp=picked(s.id)&&mselIds().length>1? mselIds() : [s.id];
+  it.push({t:(s.hid?"Afficher":"Masquer")+(grp.length>1?" les "+grp.length+" sélectionnées":""),i:"eye",fn:function(){ setHidden(grp,!s.hid); }});
+  it.push({t:"Tout sélectionner",i:"list",k:kk("Ctrl+A"),fn:selectAll});
   if(S.layers.length>1&&S.layers.length<=8){ it.push("-"); it.push({h:"Ranger dans le calque"});
     S.layers.forEach(function(L){ it.push({t:L.name,on:L.id===s.ly,fn:function(){ s.ly=L.id; L.vis=true; renderAll(); save(); }}); }); }
   it.push("-");
@@ -3019,10 +3184,11 @@ function openHelp(){
     '<h4>Pendant un tracé de métré</h4>'+row("Poser un point","Clic")+row("Terminer","Double-clic / Entrée")+row("Fermer la surface","Clic sur le 1er point")+row("Enlever le dernier point","Retour arrière")+
       row("Angles droits / 45°","Maj")+row("Terminer (menu)","Clic droit")+row("Abandonner","Échap")+row("Aimantation","sommets existants")+
     '<h4>Édition</h4>'+row("Annuler","Ctrl+Z")+row("Rétablir","Ctrl+Maj+Z / Ctrl+Y")+row("Copier / Coller sous le pointeur","Ctrl+C / Ctrl+V")+row("Couper","Ctrl+X")+
+      row("Tout sélectionner","Ctrl+A")+row("Ajouter / retirer de la sélection","Ctrl+clic / Maj+clic")+
       row("Dupliquer","Ctrl+D")+row("Supprimer","Suppr")+row("Décaler de 1 cm (10 cm)","Flèches / Maj")+row("Désélectionner, quitter l'outil","Échap")+
     '<h4>Vue et niveaux</h4>'+row("Recadrer","F / Ctrl+0")+row("Zoom","+ / − / molette")+row("Trame 1 m","G")+row("Niveau au-dessus / en dessous","Pg↑ / Pg↓")+
       row("Tous les niveaux côte à côte","T")+row("Tous les niveaux : réservation précédente / suivante","Pg↑ / Pg↓")+
-    '<h4>Projet</h4>'+row("Projets","Ctrl+O")+row("Importer des plans","Ctrl+I")+row("Exporter","Ctrl+E")+row("Enregistrer (automatique)","Ctrl+S")+row("Cette aide","?")+
+    '<h4>Projet</h4>'+row("Projets","Ctrl+O")+row("Importer des plans","Ctrl+I")+row("Exporter","Ctrl+E")+row("Enregistrer dans un fichier","Ctrl+S")+row("Enregistrer sous…","Ctrl+Maj+S")+row("Cette aide","?")+
     '<h4>Souris et tactile</h4>'+row("Menu d\'actions","Clic droit")+row("Menu au doigt","Appui long")+row("Zoom et déplacement au doigt","Deux doigts")+row("Ajouter un sommet","Tirer le rond d\'un côté")+
     '</div><div class="acts"><button class="btn primary" id="hk">Fermer</button></div>';
   openModal(d); d.querySelector("#hk").onclick=function(){ d.remove(); };
@@ -3040,9 +3206,10 @@ function openModal(sheet){
   return w;
 }
 function closeModals(){ var m=document.querySelectorAll(".modal"); if(!m.length) return false; m[m.length-1].remove(); return true; }
-function savePrefs(){ try{ localStorage.setItem("rr-prefs",JSON.stringify({lv:S.ui.lv,ly:S.ui.ly,pr:S.ui.pr,lst:S.ui.lst,exp:S.ui.exp,multi:!!S.ui.multi})); }catch(e){} }
+function savePrefs(){ try{ localStorage.setItem("rr-prefs",JSON.stringify({lv:S.ui.lv,ly:S.ui.ly,pr:S.ui.pr,lst:S.ui.lst,exp:S.ui.exp,multi:!!S.ui.multi,wL:S.ui.wL,wR:S.ui.wR,hLv:S.ui.hLv})); }catch(e){} }
 function loadPrefs(){ try{ var p=JSON.parse(localStorage.getItem("rr-prefs")||"null"); if(!p) return false;
     ["lv","ly","pr","multi"].forEach(function(k){ if(typeof p[k]==="boolean") S.ui[k]=p[k]; });
+    ["wL","wR","hLv"].forEach(function(k){ if(typeof p[k]==="number"&&p[k]>0) S.ui[k]=p[k]; });
     if(p.lst) S.ui.lst=p.lst; if(p.exp&&(PAPER_PT[p.exp.fmt]||p.exp.fmt==="orig")) S.ui.exp=p.exp; return true; }catch(e){ return false; } }
 var THEMES=["auto","light","dark"];
 function applyTheme(t){ if(t==="light"||t==="dark") document.documentElement.setAttribute("data-theme",t); else document.documentElement.removeAttribute("data-theme");
@@ -3070,7 +3237,7 @@ function openMenu(x,y,items){
     var b=document.createElement("button"); b.type="button"; b.setAttribute("role","menuitem");
     if(it.dg) b.className="dg"; if(it.on) b.className+=" on"; if(it.off) b.disabled=true;
     b.innerHTML=(it.i?ic(it.i):'<span style="width:16px;flex:none"></span>')+'<span>'+esc(it.t)+'</span>'+(it.k?'<kbd>'+esc(it.k)+'</kbd>':'');
-    b.onclick=function(e){ e.stopPropagation(); closeMenu(); it.fn&&it.fn(); };
+    b.onclick=function(e){ e.stopPropagation(); if(!it.keep) closeMenu(); it.fn&&it.fn(); };
     m.appendChild(b);
   });
   if(m.lastChild&&m.lastChild.tagName==="HR") m.lastChild.remove();
@@ -3172,9 +3339,9 @@ document.getElementById("projBtn").onclick=openProjects;
 /* fichier projet : tout le projet, plans compris (PDF en base64, partagés entre les pages d'un même PDF) */
 function b64(bytes){ var s="", CH=0x8000; for(var i=0;i<bytes.length;i+=CH) s+=String.fromCharCode.apply(null,bytes.subarray(i,i+CH)); return btoa(s); }
 function unb64(t){ var s=atob(t), a=new Uint8Array(s.length); for(var i=0;i<s.length;i++) a[i]=s.charCodeAt(i); return a; }
-function exportProjectFile(id){
+function projectJSON(id){
   var pr= id===PID? saveNow().then(function(){ return pack(); }) : kvGet("p:"+id);
-  pr.then(function(pk){ if(!pk) return;
+  return pr.then(function(pk){ if(!pk) throw new Error("projet introuvable");
     var files=[], seen=new Map();
     var out=Object.assign({},pk,{levels:(pk.levels||[]).map(function(l){
       var c=Object.assign({},l);
@@ -3182,13 +3349,34 @@ function exportProjectFile(id){
         c.pdf={file:k,page:l.pdf.page,base:l.pdf.base}; }
       return c; })});
     delete out.ui;
-    var blob=new Blob([JSON.stringify({format:"report-reservations",version:2,saved:new Date().toISOString(),project:out,pdfs:files})],{type:"application/json"});
-    var nm=((pk.title||"Projet").replace(/[^\w\-À-ÿ]+/g,"_").slice(0,50))+"_"+new Date().toISOString().slice(0,10)+".json";
-    var a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=nm; document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(function(){ URL.revokeObjectURL(a.href); },60000);
-    note("Fichier projet enregistré : "+nm,5000);
+    return {text:JSON.stringify({format:"report-reservations",version:2,saved:new Date().toISOString(),project:out,pdfs:files}),
+      name:((pk.title||"Projet").replace(/[^\w\-À-ÿ]+/g,"_").slice(0,50))+".json"};
   });
 }
+function exportProjectFile(id){
+  projectJSON(id).then(function(r){
+    var nm=r.name.replace(/\.json$/,"_"+new Date().toISOString().slice(0,10)+".json");
+    download(r.text,"application/json",nm); note("Fichier projet enregistré : "+nm,5000);
+  }).catch(function(e){ note("Enregistrement impossible : "+(e&&e.message||e)); });
+}
+/* Enregistrer (Ctrl+S) : dans Chrome / Edge, on choisit le fichier une fois puis on réenregistre dedans ;
+   ailleurs, le fichier projet est téléchargé */
+var FILE_H={};
+function saveToFile(as){
+  if(!PID) return Promise.resolve();
+  return projectJSON(PID).then(function(r){
+    if(window.showSaveFilePicker){
+      var h=!as&&FILE_H[PID];
+      var hp=h? Promise.resolve(h) : window.showSaveFilePicker({suggestedName:r.name,types:[{description:"Projet Report & métré",accept:{"application/json":[".json"]}}]});
+      return hp.then(function(fh){ FILE_H[PID]=fh;
+        return fh.createWritable().then(function(w){ return w.write(r.text).then(function(){ return w.close(); }); })
+          .then(function(){ note("Projet enregistré dans « "+fh.name+" » — Ctrl+S pour réenregistrer, Ctrl+Maj+S : enregistrer sous.",4000); }); });
+    }
+    download(r.text,"application/json",r.name);
+    note("Projet enregistré : « "+r.name+" » (dossier Téléchargements). Pour le rouvrir : Projets → Ouvrir un fichier projet.",5000);
+  }).catch(function(e){ if(e&&e.name==="AbortError") return; note("Enregistrement impossible : "+(e&&e.message||e)); });
+}
+document.getElementById("saveBtn").onclick=function(e){ saveToFile(e.shiftKey); };
 document.getElementById("projFile").onchange=function(e){
   var f=e.target.files&&e.target.files[0]; if(!f) return;
   f.text().then(function(t){

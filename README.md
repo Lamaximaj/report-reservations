@@ -19,6 +19,16 @@ au centre le plan (zoom, recadrage, trame et superposition en haut à droite), �
 les **Propriétés** de ce qui est sélectionné. Sur téléphone, les panneaux deviennent des
 onglets sous le plan.
 
+### Enregistrer, panneaux
+
+- **Enregistrer** (disquette en haut, `Ctrl+S`) : tout le projet, plans compris, dans un
+  fichier `.json`. Dans Chrome ou Edge, on choisit le fichier une fois, puis `Ctrl+S`
+  réenregistre dedans (`Ctrl+Maj+S` : enregistrer sous) ; ailleurs, le fichier part dans
+  Téléchargements. Pour le rouvrir : Projets → Ouvrir un fichier projet. Le projet reste
+  aussi enregistré automatiquement dans le navigateur.
+- **Taille des panneaux** : tirer les bords entre les panneaux et le plan (largeur) ou
+  entre Niveaux et Calques (hauteur) ; double-clic pour revenir à la taille par défaut.
+
 ### Projets
 
 - Le bouton du projet (en haut à gauche, `Ctrl+O`) ouvre la liste des **projets** :
@@ -67,6 +77,15 @@ onglets sous le plan.
   ◀ ▶ (`Pg↑` / `Pg↓` dans cette vue), cadre la réservation sur tous les niveaux à la fois,
   avec ses positions réelles et les corrections reportées. Cliquer dans une tuile en fait
   le niveau courant ; tous les outils (anomalies, métré, clic droit…) y fonctionnent.
+  Le bouton **Niveaux n/N** choisit les niveaux affichés (mémorisé dans le projet).
+- **Sélection multiple** : `Ctrl+A` ou « Tout sélectionner », `Ctrl+clic` / `Maj+clic`
+  sur le plan ou dans la liste. Propriétés propose alors Masquer, Afficher, Ranger dans
+  un calque, Supprimer.
+- **Masquer une réservation** : l'œil de sa ligne, le bouton Masquer de Propriétés ou le
+  clic droit. Masquée, elle n'apparaît ni sur le plan ni dans les exports ; « Tout
+  afficher » en haut de la liste les remet.
+- **Couleurs** : la position attendue garde la couleur de son objet ou calque, même en
+  anomalie ; le rouge est réservé à la position réelle (pointillé) et aux alertes.
 
 ### Métré
 
