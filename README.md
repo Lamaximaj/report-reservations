@@ -19,6 +19,16 @@ au centre le plan (zoom, recadrage, trame et superposition en haut à droite), �
 les **Propriétés** de ce qui est sélectionné. Sur téléphone, les panneaux deviennent des
 onglets sous le plan.
 
+### Installer l'appli sur l'ordinateur (sans droits administrateur)
+
+Dans Edge ou Chrome, ouvrir le site puis cliquer **Installer l'appli** en haut (ou menu ⋯ →
+Applications → Installer ce site en tant qu'application). L'appli s'installe dans le
+profil de l'utilisateur, sans droits administrateur : sa propre fenêtre, une icône dans le
+menu Démarrer, et elle **fonctionne hors connexion** (l'appli et ses modules PDF sont gardés
+en cache ; les mises à jour arrivent d'elles-mêmes à la prochaine ouverture en ligne). Les
+projets restent dans le navigateur de cet ordinateur ; pour les sauvegarder ou les
+déplacer, utiliser **Enregistrer**.
+
 ### Enregistrer, panneaux
 
 - **Enregistrer** (disquette en haut, `Ctrl+S`) : tout le projet, plans compris, dans un

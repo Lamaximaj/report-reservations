@@ -6,6 +6,11 @@
 <style>html{color-scheme:light}body{margin:0;font:14px system-ui}img{max-width:100%}[hidden]{display:none!important}</style>
 <title>Report &amp; métré</title>
 <meta name="claude:viewport-fit-sides" content="cover">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#c8492a">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
@@ -424,6 +429,7 @@ kbd{font-family:var(--f-num);font-size:10.5px;background:var(--panel-2);border:1
     </nav>
     <span class="sp"></span>
     <div class="acts">
+      <button class="btn sm" id="installBtn" hidden title="Installer l'appli sur cet ordinateur : sa propre fenêtre, une icône, fonctionne hors connexion — sans droits administrateur">Installer l'appli</button>
       <button class="ib" id="saveBtn" title="Enregistrer le projet dans un fichier, plans compris (Ctrl+S) — Maj+clic : enregistrer sous…"><svg class="i"><use href="#i-save"/></svg></button>
       <span class="vsep"></span>
       <button class="ib" id="undoBtn" title="Annuler (Ctrl+Z)" disabled><svg class="i"><use href="#i-undo"/></svg></button>
@@ -3194,6 +3200,29 @@ function openHelp(){
   openModal(d); d.querySelector("#hk").onclick=function(){ d.remove(); };
 }
 document.getElementById("helpBtn").onclick=openHelp;
+
+/* ============ appli installable et hors connexion ============ */
+/* le service worker garde l'appli et ses modules en cache ; l'installation (Edge / Chrome) se fait dans le profil
+   de l'utilisateur, sans droits administrateur */
+var installEvt=null;
+var standalone=window.matchMedia("(display-mode: standalone)").matches||navigator.standalone===true;
+if("serviceWorker" in navigator&&/^https?:$/.test(location.protocol)){
+  window.addEventListener("load",function(){ navigator.serviceWorker.register("sw.js").catch(function(){}); });
+}
+/* stockage persistant : le navigateur ne vide pas les projets quand la place manque */
+if(navigator.storage&&navigator.storage.persist) navigator.storage.persisted().then(function(p){ if(!p) return navigator.storage.persist(); }).catch(function(){});
+window.addEventListener("beforeinstallprompt",function(e){
+  e.preventDefault(); installEvt=e;
+  if(!standalone) document.getElementById("installBtn").hidden=false;
+});
+window.addEventListener("appinstalled",function(){
+  installEvt=null; document.getElementById("installBtn").hidden=true;
+  note("Appli installée : elle s'ouvre depuis le menu Démarrer ou le bureau, même sans connexion.",5000);
+});
+document.getElementById("installBtn").onclick=function(){
+  if(!installEvt){ note("Dans Edge ou Chrome : menu ⋯ → Applications → Installer ce site en tant qu'application.",5000); return; }
+  installEvt.prompt(); installEvt.userChoice.finally(function(){ installEvt=null; document.getElementById("installBtn").hidden=true; });
+};
 
 /* ============ fenêtres, thème, préférences de l'appareil ============ */
 function openModal(sheet){
