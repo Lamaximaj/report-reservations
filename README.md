@@ -61,6 +61,12 @@ onglets sous le plan.
 - **Report des corrections** : une anomalie pointée devient la position attendue des
   niveaux du dessus (marquée « ↳ R+1 »), sauf si l'on décoche « Reporter cette
   correction aux niveaux du dessus ».
+- **Tous les niveaux** (bouton au-dessus du plan, `T`) : chaque niveau dans sa tuile, côte
+  à côte, avec le même zoom et la même position — zoomer ou déplacer dans une tuile fait
+  de même dans toutes. Pour travailler **par réservation** : un clic dans la liste, ou
+  ◀ ▶ (`Pg↑` / `Pg↓` dans cette vue), cadre la réservation sur tous les niveaux à la fois,
+  avec ses positions réelles et les corrections reportées. Cliquer dans une tuile en fait
+  le niveau courant ; tous les outils (anomalies, métré, clic droit…) y fonctionnent.
 
 ### Métré
 
@@ -95,6 +101,10 @@ onglets sous le plan.
   total HT), puis le détail de chaque mesure.
 - **Métré pour Excel (CSV)** et **Liste des réservations pour Excel (CSV)** :
   séparateur « ; » et virgule décimale, à ouvrir directement dans Excel.
+- **Réservations à exporter** (plans, réservation par réservation, liste CSV) : une liste
+  à cocher par objet ou par calque, avec Toutes / Aucune / Anomalies seulement /
+  Sélectionnée. Le choix est mémorisé dans le projet ; les nouvelles réservations sont
+  cochées d'office.
 
 ## Clic droit et raccourcis
 
@@ -111,6 +121,7 @@ les listes.
 | `S` surface | `Maj+S` surface rect. | `Ctrl+D` dupliquer | `Suppr` supprimer |
 | `L` linéaire | `N` comptage | flèches : 1 cm (`Maj` : 10 cm) | `Échap` désélectionner |
 | `M` mesure | `E` échelle, `P` repère | `F` recadrer, `+` / `−` zoom | `G` trame, `Pg↑` / `Pg↓` niveaux |
+| `T` tous les niveaux | | | |
 
 `Ctrl+O` projets · `Ctrl+I` importer des plans · `Ctrl+E` exporter · `?` aide (sur Mac,
 `⌘` à la place de `Ctrl`).

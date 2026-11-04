@@ -196,6 +196,12 @@ button.tag:hover{text-decoration:underline}
 .fld label{font-size:10px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
 .fld input,.fld select,.fld textarea{width:100%;background:var(--panel-2);border:1px solid var(--line);border-radius:6px;padding:5px 7px;font-family:var(--f-num);font-size:12.5px;font-variant-numeric:tabular-nums}
 .fld input[type=text],.fld textarea{font-family:var(--f-ui);font-size:13px}
+.fld input[type=checkbox]{width:auto;flex:none}
+.picks{max-height:190px;overflow:auto;border:1px solid var(--line);border-radius:6px;background:var(--panel-2);margin-top:5px}
+.picks .grp{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);padding:6px 8px 3px;display:flex;gap:6px;align-items:center}
+.picks label{display:flex;gap:7px;align-items:center;padding:3px 8px 3px 14px;font-size:12.5px;cursor:pointer;text-transform:none;letter-spacing:0;color:var(--ink)}
+.picks label:hover{background:var(--line-soft)}
+.picks input[type=checkbox]{width:auto;margin:0}
 .ck{display:flex;gap:7px;align-items:center;font-size:12px;cursor:pointer}
 .chips{display:flex;flex-wrap:wrap;gap:4px}
 .chip{border:1px solid var(--line);background:var(--panel-2);border-radius:999px;padding:2px 9px;font-size:11.5px;color:var(--muted)}
@@ -217,6 +223,8 @@ canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-acti
 .gl button:hover{background:rgba(255,255,255,.12);color:#fff}
 .gl button.on{background:rgba(255,255,255,.2);color:#fff}
 .gl .zv{font-family:var(--f-num);font-size:11px;min-width:58px}
+#multiBtn.on{background:var(--accent);color:#fff}
+#nav .nm{font-size:12px;font-weight:600;padding:0 4px;max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .gl label{display:flex;align-items:center;gap:6px;padding:0 6px;font-size:12px}
 .gl select{background:transparent;border:0;color:inherit;font-size:12px;max-width:110px}
 .gl select option{color:var(--ink);background:var(--panel)}
@@ -366,6 +374,7 @@ kbd{font-family:var(--f-num);font-size:10.5px;background:var(--panel-2);border:1
   <symbol id="i-theme" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 0 0 16z" fill="currentColor"/></symbol>
   <symbol id="i-file" viewBox="0 0 24 24"><path d="M6 3.5h8l4 4v13H6z"/><path d="M14 3.5v4h4"/></symbol>
   <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-tiles" viewBox="0 0 24 24"><rect x="3.5" y="4" width="7.5" height="7" rx="1"/><rect x="13" y="4" width="7.5" height="7" rx="1"/><rect x="3.5" y="13" width="7.5" height="7" rx="1"/><rect x="13" y="13" width="7.5" height="7" rx="1"/></symbol>
   <symbol id="i-list" viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01"/></symbol>
 </svg>
 <div id="app">
@@ -441,6 +450,14 @@ kbd{font-family:var(--f-num);font-size:10.5px;background:var(--panel-2);border:1
       <canvas id="cv"></canvas>
       <div class="vctl">
         <div class="gl">
+          <button id="multiBtn" title="Tous les niveaux côte à côte, même zoom et même position (T)"><svg class="i s"><use href="#i-tiles"/></svg><span>Tous les niveaux</span></button>
+        </div>
+        <div class="gl" id="nav" hidden title="Passer d'une réservation à l'autre sur tous les niveaux (Pg↑ / Pg↓)">
+          <button id="navPrev" title="Réservation précédente (Pg↑)">◀</button>
+          <span class="nm" id="navName">—</span>
+          <button id="navNext" title="Réservation suivante (Pg↓)">▶</button>
+        </div>
+        <div class="gl">
           <button id="zoomOut" title="Zoom arrière (−)"><svg class="i s"><use href="#i-minus"/></svg></button>
           <button id="zoomVal" class="zv" title="Échelle d'affichage — clic : recadrer">100 %</button>
           <button id="zoomIn" title="Zoom avant (+)"><svg class="i s"><use href="#i-plus"/></svg></button>
@@ -489,7 +506,7 @@ var S={ levels:[], shapes:[], activeId:null, selId:null, tool:"select",
         view:{s:1,tx:0,ty:0}, under:"", underOp:.45, grid:false, seq:1,
         asc:true,            /* true : le 1er de la liste est le niveau le plus bas */
         title:"", layers:[], activeLayer:null, types:undefined, ui:{lv:true,ly:true,pr:true,lst:"ly",exp:{fmt:"orig",ori:"auto"}},
-        items:[], meas:[], activeItem:null, selM:null };
+        items:[], meas:[], activeItem:null, selM:null, expOff:[] };
 var PAL=["#c8492a","#1f6f8b","#2d7a4f","#8a5bbf","#9d7312","#1f8b7e"];
 var cv=document.getElementById("cv"), ctx=cv.getContext("2d"), dpr=1;
 var stage=document.getElementById("stage");
@@ -591,7 +608,13 @@ function keepView(lv,anchor,fn){
 }
 function w2s(X,Y){ return {x:X*S.view.s+S.view.tx, y:Y*S.view.s+S.view.ty}; }
 function s2w(x,y){ return {X:(x-S.view.tx)/S.view.s, Y:(y-S.view.ty)/S.view.s}; }
-function evPos(e){ var r=cv.getBoundingClientRect(); return {x:e.clientX-r.left, y:e.clientY-r.top}; }
+function rawPos(e){ var r=cv.getBoundingClientRect(); return {x:e.clientX-r.left, y:e.clientY-r.top}; }
+/* en vue « Tous les niveaux », les coordonnées sont relatives à la tuile : celle du début du geste, sinon celle sous le pointeur */
+function evPos(e){
+  var p=rawPos(e); if(!multiOn()) return p;
+  var t=(ptrs.size&&ptTile)||tileAt(p)||tiles[0]; if(!t) return p;
+  return {x:p.x-t.x, y:p.y-t.y};
+}
 
 /* échelle papier : px de l'image par mm de papier */
 var PAPER={A4:[297,210],A3:[420,297],A2:[594,420],A1:[841,594],A0:[1189,841]};
@@ -628,7 +651,7 @@ function projMeta(id){ return PROJS.find(function(p){ return p.id===id; })||null
 function pack(){ return { levels:S.levels.map(function(l){
     return {id:l.id,name:l.name,src:l.src,w:l.w,h:l.h,scale:l.scale,org:l.org,rot:l.rot,pdf:l.pdf}; }),
     shapes:S.shapes, activeId:S.activeId, seq:S.seq, demo:S.demo, asc:S.asc, title:S.title,
-    layers:S.layers, activeLayer:S.activeLayer, types:S.types, items:S.items, meas:S.meas, activeItem:S.activeItem, ui:S.ui }; }
+    layers:S.layers, activeLayer:S.activeLayer, types:S.types, items:S.items, meas:S.meas, activeItem:S.activeItem, ui:S.ui, expOff:S.expOff }; }
 function counts(p){ return {nl:(p.levels||[]).length, nr:(p.shapes||[]).length, nm:(p.meas||[]).length}; }
 var saveT=null, saveErr=false;
 function persist(){
@@ -689,7 +712,7 @@ document.getElementById("redoBtn").onclick=redo;
 /* ============ ouverture / création de projets ============ */
 function blank(){
   S.levels=[]; S.shapes=[]; S.items=[]; S.meas=[]; S.layers=[]; S.types=undefined; S.activeLayer=null; S.activeItem=null;
-  S.activeId=null; S.selId=null; S.selM=null; S.seq=1; S.asc=true; S.demo=false; S.under=""; S.title="";
+  S.activeId=null; S.selId=null; S.selM=null; S.seq=1; S.asc=true; S.demo=false; S.under=""; S.title=""; S.expOff=[];
   S.view={s:0,tx:0,ty:0}; meas=null; calLine=null; drag=null; draft=null; lvPool={};
   fixLayers(); fixItems();
 }
@@ -699,6 +722,7 @@ function applyPack(p){
   S.activeId=p.activeId&&S.levels.some(function(l){ return l.id===p.activeId; })? p.activeId : (S.levels[0]&&S.levels[0].id)||null;
   S.seq=p.seq||(S.shapes.length+1); S.demo=!!p.demo; if(p.asc!==undefined) S.asc=p.asc;
   S.layers=p.layers||[]; S.activeLayer=p.activeLayer||null; S.types=p.types; S.items=p.items||[]; S.meas=p.meas||[]; S.activeItem=p.activeItem||null;
+  S.expOff=Array.isArray(p.expOff)? p.expOff.filter(function(x){ return typeof x==="string"; }) : [];
   fixLayers(); fixItems();
   if(!hasPrefs&&p.ui){ ["lv","ly","pr"].forEach(function(k){ if(typeof p.ui[k]==="boolean") S.ui[k]=p.ui[k]; }); if(p.ui.lst) S.ui.lst=p.ui.lst;
     if(p.ui.exp&&(PAPER_PT[p.ui.exp.fmt]||p.ui.exp.fmt==="orig")) S.ui.exp={fmt:p.ui.exp.fmt,ori:/^(auto|p|l)$/.test(p.ui.exp.ori)?p.ui.exp.ori:"auto",mode:p.ui.exp.mode==="res"?"res":"plans",ko:!!p.ui.exp.ko}; }
@@ -799,6 +823,36 @@ function pdfToLevels(f){
   }).catch(function(){ note("PDF illisible — exportez le plan en PNG/JPG."); return []; });
 }
 
+/* ============ vue « Tous les niveaux » : une tuile par niveau, même zoom et même position partout ============ */
+var tiles=[], ptTile=null, OFF={x:0,y:0};
+function multiOn(){ return !!S.ui.multi && S.levels.length>1; }
+function layoutTiles(){
+  tiles=[]; if(!multiOn()) return;
+  var vc=document.querySelector(".vctl"), top=vc? vc.offsetTop+vc.offsetHeight+6 : 0, bot=30;
+  var W=stage.clientWidth, H=Math.max(60,stage.clientHeight-top-bot), n=S.levels.length, best=1, bs=-1;
+  /* nombre de colonnes qui donne les tuiles les plus grandes pour des plans ≈ 1,4:1 */
+  for(var c=1;c<=n;c++){ var r=Math.ceil(n/c), sc=Math.min(W/c/1.4,H/r); if(sc>bs){ bs=sc; best=c; } }
+  var rows=Math.ceil(n/best), tw=W/best, th=H/rows;
+  S.levels.forEach(function(l,i){ tiles.push({lv:l, x:(i%best)*tw, y:top+Math.floor(i/best)*th, w:tw, h:th}); });
+}
+function tileAt(p){ return tiles.find(function(t){ return p.x>=t.x&&p.x<t.x+t.w&&p.y>=t.y&&p.y<t.y+t.h; })||null; }
+function viewSize(){
+  if(multiOn()){ if(!tiles.length) layoutTiles(); if(tiles.length) return {W:tiles[0].w,H:tiles[0].h}; }
+  return {W:stage.clientWidth,H:stage.clientHeight};
+}
+/* le clic (ou le menu) dans une tuile fait de son niveau le niveau courant */
+function pickTile(raw){
+  layoutTiles(); var t=tileAt(raw); if(!t) return null;
+  if(S.activeId!==t.lv.id){ S.activeId=t.lv.id; S.selM=null; draft=null; renderAll(); }
+  return t;
+}
+function setMulti(on){
+  S.ui.multi=!!on; savePrefs(); layoutTiles();
+  var s=sel(); if(s&&multiOn()) focusShape(s); else fit();
+  renderAll();
+  if(on&&S.levels.length<2) note("Il faut au moins deux niveaux.");
+}
+
 /* ============ vue ============ */
 function fit(){
   var lv=active(); if(!lv||!lv.img) return;
@@ -806,16 +860,17 @@ function fit(){
   var xs=cs.map(function(p){return p.X;}), ys=cs.map(function(p){return p.Y;});
   var x0=Math.min.apply(null,xs), x1=Math.max.apply(null,xs);
   var y0=Math.min.apply(null,ys), y1=Math.max.apply(null,ys);
-  var W=stage.clientWidth, H=stage.clientHeight;
-  var s=Math.min((W-80)/Math.max(x1-x0,1e-6),(H-100)/Math.max(y1-y0,1e-6));
-  S.view.s=s; S.view.tx=W/2-(x0+x1)/2*s; S.view.ty=H/2-(y0+y1)/2*s;
+  var vz=viewSize(), W=vz.W, H=vz.H, mo=multiOn();
+  var s=Math.min((W-(mo?20:80))/Math.max(x1-x0,1e-6),(H-(mo?40:100))/Math.max(y1-y0,1e-6));
+  S.view.s=s; S.view.tx=W/2-(x0+x1)/2*s; S.view.ty=H/2-(y0+y1)/2*s+(mo?10:0);
   draw(); scheduleRefine();
 }
-document.getElementById("fitBtn").onclick=fit;
+document.getElementById("fitBtn").onclick=function(){ var s=sel(); if(multiOn()&&s) focusShape(s); else fit(); };
 
 function resize(){
   dpr=Math.max(1,Math.min(window.devicePixelRatio||1,3));
   cv.width=Math.round(stage.clientWidth*dpr); cv.height=Math.round(stage.clientHeight*dpr);
+  layoutTiles();
   /* page chargée dans une fenêtre encore sans taille : recadrer dès qu'elle en a une */
   if(!(S.view.s>0)) fit();
   draw(); scheduleRefine();
@@ -823,10 +878,14 @@ function resize(){
 new ResizeObserver(resize).observe(stage);
 
 /* ============ rendu scène ============ */
-function base(){ ctx.setTransform(dpr,0,0,dpr,0,0); }
+function base(){ ctx.setTransform(dpr,0,0,dpr,dpr*OFF.x,dpr*OFF.y); }
 /* ---- rendu fin : re-rastérisation de la zone visible d'un PDF au zoom courant ---- */
-var refineT=null, refineSeq=0;
-function scheduleRefine(){ clearTimeout(refineT); refineT=setTimeout(refine,150); }
+var refineT=null;
+function scheduleRefine(){ clearTimeout(refineT); refineT=setTimeout(refineAll,150); }
+function refineAll(){
+  if(multiOn()){ layoutTiles(); tiles.forEach(function(t){ refine(t.lv,t.w,t.h); }); }
+  else refine(active(),stage.clientWidth,stage.clientHeight);
+}
 function pdfPage(lv){
   if(lv._page) return Promise.resolve(lv._page);
   if(!window.pdfjsLib||!lv.pdf) return Promise.reject();
@@ -834,12 +893,11 @@ function pdfPage(lv){
     .then(function(d){ return d.getPage(lv.pdf.page); })
     .then(function(pg){ lv._page=pg; return pg; });
 }
-function refine(){
-  var lv=active(); if(!lv||!lv.pdf||!lv.img) return;
+function refine(lv,W,H){
+  if(!lv||!lv.pdf||!lv.img) return;
   var c=cal(lv), k=S.view.s/c.s*dpr;
   if(c.raw) k=S.view.s*dpr;
   if(k<=1.05){ if(lv.tile){ lv.tile=null; draw(); } return; }
-  var W=stage.clientWidth,H=stage.clientHeight;
   var ps=[[0,0],[W,0],[W,H],[0,H]].map(function(q){ var w=s2w(q[0],q[1]); return w2p(lv,w.X,w.Y); });
   var xs=ps.map(function(q){return q.x;}), ys=ps.map(function(q){return q.y;});
   var x0=Math.max(0,Math.floor(Math.min.apply(null,xs))-6), x1=Math.min(lv.w,Math.ceil(Math.max.apply(null,xs))+6);
@@ -849,10 +907,10 @@ function refine(){
   if(f<=1.05) return;
   var t=lv.tile;
   if(t && t.f>=f*0.92 && t.x0<=x0 && t.y0<=y0 && t.x0+t.w>=x1 && t.y0+t.h>=y1) return;
-  var seq=++refineSeq;
+  var seq=lv._rseq=(lv._rseq||0)+1;
   if(lv._task){ try{ lv._task.cancel(); }catch(e){} lv._task=null; }
   pdfPage(lv).then(function(pg){
-    if(seq!==refineSeq) return;
+    if(seq!==lv._rseq) return;
     var vp=pg.getViewport({scale:lv.pdf.base*f});
     var cs=document.createElement("canvas");
     cs.width=Math.round(tw*f); cs.height=Math.round(th*f);
@@ -860,7 +918,7 @@ function refine(){
     var task=pg.render({canvasContext:g, viewport:vp, transform:[1,0,0,1,-x0*f,-y0*f]});
     lv._task=task;
     return task.promise.then(function(){
-      if(seq!==refineSeq) return;
+      if(seq!==lv._rseq) return;
       lv.tile={cv:cs,x0:x0,y0:y0,w:tw,h:th,f:f}; lv._task=null; draw();
     });
   }).catch(function(){});
@@ -872,7 +930,7 @@ function drawPlan(lv,alpha){
   var e=S.view.tx-k*(c.co*c.ax+c.si*c.ay);
   var f=S.view.ty-k*(-c.si*c.ax+c.co*c.ay);
   ctx.save(); ctx.globalAlpha=alpha;
-  ctx.setTransform(dpr*a,dpr*b,dpr*cc,dpr*d,dpr*e,dpr*f);
+  ctx.setTransform(dpr*a,dpr*b,dpr*cc,dpr*d,dpr*(e+OFF.x),dpr*(f+OFF.y));
   ctx.imageSmoothingQuality="high";
   try{ ctx.drawImage(lv.img,0,0);
        if(lv.tile) ctx.drawImage(lv.tile.cv, lv.tile.x0, lv.tile.y0, lv.tile.w, lv.tile.h);
@@ -880,7 +938,7 @@ function drawPlan(lv,alpha){
   ctx.restore(); base();
 }
 function drawGrid(){
-  var W=stage.clientWidth,H=stage.clientHeight,s=S.view.s;
+  var vz=viewSize(), W=vz.W, H=vz.H, s=S.view.s;
   if(s<7) return;
   var a=s2w(0,0), b=s2w(W,H);
   ctx.save(); ctx.strokeStyle=css("--stage-grid"); ctx.lineWidth=1;
@@ -1072,14 +1130,37 @@ function drawMeas(){
   ctx.restore();
 }
 function draw(){
-  base();
+  OFF={x:0,y:0}; base();
   ctx.clearRect(0,0,stage.clientWidth,stage.clientHeight);
   ctx.fillStyle=css("--stage"); ctx.fillRect(0,0,stage.clientWidth,stage.clientHeight);
-  var lv=active();
   document.querySelector(".drop") && document.querySelector(".drop").remove();
-  if(!lv){ emptyStage(); status(); return; }
+  if(!active()){ emptyStage(); status(); return; }
+  if(!multiOn()){ drawScene(false); status(); return; }
+  /* une tuile par niveau : même vue, chaque tuile dessinée avec son niveau comme niveau courant */
+  layoutTiles();
+  var act=S.activeId;
+  tiles.forEach(function(t){
+    OFF={x:t.x,y:t.y}; ctx.save(); base();
+    ctx.beginPath(); ctx.rect(0,0,t.w,t.h); ctx.clip();
+    S.activeId=t.lv.id;
+    try{ drawScene(true); } finally { S.activeId=act; }
+    ctx.restore(); base();
+    var on=t.lv.id===act;
+    ctx.strokeStyle=on?css("--accent"):"rgba(255,255,255,.18)"; ctx.lineWidth=on?2:1;
+    ctx.strokeRect(1,1,t.w-2,t.h-2);
+    var txt=t.lv.name+(ready(t.lv)?"":" — échelle / repère à définir");
+    ctx.font="600 12px 'Archivo', sans-serif";
+    var w=ctx.measureText(txt).width+14;
+    ctx.fillStyle=on?css("--accent"):"rgba(20,24,30,.82)"; ctx.fillRect(6,6,w,20);
+    ctx.fillStyle="#fff"; ctx.fillText(txt,13,20);
+  });
+  OFF={x:0,y:0}; base();
+  status();
+}
+function drawScene(tile){
+  var lv=active();
   if(S.grid) drawGrid();
-  if(S.under){ var u=S.levels.find(function(l){return l.id===S.under;});
+  if(S.under&&!tile){ var u=S.levels.find(function(l){return l.id===S.under;});
     if(u&&u!==lv&&ready(u)&&ready(lv)) drawPlan(u,S.underOp); }
   drawPlan(lv,1);
   drawMetre(lv);
@@ -1100,7 +1181,6 @@ function draw(){
       pill(nf(wq*k,2)+" × "+nf(hq*k,2)+" m  ·  "+qTxt(wq*hq*k*k,"m²"),rb.x,rb.y-20,ri.c); }
     ctx.restore(); }
   drawDraft(lv);
-  status();
 }
 function emptyStage(){
   var d=document.createElement("div"); d.className="drop";
@@ -1175,6 +1255,8 @@ function round(s){
 /* ============ pointeur ============ */
 var ptrs=new Map(), pinch=null;
 cv.addEventListener("pointerdown",function(e){
+  /* vue « Tous les niveaux » : la tuile touchée devient le niveau courant, le geste reste dans cette tuile */
+  if(multiOn()&&!ptrs.size){ var t=pickTile(rawPos(e)); if(!t) return; ptTile=t; }
   cv.setPointerCapture(e.pointerId); ptrs.set(e.pointerId,evPos(e));
   if(ptrs.size===2){ var a=Array.from(ptrs.values());
     pinch={d:Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y),c:{x:(a[0].x+a[1].x)/2,y:(a[0].y+a[1].y)/2}};
@@ -1375,7 +1457,9 @@ cv.addEventListener("pointermove",function(e){
 });
 function lv2(){ return active(); }
 function endPtr(e){
+  var tapPt=(drag&&drag.m==="tap")? evPos(e) : null;   /* avant de lâcher le pointeur : coordonnées dans la bonne tuile */
   ptrs.delete(e.pointerId); if(ptrs.size<2) pinch=null;
+  if(!ptrs.size) setTimeout(function(){ if(!ptrs.size) ptTile=null; },0);
   if(!drag) return;
   if(drag.m==="cal"){ dockLine(true); drag=null; draw(); return; }
   if(drag.m==="real"){
@@ -1392,7 +1476,7 @@ function endPtr(e){
     if(sq&&lq){ var oq=obsOf(sq,lq.id), aq=at(sq,lq.id); note("Dimensions réelles : "+dimTxt(realShape(aq,oq))+" (prévu "+dimTxt(aq)+")."); }
     renderAll(); save(); return;
   }
-  if(drag.m==="tap"){ var lt=active(); drag=null; if(lt&&ptrs.size===0){ var pp=evPos(e); if(S.tool==="count") addCount(lt,pp); else addDraftPt(lt,pp,false); } return; }
+  if(drag.m==="tap"){ var lt=active(); drag=null; if(lt&&ptrs.size===0){ var pp=tapPt; if(S.tool==="count") addCount(lt,pp); else addDraftPt(lt,pp,false); } return; }
   if(drag.m==="arect"){ var la=active(), dr=drag; drag=null; if(la) addRect(la,dr.a,dr.b); draw(); return; }
   if(drag.m==="mvtx"||drag.m==="mmove"){ var mvd=drag.moved; drag=null; snapAt=null;
     if(mvd){ var mz=selM(); if(mz) mz.pts.forEach(function(pt){ pt.x=Math.round(pt.x*100)/100; pt.y=Math.round(pt.y*100)/100; }); renderAll(); save(); } else draw(); return; }
@@ -1491,7 +1575,7 @@ function openDock(){
       var sc=ratioS(); if(!sc){ rv.focus(); return; }
       ns={s:sc, ratio:parseFloat(rv.value), paper:pv?pv.value:null};
     }
-    var anchor=lv.org||w2p(lv,s2w(stage.clientWidth/2,stage.clientHeight/2).X,s2w(stage.clientWidth/2,stage.clientHeight/2).Y);
+    var vz=viewSize(), mid=s2w(vz.W/2,vz.H/2), anchor=lv.org||w2p(lv,mid.X,mid.Y);
     keepView(lv,anchor,function(){ lv.scale=ns; lv.rot=rot; });
     var allChk=d.querySelector("#all"), nAll=0;
     if(allChk&&allChk.checked){
@@ -1564,10 +1648,13 @@ function setGrid(on){ S.grid=on; document.getElementById("gridBtn").classList.to
 document.getElementById("gridBtn").onclick=function(){ setGrid(!S.grid); };
 /* zoom au centre de la vue (boutons, touches + / −) */
 function zoomBy(k,px,py){
-  if(px===undefined){ px=stage.clientWidth/2; py=stage.clientHeight/2; }
+  if(px===undefined){ var vz=viewSize(); px=vz.W/2; py=vz.H/2; }
   var w=s2w(px,py); S.view.s=Math.max(.5,Math.min(4000,S.view.s*k));
   S.view.tx=px-w.X*S.view.s; S.view.ty=py-w.Y*S.view.s; draw(); scheduleRefine();
 }
+document.getElementById("multiBtn").onclick=function(){ setMulti(!S.ui.multi); };
+document.getElementById("navPrev").onclick=function(){ navStep(-1); };
+document.getElementById("navNext").onclick=function(){ navStep(1); };
 document.getElementById("zoomIn").onclick=function(){ zoomBy(1.35); };
 document.getElementById("zoomOut").onclick=function(){ zoomBy(1/1.35); };
 document.getElementById("zoomVal").onclick=function(){ fit(); };
@@ -1636,6 +1723,7 @@ function resRow(s){
   el.onclick=function(e){ if(e.target.closest("[data-rm]")) return;
     S.selId=s.id; S.selM=null; if(L) L.vis=true;
     if(lv&&!onLevel(s,lv.id)){ var t=S.levels.find(function(l){ return onLevel(s,l.id)&&ready(l); }); if(t){ S.activeId=t.id; fit(); } }
+    if(multiOn()){ renderAll(); focusShape(s); save(); return; }
     var cur=active(); centerOn(cur&&onLevel(s,cur.id)? at(s,cur.id) : s); renderAll(); save(); };
   el.querySelector("[data-rm]").onclick=function(){ delShape(s.id); };
   el.oncontextmenu=function(e){ e.preventDefault(); S.selId=s.id; S.selM=null; renderAll(); openMenu(e.clientX,e.clientY,resMenuItems(s,active())); };
@@ -1731,8 +1819,39 @@ document.getElementById("addLy").onclick=function(e){
   var i=document.querySelector('#rsList .ly[data-id="'+l.id+'"] .lnm'); if(i){ i.focus(); i.select(); }
 };
 function centerOn(s){
-  var cx=s.t==="rect"?s.x+s.w/2:s.x, cy=s.t==="rect"?s.y+s.h/2:s.y;
-  S.view.tx=stage.clientWidth/2-cx*S.view.s; S.view.ty=stage.clientHeight/2-cy*S.view.s;
+  var cx=s.t==="rect"?s.x+s.w/2:s.x, cy=s.t==="rect"?s.y+s.h/2:s.y, vz=viewSize();
+  S.view.tx=vz.W/2-cx*S.view.s; S.view.ty=vz.H/2-cy*S.view.s;
+}
+/* travail par réservation : cadre la réservation (positions attendues et réelles de tous ses niveaux) */
+function focusShape(s){
+  var X=[],Y=[];
+  S.levels.forEach(function(l){
+    if(!onLevel(s,l.id)||!ready(l)) return;
+    var a=at(s,l.id), o=obsOf(s,l.id), list=[a];
+    if(o&&o.st==="ko"&&o.real) list.push(realShape(a,o));
+    list.forEach(function(g){ corners(g).forEach(function(q){ X.push(q[0]); Y.push(q[1]); }); });
+  });
+  if(!X.length) corners(s).forEach(function(q){ X.push(q[0]); Y.push(q[1]); });
+  var x0=Math.min.apply(null,X), x1=Math.max.apply(null,X), y0=Math.min.apply(null,Y), y1=Math.max.apply(null,Y);
+  var span=Math.max(x1-x0,y1-y0,.2), padm=Math.max(1.2,span*1.2), vz=viewSize();
+  var sc=Math.min(vz.W/(x1-x0+2*padm),(vz.H-30)/(y1-y0+2*padm));
+  S.view.s=Math.max(.5,Math.min(4000,sc));
+  S.view.tx=vz.W/2-(x0+x1)/2*S.view.s; S.view.ty=(vz.H+24)/2-(y0+y1)/2*S.view.s;
+  draw(); scheduleRefine();
+}
+function navList(){ return S.shapes.filter(shown); }
+function renderNav(){
+  var b=document.getElementById("multiBtn"), nv=document.getElementById("nav"), n=document.getElementById("navName"); if(!b) return;
+  b.classList.toggle("on",multiOn()); nv.hidden=!multiOn();
+  var s=sel(), L=navList(), i=s?L.indexOf(s):-1;
+  n.textContent=s? s.n+"  ("+(i+1)+"/"+L.length+")" : plural(L.length,"réservation");
+}
+function navStep(d){
+  var L=navList(); if(!L.length) return;
+  var i=L.indexOf(sel()), s=L[(i<0? (d>0?0:L.length-1) : (i+d+L.length)%L.length)];
+  S.selId=s.id; S.selM=null; var Ly=layerOf(s); if(Ly) Ly.vis=true;
+  if(!onLevel(s,S.activeId)){ var t=S.levels.find(function(l){ return onLevel(s,l.id)&&ready(l); }); if(t) S.activeId=t.id; }
+  renderAll(); focusShape(s);
 }
 function delShape(id){ S.shapes=S.shapes.filter(function(s){return s.id!==id;}); if(S.selId===id) S.selId=null; renderAll(); save(); }
 
@@ -1894,7 +2013,7 @@ function bindState(box,s){
   var rm=box.querySelector("#s_rm"); if(rm) rm.onclick=function(){ var o=obs(s,lv.id); o.real=null; renderAll(); save(); };
 }
 function renderLists(){ renderShapes(); renderMetre(); }
-function renderAll(){ ordLabel(); renderLevels(); renderUnder(); renderLists(); renderInsp(); draw(); }
+function renderAll(){ ordLabel(); renderLevels(); renderUnder(); renderLists(); renderInsp(); renderNav(); draw(); }
 
 /* ============ panneaux : masquables sur ordinateur, en onglets sur téléphone ============ */
 mobTab="ly";
@@ -1960,8 +2079,8 @@ function cm(v){ var n=Math.round(v*100); return (n>0?"+":n<0?"-":"±")+Math.abs(
 function today(){ return new Date().toLocaleDateString("fr-FR"); }
 function fname(kind){ return ((S.title||"Reservations").replace(/[^\w\-À-ÿ]+/g,"_").slice(0,40))+"_"+kind+"_"+new Date().toISOString().slice(0,10)+".pdf"; }
 function hexRGB(c){ var m=/^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(c||""); return m? [parseInt(m[1],16),parseInt(m[2],16),parseInt(m[3],16)] : [120,120,120]; }
-function exportRows(l){
-  return S.shapes.filter(shown).filter(function(sh){ return onLevel(sh,l.id); }).map(function(sh){
+function exportRows(l,pick){
+  return S.shapes.filter(shown).filter(function(sh){ return onLevel(sh,l.id)&&(!pick||pick.has(sh.id)); }).map(function(sh){
     var o=obsOf(sh,l.id);
     return {orig:sh, sh:at(sh,l.id), o:o, ko:!!(o&&o.st==="ko")};
   });
@@ -2179,7 +2298,7 @@ function ratioTxt(N){
   for(var i=0;i<std.length;i++) if(Math.abs(N-std[i])/std[i]<.02) return "1/"+std[i];
   return "≈ 1/"+Math.round(N);
 }
-function exportPlans(fmt,ori,prog,withMt){
+function exportPlans(fmt,ori,prog,withMt,pick){
   var L=window.PDFLib;
   if(!L) return Promise.reject(new Error("module PDF non chargé"));
   var lvs=levelsUp(); if(!lvs.length) return Promise.reject(new Error("aucun niveau calé (échelle + repère)"));
@@ -2192,7 +2311,7 @@ function exportPlans(fmt,ori,prog,withMt){
     return levelPage(tmp,l,cache).then(function(info){
       var ly=layoutFor(l,info.Wd,info.Hd,info.k,fmt,ori);
       if(withMt) drawMetrePdf(info,l,F,ly.Tz);
-      annotate(info,l,exportRows(l),F,title,ly.Tz,
+      annotate(info,l,exportRows(l,pick),F,title,ly.Tz,
         "Échelle à l'impression : "+ratioTxt(ly.N)+" — "+(ly.paper?ly.paper.name:"format d'origine")+", imprimer à 100 % (taille réelle)");
       if(withMt) metreLegendPdf(info,l,F,ly.Tz);
       lays.push({ly:ly, W:info.Wd});
@@ -2225,11 +2344,11 @@ function exportPlans(fmt,ori,prog,withMt){
 
 /* ============ export réservation par réservation : une page par réservation, ses niveaux zoomés côte à côte ============ */
 var STD_N=[5,10,20,25,50,75,100,125,150,200,250,500,1000,2000];
-function resList(koOnly){
-  return S.shapes.filter(shown).map(function(sh){
+function resList(pick){
+  return S.shapes.filter(shown).filter(function(sh){ return !pick||pick.has(sh.id); }).map(function(sh){
     var lvs=levelsUp().filter(function(l){ return onLevel(sh,l.id); });
     return {sh:sh, lvs:lvs, kos:lvs.filter(function(l){ var o=obsOf(sh,l.id); return o&&o.st==="ko"; }).length};
-  }).filter(function(r){ return r.lvs.length&&(!koOnly||r.kos); })
+  }).filter(function(r){ return r.lvs.length; })
     .sort(function(a,b){ return String(a.sh.n||"").localeCompare(String(b.sh.n||""),"fr",{numeric:true}); });
 }
 /* emprise de la réservation sur un niveau (attendue, réelle, projet d'origine), en points du niveau, bas → haut */
@@ -2256,12 +2375,12 @@ function resGrid(t,n,needW,needH){
   best.N=N; best.s=72000/(25.4*N);
   return best;
 }
-function exportByRes(fmt,ori,koOnly,prog){
+function exportByRes(fmt,ori,pick,prog){
   var L=window.PDFLib;
   if(!L) return Promise.reject(new Error("module PDF non chargé"));
   if(!levelsUp().length) return Promise.reject(new Error("aucun niveau calé (échelle + repère)"));
-  var list=resList(koOnly);
-  if(!list.length) return Promise.reject(new Error(koOnly?"aucune réservation en anomalie":"aucune réservation sur les niveaux calés"));
+  var list=resList(pick);
+  if(!list.length) return Promise.reject(new Error("aucune des réservations cochées n'est sur un niveau calé"));
   if(!PAPER_PT[fmt]) fmt="a3";
   var out, F={}, cache=new Map(), bases=new Map(), title=S.title||"";
   var GREY=L.rgb(.45,.45,.45), RED=L.rgb(.78,.16,.12), GREEN=L.rgb(.1,.5,.25), BLACK=L.rgb(0,0,0);
@@ -2474,11 +2593,12 @@ function exportMetreCsv(){
   if(total) rows.push([],["","Total HT","","","","","","","","","",total]);
   return Promise.resolve(download(csvText(rows),"text/csv;charset=utf-8",fname("Metre").replace(/\.pdf$/,".csv")));
 }
-function exportResCsv(){
-  var lvs=levelsUp(); if(!S.shapes.length) return Promise.reject(new Error("aucune réservation"));
+function exportResCsv(pick){
+  var lvs=levelsUp(), list=S.shapes.filter(function(s){ return !pick||pick.has(s.id); });
+  if(!list.length) return Promise.reject(new Error("aucune réservation cochée"));
   var rows=[["Chantier",S.title||""],["Édité le",today()],[],
     ["Réservation","Calque","Objet","Forme","Dimensions prévues","X repère (m)","Y repère (m)","Niveau","État","Écart (cm)","Écart X (cm)","Écart Y (cm)","Dimensions réelles","Position reprise de","Observation"]];
-  S.shapes.forEach(function(s){
+  list.forEach(function(s){
     var ly=layerOf(s), ty=s.ty&&typeOf(s.ty);
     lvs.filter(function(l){ return onLevel(s,l.id); }).forEach(function(l){
       var sa=at(s,l.id), o=obsOf(s,l.id), ec=o&&o.st==="ko"? ecart(sa,o) : null, c=centerOf(sa), rs=o&&o.real? realShape(sa,o) : null;
@@ -2490,6 +2610,22 @@ function exportResCsv(){
   return Promise.resolve(download(csvText(rows),"text/csv;charset=utf-8",fname("Reservations").replace(/\.pdf$/,".csv")));
 }
 
+/* liste à cocher des réservations exportables, groupées par objet (sinon par calque) ; les décochées sont mémorisées dans le projet */
+function pickList(){
+  var off=new Set(S.expOff||[]), groups=[], byKey={};
+  S.shapes.filter(shown).forEach(function(s){
+    var t=s.ty&&typeOf(s.ty), L=layerOf(s), key=t?"t"+t.id:"l"+(L?L.id:"");
+    if(!byKey[key]){ byKey[key]={key:key, name:t? t.code+(t.name?" · "+t.name:"") : "Calque "+(L?L.name:"—"), col:colOf(s), items:[]}; groups.push(byKey[key]); }
+    byKey[key].items.push(s);
+  });
+  if(!groups.length) return '<div class="empty">Aucune réservation visible.</div>';
+  return groups.map(function(g){
+    return '<div class="grp"><input type="checkbox" data-grp="'+g.key+'"><span class="swatch" style="background:'+g.col+'"></span>'+esc(g.name)+' ('+g.items.length+')</div>'+
+      g.items.map(function(s){ var ko=koCount(s);
+        return '<label><input type="checkbox" data-id="'+s.id+'" data-g="'+g.key+'" data-ko="'+(ko?1:0)+'"'+(off.has(s.id)?"":" checked")+'>'+
+          esc(s.n)+(ko?' <span class="bad">'+ko+' anomalie'+(ko>1?'s':'')+'</span>':'')+'</label>'; }).join("");
+  }).join("");
+}
 document.getElementById("repBtn").onclick=function(){
   var old=document.getElementById("expSheet"); if(old) old.remove();
   closeMenu();
@@ -2512,7 +2648,10 @@ document.getElementById("repBtn").onclick=function(){
       '<div class="fld"><label>Orientation</label><select id="r_ori">'+
         [["auto","Automatique"],["p","Portrait"],["l","Paysage"]].map(function(o){ return '<option value="'+o[0]+'"'+(o[0]===ex.ori?" selected":"")+'>'+o[1]+'</option>'; }).join("")+'</select></div>'+
     '</div>'+
-    '<label class="ck" id="r_kow" style="display:flex;gap:7px;align-items:center;margin-top:8px;font-size:12px"><input type="checkbox" id="r_ko"'+(ex.ko?" checked":"")+'> Uniquement les réservations en anomalie</label>'+
+    '<div class="fld" id="r_pkw" style="margin-top:10px"><label>Réservations à exporter · <span id="r_cnt"></span></label>'+
+      '<div class="qk" style="margin:3px 0 0"><button data-pk="all">Toutes</button><button data-pk="none">Aucune</button>'+
+      '<button data-pk="ko">Anomalies seulement</button>'+(sel()?'<button data-pk="sel">Sélectionnée</button>':'')+'</div>'+
+      '<div class="picks" id="r_pk">'+pickList()+'</div></div>'+
     '<label class="ck" id="r_mtw" style="display:flex;gap:7px;align-items:center;margin-top:8px;font-size:12px"><input type="checkbox" id="r_mt"'+(hasMt&&ex.mt!==false?" checked":"")+(hasMt?"":" disabled")+'> Dessiner aussi le métré (surfaces, linéaires, comptages) et sa légende</label>'+
     '<p id="r_sc" style="margin:7px 0 0;font-size:11.5px;color:var(--muted);line-height:1.5"></p>'+
     '<p id="r_info" style="margin:9px 0 0;font-size:12px">'+lvs.length+' niveau'+(lvs.length>1?"x":"")+
@@ -2522,22 +2661,27 @@ document.getElementById("repBtn").onclick=function(){
     '<p id="r_p" style="margin:6px 0 0;font-size:12px;color:var(--blue);min-height:16px"></p>'+
     '<div class="acts"><button class="btn" id="ko">Fermer</button><button class="btn primary" id="goP">Exporter</button></div>';
   openModal(d);
-  var sf=d.querySelector("#r_fmt"), so=d.querySelector("#r_ori"), sm=d.querySelector("#r_m"), sk=d.querySelector("#r_ko"), smt=d.querySelector("#r_mt"), lastFmt=ex.fmt;
+  var sf=d.querySelector("#r_fmt"), so=d.querySelector("#r_ori"), sm=d.querySelector("#r_m"), smt=d.querySelector("#r_mt"), lastFmt=ex.fmt;
+  var pk=d.querySelector("#r_pk");
+  function boxes(){ return Array.prototype.slice.call(pk.querySelectorAll("input[data-id]")); }
+  function pick(){ return new Set(boxes().filter(function(c){ return c.checked; }).map(function(c){ return c.dataset.id; })); }
+  function usesPick(md){ return md==="plans"||md==="res"||md==="csvr"; }
   /* aperçu : échelle à laquelle chaque niveau sortira sur la feuille choisie */
   function preview(){
     var res=sm.value==="res", oo=sf.querySelector('option[value="orig"]'), md=sm.value, paper=md==="plans"||md==="res";
     d.querySelector("#r_fo").style.display=paper?"grid":"none";
     d.querySelector("#r_mtw").style.display=md==="plans"?"flex":"none";
+    d.querySelector("#r_pkw").style.display=usesPick(md)?"":"none";
     ["#r_info","#r_img"].forEach(function(q){ var e=d.querySelector(q); if(e) e.style.display=paper?"":"none"; });
     d.querySelector("#goP").textContent= md==="csvm"||md==="csvr"? "Télécharger le tableau" : "Exporter";
+    d.querySelector("#goP").disabled= usesPick(md)&&!pick().size;
     if(!paper){
-      S.ui.exp={fmt:lastFmt,ori:so.value,mode:md,ko:sk.checked,mt:smt.checked}; savePrefs();
-      d.querySelector("#r_kow").style.display="none";
-      var T=totals(), nm=S.meas.filter(function(m){ return lvIndex(m.lv)>=0; }).length, pu=S.items.filter(function(it){ return it.pu>0; });
+      S.ui.exp={fmt:lastFmt,ori:so.value,mode:md,mt:smt.checked}; savePrefs();
+      var nm=S.meas.filter(function(m){ return lvIndex(m.lv)>=0; }).length, pu=S.items.filter(function(it){ return it.pu>0; });
       d.querySelector("#r_d").textContent= md==="metre"? "Un PDF A4 : récapitulatif par poste (quantités par niveau, prix et total HT s'ils sont renseignés), puis le détail de chaque mesure."
         : md==="csvm"? "Un tableau à ouvrir dans Excel : une ligne par poste et par niveau, plus le total de chaque poste. Séparateur « ; », virgule décimale."
         : "Un tableau à ouvrir dans Excel : une ligne par réservation et par niveau (état, écarts, observation).";
-      d.querySelector("#r_sc").innerHTML= md==="csvr"? plural(S.shapes.length,"réservation")+" · "+plural(levelsUp().length,"niveau calé","niveaux calés")
+      d.querySelector("#r_sc").innerHTML= md==="csvr"? plural(pick().size,"réservation cochée","réservations cochées")+" · "+plural(levelsUp().length,"niveau calé","niveaux calés")
         : plural(S.items.length,"poste")+" · "+plural(nm,"mesure")+(pu.length?" · "+plural(pu.length,"poste chiffré","postes chiffrés"):" · aucun prix (▶ d'un poste dans l'onglet Métré)");
       return;
     }
@@ -2545,30 +2689,49 @@ document.getElementById("repBtn").onclick=function(){
     oo.disabled=res;
     sf.value= res&&lastFmt==="orig"? "a3" : lastFmt;
     so.disabled=sf.value==="orig";
-    d.querySelector("#r_kow").style.display=res?"flex":"none";
-    S.ui.exp={fmt:lastFmt,ori:so.value,mode:sm.value,ko:sk.checked,mt:smt.checked}; savePrefs();
+    S.ui.exp={fmt:lastFmt,ori:so.value,mode:sm.value,mt:smt.checked}; savePrefs();
     if(res){
-      var rl=resList(sk.checked);
+      var rl=resList(pick());
       d.querySelector("#r_d").textContent="Un PDF, une page par réservation : tous les niveaux où elle passe, zoomés côte à côte (du bas vers le haut du bâtiment), à la même échelle. Seule cette réservation est affichée, avec son écart éventuel.";
       d.querySelector("#r_sc").innerHTML=rl.length+" réservation"+(rl.length>1?"s":"")+" → "+rl.length+" page"+(rl.length>1?"s":"")+
         ". Échelle choisie pour chaque réservation (1/20, 1/50…), la plus grande qui tient sur la feuille.<br>Étiquettes imprimées à 9 pt.";
       return;
     }
-    d.querySelector("#r_d").textContent="Un PDF, une page par niveau : le plan d'origine en vectoriel (net à tout zoom) avec les réservations et les écarts annotés par-dessus.";
+    d.querySelector("#r_d").textContent="Un PDF, une page par niveau : le plan d'origine en vectoriel (net à tout zoom) avec les réservations cochées et leurs écarts annotés par-dessus.";
     d.querySelector("#r_sc").innerHTML=lvs.length? "Échelle imprimée : "+lvs.map(function(l){
       var p=levelPt(l), ly=layoutFor(l,p.W,p.H,p.k,sf.value,so.value);
       return esc(l.name)+" <b>"+esc(ratioTxt(ly.N))+"</b>"+(ly.paper?" ("+esc(ly.paper.name)+")":"");
     }).join(" · ")+(sf.value==="orig"?"":"<br>Étiquettes imprimées à 9 pt quel que soit le format.") : "";
   }
-  sf.onchange=function(){ lastFmt=sf.value; preview(); }; so.onchange=preview; sm.onchange=preview; sk.onchange=preview; smt.onchange=preview; preview();
+  /* cases : compteur, état des cases de groupe, mémorisation des décochées */
+  function syncPick(){
+    var all=boxes(), on=all.filter(function(c){ return c.checked; });
+    S.expOff=all.filter(function(c){ return !c.checked; }).map(function(c){ return c.dataset.id; }); save();
+    d.querySelector("#r_cnt").textContent=on.length+" / "+all.length;
+    Array.prototype.forEach.call(pk.querySelectorAll("input[data-grp]"),function(g){
+      var m=all.filter(function(c){ return c.dataset.g===g.dataset.grp; }), n=m.filter(function(c){ return c.checked; }).length;
+      g.checked=n===m.length; g.indeterminate=n>0&&n<m.length; });
+    preview();
+  }
+  pk.addEventListener("change",function(e){
+    var g=e.target.dataset.grp;
+    if(g) boxes().forEach(function(c){ if(c.dataset.g===g) c.checked=e.target.checked; });
+    syncPick();
+  });
+  d.querySelector("#r_pkw .qk").addEventListener("click",function(e){
+    var b=e.target.closest("[data-pk]"); if(!b) return; var k=b.dataset.pk, s=sel();
+    boxes().forEach(function(c){ c.checked= k==="all" || (k==="ko"&&c.dataset.ko==="1") || (k==="sel"&&!!s&&c.dataset.id===s.id); });
+    syncPick();
+  });
+  sf.onchange=function(){ lastFmt=sf.value; preview(); }; so.onchange=preview; sm.onchange=preview; smt.onchange=preview; syncPick();
   d.querySelector("#ko").onclick=function(){ d.remove(); };
   d.querySelector("#goP").onclick=function(){
     var b=this, p=d.querySelector("#r_p");
     S.title=d.querySelector("#r_t").value; save(); b.disabled=true;
-    var pg=function(t){ p.textContent=t; }, pr;
+    var pg=function(t){ p.textContent=t; }, pr, pc=pick();
     try{ var md=sm.value;
-      pr= md==="res"? exportByRes(sf.value,so.value,sk.checked,pg) : md==="metre"? exportMetrePdf(pg) : md==="csvm"? exportMetreCsv() : md==="csvr"? exportResCsv()
-        : exportPlans(sf.value,so.value,pg,smt.checked&&!smt.disabled); }catch(err){ pr=Promise.reject(err); }
+      pr= md==="res"? exportByRes(sf.value,so.value,pc,pg) : md==="metre"? exportMetrePdf(pg) : md==="csvm"? exportMetreCsv() : md==="csvr"? exportResCsv(pc)
+        : exportPlans(sf.value,so.value,pg,smt.checked&&!smt.disabled,pc); }catch(err){ pr=Promise.reject(err); }
     pr.then(function(f){ p.textContent="Fichier généré : "+f; b.disabled=false; })
       .catch(function(err){ p.textContent=""; b.disabled=false; note("Export impossible : "+(err&&err.message||err)); });
   };
@@ -2695,7 +2858,10 @@ document.addEventListener("keydown",function(e){
   }
   if(e.key==="Delete"||e.key==="Backspace"){ if(delSel()) e.preventDefault(); return; }
   if(e.key.indexOf("Arrow")===0){ if(nudge(e.key,e.shiftKey)) e.preventDefault(); return; }
-  if(e.key==="PageUp"||e.key==="PageDown"){ e.preventDefault(); levelStep(e.key==="PageUp"?1:-1); return; }
+  if(e.key==="PageUp"||e.key==="PageDown"){ e.preventDefault();
+    if(multiOn()) navStep(e.key==="PageDown"?1:-1);   /* tous les niveaux sont visibles : on passe d'une réservation à l'autre */
+    else levelStep(e.key==="PageUp"?1:-1);
+    return; }
   if(e.key==="?"||e.key==="F1"){ e.preventDefault(); openHelp(); return; }
   if(e.key==="+"||e.key==="="){ zoomBy(1.35); return; }
   if(e.key==="-"||e.key==="_"){ zoomBy(1/1.35); return; }
@@ -2703,6 +2869,7 @@ document.addEventListener("keydown",function(e){
   if(map[k]){ e.preventDefault(); setTool(map[k]); return; }
   if(k==="f"){ fit(); return; }
   if(k==="g"){ setGrid(!S.grid); return; }
+  if(k==="t"){ setMulti(!S.ui.multi); return; }
 });
 document.addEventListener("keyup",function(e){ if(e.key===" "){ spaceDown=false; if(!drag) cv.style.cursor= S.tool==="pan"?"grab" : S.tool==="select"?"default":"crosshair"; } });
 window.addEventListener("blur",function(){ spaceDown=false; });
@@ -2818,6 +2985,7 @@ function canvasMenu(cx,cy,p){
         renderAll(); save(); note("Repère posé sur "+lv.name+(lv.scale?"":" — il reste l'échelle à définir.")); }},
       {t:"Recadrer la vue",i:"fit",k:"F",fn:fit},
       {t:"Trame de 1 m",i:"grid",k:"G",on:S.grid,fn:function(){ setGrid(!S.grid); }},
+      S.levels.length>1? {t:"Tous les niveaux côte à côte",i:"tiles",k:"T",on:multiOn(),fn:function(){ setMulti(!S.ui.multi); }} : null,
       D&&ready(D)&&ready(lv)? {t:"Superposer "+D.name+" (dessous)",i:"under",on:S.under===D.id,fn:function(){ S.under=S.under===D.id?"":D.id; renderUnder(); draw(); }} : null,
       "-",
       {t:U?"Niveau au-dessus : "+U.name:"Pas de niveau au-dessus",i:"chev",k:"Pg↑",off:!U,fn:function(){ levelStep(1); }},
@@ -2827,12 +2995,12 @@ function canvasMenu(cx,cy,p){
   }
   openMenu(cx,cy,items);
 }
-cv.addEventListener("contextmenu",function(e){ e.preventDefault(); var r=cv.getBoundingClientRect(); canvasMenu(e.clientX,e.clientY,{x:e.clientX-r.left,y:e.clientY-r.top}); });
+cv.addEventListener("contextmenu",function(e){ e.preventDefault(); if(multiOn()&&!pickTile(rawPos(e))) return; canvasMenu(e.clientX,e.clientY,evPos(e)); });
 /* appui long au doigt = clic droit */
 var lpT=null, lpAt=null;
 cv.addEventListener("pointerdown",function(e){
   clearTimeout(lpT); lpAt=null; if(e.pointerType!=="touch") return;
-  var r=cv.getBoundingClientRect(); lpAt={x:e.clientX,y:e.clientY,p:{x:e.clientX-r.left,y:e.clientY-r.top}};
+  lpAt={x:e.clientX,y:e.clientY,p:evPos(e)};
   lpT=setTimeout(function(){ if(!lpAt||ptrs.size>1) return;
     if(drag&&(drag.m==="move"||drag.m==="mmove"||drag.m==="size")) return;   /* déjà en train de déplacer */
     drag=null; canvasMenu(lpAt.x,lpAt.y,lpAt.p); lpAt=null; },550);
@@ -2853,6 +3021,7 @@ function openHelp(){
     '<h4>Édition</h4>'+row("Annuler","Ctrl+Z")+row("Rétablir","Ctrl+Maj+Z / Ctrl+Y")+row("Copier / Coller sous le pointeur","Ctrl+C / Ctrl+V")+row("Couper","Ctrl+X")+
       row("Dupliquer","Ctrl+D")+row("Supprimer","Suppr")+row("Décaler de 1 cm (10 cm)","Flèches / Maj")+row("Désélectionner, quitter l'outil","Échap")+
     '<h4>Vue et niveaux</h4>'+row("Recadrer","F / Ctrl+0")+row("Zoom","+ / − / molette")+row("Trame 1 m","G")+row("Niveau au-dessus / en dessous","Pg↑ / Pg↓")+
+      row("Tous les niveaux côte à côte","T")+row("Tous les niveaux : réservation précédente / suivante","Pg↑ / Pg↓")+
     '<h4>Projet</h4>'+row("Projets","Ctrl+O")+row("Importer des plans","Ctrl+I")+row("Exporter","Ctrl+E")+row("Enregistrer (automatique)","Ctrl+S")+row("Cette aide","?")+
     '<h4>Souris et tactile</h4>'+row("Menu d\'actions","Clic droit")+row("Menu au doigt","Appui long")+row("Zoom et déplacement au doigt","Deux doigts")+row("Ajouter un sommet","Tirer le rond d\'un côté")+
     '</div><div class="acts"><button class="btn primary" id="hk">Fermer</button></div>';
@@ -2871,9 +3040,9 @@ function openModal(sheet){
   return w;
 }
 function closeModals(){ var m=document.querySelectorAll(".modal"); if(!m.length) return false; m[m.length-1].remove(); return true; }
-function savePrefs(){ try{ localStorage.setItem("rr-prefs",JSON.stringify({lv:S.ui.lv,ly:S.ui.ly,pr:S.ui.pr,lst:S.ui.lst,exp:S.ui.exp})); }catch(e){} }
+function savePrefs(){ try{ localStorage.setItem("rr-prefs",JSON.stringify({lv:S.ui.lv,ly:S.ui.ly,pr:S.ui.pr,lst:S.ui.lst,exp:S.ui.exp,multi:!!S.ui.multi})); }catch(e){} }
 function loadPrefs(){ try{ var p=JSON.parse(localStorage.getItem("rr-prefs")||"null"); if(!p) return false;
-    ["lv","ly","pr"].forEach(function(k){ if(typeof p[k]==="boolean") S.ui[k]=p[k]; });
+    ["lv","ly","pr","multi"].forEach(function(k){ if(typeof p[k]==="boolean") S.ui[k]=p[k]; });
     if(p.lst) S.ui.lst=p.lst; if(p.exp&&(PAPER_PT[p.exp.fmt]||p.exp.fmt==="orig")) S.ui.exp=p.exp; return true; }catch(e){ return false; } }
 var THEMES=["auto","light","dark"];
 function applyTheme(t){ if(t==="light"||t==="dark") document.documentElement.setAttribute("data-theme",t); else document.documentElement.removeAttribute("data-theme");
@@ -3390,7 +3559,7 @@ function removeItem(it){
   renderAll(); save(); note("Poste « "+it.name+" » supprimé"+(n?" avec ses "+n+" mesure"+(n>1?"s":""):"")+" — Ctrl+Z pour revenir.");
 }
 function centerOnMeas(m){ var lv=lvById(m.lv); if(!lv) return; var c=pcentroid(m.pts), w=p2w(lv,c.x,c.y);
-  S.view.tx=stage.clientWidth/2-w.X*S.view.s; S.view.ty=stage.clientHeight/2-w.Y*S.view.s; }
+  var vz=viewSize(); S.view.tx=vz.W/2-w.X*S.view.s; S.view.ty=vz.H/2-w.Y*S.view.s; }
 function addItemMenu(btn){
   var b=btn.getBoundingClientRect();
   openMenu(b.left,b.bottom+4,[{h:"Nouveau poste de métré"},
