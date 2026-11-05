@@ -81,6 +81,15 @@ déplacer, utiliser **Enregistrer**.
 - **Report des corrections** : une anomalie pointée devient la position attendue des
   niveaux du dessus (marquée « ↳ R+1 »), sauf si l'on décoche « Reporter cette
   correction aux niveaux du dessus ».
+- **Dévoiement d'un réseau** : quand le réseau passe à l'horizontale et change de place d'un
+  niveau à l'autre, ce n'est pas une anomalie. Propriétés (ou clic droit) → « Dévoyer à partir
+  de ce niveau », puis faire glisser la réservation à sa nouvelle position (`Maj` : dans l'axe) :
+  elle devient la position prévue de ce niveau et de ceux du dessus, avec au besoin d'autres
+  dimensions. Le **cheminement** depuis l'arrivée du dessous se choisit : **Équerre** (« Passer par
+  l'autre angle » pour l'autre coude), **Droit**, ou **Libre** — « Tracer le cheminement » (un clic
+  par coude, `Maj` : angle droit), ou tirer les coudes sur le plan (rond : ajouter un coude, clic
+  droit : le supprimer). Une anomalie déjà pointée peut être requalifiée en « Dévoiement voulu,
+  pas une anomalie ». Les exports montrent le cheminement fléché et sa longueur.
 - **Tous les niveaux** (bouton au-dessus du plan, `T`) : chaque niveau dans sa tuile, côte
   à côte, avec le même zoom et la même position — zoomer ou déplacer dans une tuile fait
   de même dans toutes. Pour travailler **par réservation** : un clic dans la liste, ou

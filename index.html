@@ -188,6 +188,8 @@ button.tag:hover{text-decoration:underline}
 .card header .seg{padding:2px;gap:2px}
 .card header .seg button{flex:none;padding:3px 8px;font-size:11.5px}
 .inh{margin:0;font-size:11.5px;color:var(--blue);line-height:1.4}
+.dvb{border-top:1px dashed var(--line);padding-top:9px}
+.dvn{margin:0;font-family:var(--f-num);font-size:11px;color:var(--blue)}
 .res.sub{padding-left:30px}
 .res.hide{opacity:.45}
 .res .ra{display:flex;align-items:center}
@@ -389,6 +391,7 @@ kbd{font-family:var(--f-num);font-size:10.5px;background:var(--panel-2);border:1
   <symbol id="i-ok" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
   <symbol id="i-ko" viewBox="0 0 24 24"><path d="M12 4l9 16H3z"/><path d="M12 10v4.5M12 17.5h.01"/></symbol>
   <symbol id="i-move" viewBox="0 0 24 24"><path d="M4 12h13M13 7l5 5-5 5"/></symbol>
+  <symbol id="i-dev" viewBox="0 0 24 24"><rect x="3" y="16" width="5" height="5" rx="1"/><rect x="16" y="3" width="5" height="5" rx="1"/><path d="M5.5 16v-4.5h13V8"/></symbol>
   <symbol id="i-center" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M4 8V4h4M20 8V4h-4M4 16v4h4M20 16v4h-4"/></symbol>
   <symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/></symbol>
   <symbol id="i-neg" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="1"/><path d="M8.5 12h7"/></symbol>
@@ -1043,21 +1046,66 @@ function dimPair(sh,o){ var r=realShape(sh,o);
   if(!r||!dimsChanged(sh,o)) return dimTxt(sh);
   return dimTxt(sh).replace(/ cm$/,"")+" → "+dimTxt(r); }
 function inShape(r,W){ return r.t==="rect"? (W.X>=r.x&&W.X<=r.x+r.w&&W.Y>=r.y&&W.Y<=r.y+r.h) : Math.hypot(W.X-r.x,W.Y-r.y)<=r.r; }
-/* position attendue sur un niveau : la dernière correction pointée en dessous (et reportée)
-   remplace la position du projet pour les niveaux du dessus ; .from = niveau d'où elle vient */
+/* position attendue sur un niveau, en remontant le bâtiment depuis le bas :
+   - un dévoiement (sh.dev[niveau]) est voulu : le réseau passe à l'horizontale et la réservation change de place
+     à partir de ce niveau ; ce n'est pas une anomalie, c'est la nouvelle position du projet pour ce niveau et ceux du dessus ;
+   - une anomalie pointée (et reportée) remplace la position attendue des niveaux du dessus.
+   Résultat : .from = niveau d'où vient la position reprise (.fromDev si c'est un dévoiement), .des = position du projet
+   quand une correction l'a décalée, .devAt = dévoiement posé sur ce niveau même (départ, niveau du dessous, réglages) */
+function geomOf(s){ return s.t==="rect"? {t:"rect",x:s.x,y:s.y,w:s.w,h:s.h} : {t:"circle",x:s.x,y:s.y,r:s.r}; }
+function devOf(sh,id){ return (sh.dev&&sh.dev[id])||null; }
+function geomAt(g,X,Y){ return g.t==="rect"? {t:"rect",x:X-g.w/2,y:Y-g.h/2,w:g.w,h:g.h} : {t:"circle",x:X,y:Y,r:g.r}; }
+/* emprise d'un dévoiement : sa position, et ses dimensions si elles changent à partir de ce niveau */
+function devGeom(g,d){ var r=geomAt(g,d.X,d.Y);
+  if(r.t==="rect"){ if(d.w>0){ r.w=d.w; r.x=d.X-d.w/2; } if(d.h>0){ r.h=d.h; r.y=d.Y-d.h/2; } } else if(d.r>0) r.r=d.r;
+  return r; }
 function at(sh,lvId){
-  var i=lvIndex(lvId); if(i<0||!sh.obs) return sh;
-  var below=S.asc? S.levels.slice(0,i).reverse() : S.levels.slice(i+1);
-  for(var k=0;k<below.length;k++){
-    var L=below[k]; if(!onLevel(sh,L.id)) continue;
-    var o=sh.obs[L.id];
-    if(o&&o.st==="ko"&&o.real&&o.prop!==false){
-      var r=realShape(at(sh,L.id),o);
-      return Object.assign({},sh,r,{t:sh.t,from:L.id});
-    }
-  }
-  return sh;
+  var i=lvIndex(lvId); if(i<0||(!sh.obs&&!sh.dev)) return sh;
+  var below=S.asc? S.levels.slice(0,i) : S.levels.slice(i+1).reverse();   /* du bas jusqu'au niveau juste en dessous */
+  var des=geomOf(sh), cur=des, from=null, fromDev=false, prev=null;
+  below.forEach(function(L){
+    if(!onLevel(sh,L.id)) return;
+    prev=L.id;
+    var d=devOf(sh,L.id);
+    if(d){ des=devGeom(des,d); cur=des; from=L.id; fromDev=true; }
+    var o=sh.obs&&sh.obs[L.id];
+    if(o&&o.st==="ko"&&o.real&&o.prop!==false){ cur=geomOf(realShape(cur,o)); from=L.id; fromDev=false; }
+  });
+  var d0=onLevel(sh,lvId)? devOf(sh,lvId) : null;
+  if(d0) return Object.assign({},sh,devGeom(des,d0),{t:sh.t,devAt:{d:d0,lv:lvId,below:prev,start:cur}});
+  if(!from) return sh;
+  var out=Object.assign({},sh,cur,{t:sh.t,from:from,fromDev:fromDev});
+  if(!fromDev) out.des=des;
+  return out;
 }
+/* niveau juste en dessous où la réservation existe (départ d'un dévoiement) */
+function belowOn(sh,lvId){
+  var i=lvIndex(lvId); if(i<0) return null;
+  var below=S.asc? S.levels.slice(0,i).reverse() : S.levels.slice(i+1);
+  for(var k=0;k<below.length;k++) if(onLevel(sh,below[k].id)) return below[k];
+  return null;
+}
+/* cheminement d'un dévoiement, en mètres : départ (arrivée du réseau depuis le dessous), coudes, nouvelle position.
+   route "xy" : équerre, d'abord le long de X ; "yx" : d'abord le long de Y ; "direct" : en biais ; "free" : coudes choisis */
+function routeOf(a){
+  if(!a||!a.devAt) return [];
+  var d=a.devAt.d, s=centerOf(a.devAt.start), e=centerOf(a), mid;
+  if(d.route==="direct") mid=[];
+  else if(d.route==="free") mid=(d.pts||[]).map(function(q){ return {X:q.X,Y:q.Y}; });
+  else if(d.route==="yx") mid=[{X:s.X,Y:e.Y}];
+  else mid=[{X:e.X,Y:s.Y}];
+  var all=[s].concat(mid,[e]), out=[];
+  all.forEach(function(q){ var l=out[out.length-1]; if(!l||Math.hypot(q.X-l.X,q.Y-l.Y)>.002) out.push(q); });
+  return out;
+}
+function routeLen(pts){ var L=0; for(var i=1;i<pts.length;i++) L+=Math.hypot(pts[i].X-pts[i-1].X,pts[i].Y-pts[i-1].Y); return L; }
+function devCount(sh){ var n=0; if(sh.dev) for(var k in sh.dev) if(lvIndex(k)>=0&&onLevel(sh,k)) n++; return n; }
+/* copie déplacée d'une réservation : ses dévoiements suivent */
+function shiftDev(c,dx,dy){ if(!c.dev) return;
+  for(var k in c.dev){ var d=c.dev[k]; d.X=Math.round((d.X+dx)*1000)/1000; d.Y=Math.round((d.Y+dy)*1000)/1000;
+    if(d.pts) d.pts.forEach(function(q){ q.X=Math.round((q.X+dx)*1000)/1000; q.Y=Math.round((q.Y+dy)*1000)/1000; }); } }
+function mTxt(v){ return v<1? Math.round(v*100)+" cm" : nf(v,2)+" m"; }
+function r3(v){ return Math.round(v*1000)/1000; }
 function lvName(id){ var i=lvIndex(id); return i>=0? S.levels[i].name : "?"; }
 /* niveaux qui reprennent la correction pointée sur lvId */
 function heirs(sh,lvId){ return S.levels.filter(function(L){ return L.id!==lvId&&onLevel(sh,L.id)&&at(sh,L.id).from===lvId; })
@@ -1076,13 +1124,16 @@ function drawShape(sh,here,isSel){
   var lvA=active();
   if(here&&lvA&&sh.id!=="_"){
     var att=at(sh,lvA.id);
-    if(att.from){
-      /* correction reportée : contour du projet en filigrane, réservation à sa position corrigée */
-      ctx.save(); ctx.globalAlpha=.35;
-      outline(sh,0,0,colOf(sh),[3,4],w2s,1);
-      var c1=centerOf(sh), c2=centerOf(att), p1=w2s(c1.X,c1.Y), p2=w2s(c2.X,c2.Y);
-      ctx.strokeStyle=colOf(sh); ctx.setLineDash([2,3]); ctx.beginPath(); ctx.moveTo(p1.x,p1.y); ctx.lineTo(p2.x,p2.y); ctx.stroke();
-      ctx.restore();
+    if(att.devAt){ drawRoute(att,isSel); sh=att; }
+    else if(att.from){
+      if(att.des){
+        /* correction reportée : contour du projet en filigrane, réservation à sa position corrigée */
+        ctx.save(); ctx.globalAlpha=.35;
+        outline(att.des,0,0,colOf(sh),[3,4],w2s,1);
+        var c1=centerOf(att.des), c2=centerOf(att), p1=w2s(c1.X,c1.Y), p2=w2s(c2.X,c2.Y);
+        ctx.strokeStyle=colOf(sh); ctx.setLineDash([2,3]); ctx.beginPath(); ctx.moveTo(p1.x,p1.y); ctx.lineTo(p2.x,p2.y); ctx.stroke();
+        ctx.restore();
+      }
       sh=att;
     }
   }
@@ -1116,7 +1167,7 @@ function drawShape(sh,here,isSel){
   /* étiquette */
   if(S.view.s>5){
     var tl=w2s(sh.t==="rect"?sh.x:sh.x-sh.r, sh.t==="rect"?sh.y:sh.y-sh.r);
-    var txt=sh.n+"  "+dimTxt(sh)+(sh.from?"  ↳ "+lvName(sh.from):"");
+    var txt=sh.n+"  "+dimTxt(sh)+(sh.devAt?"  dévoyée":sh.from?"  ↳ "+(sh.fromDev?"dév. ":"")+lvName(sh.from):"");
     ctx.font="500 11px "+("'IBM Plex Mono', monospace");
     var w=ctx.measureText(txt).width+10;
     ctx.globalAlpha=here?.95:.6; ctx.fillStyle=col;
@@ -1145,12 +1196,61 @@ function drawShape(sh,here,isSel){
     ctx.fillStyle="#fff"; ctx.font="700 12px 'Archivo', sans-serif"; ctx.textAlign="center";
     ctx.fillText("!",bx.x+8,bx.y-3.5); ctx.textAlign="left";
   }
-  if(isSel && here && !sh.from){
+  if(isSel && here && !sh.from && !sh.devAt){
     ctx.globalAlpha=1; ctx.fillStyle=css("--panel"); ctx.strokeStyle=col; ctx.lineWidth=1.5;
     handles(sh).forEach(function(h){ var p=w2s(h.X,h.Y);
       ctx.beginPath(); ctx.rect(p.x-4,p.y-4,8,8); ctx.fill(); ctx.stroke(); });
   }
   ctx.restore();
+}
+/* dévoiement sur le niveau courant : arrivée du réseau en filigrane, cheminement fléché jusqu'à la nouvelle position */
+function drawRoute(a,isSel){
+  var col=colOf(a), pts=routeOf(a), ps=pts.map(function(q){ return w2s(q.X,q.Y); }), st=a.devAt.start;
+  ctx.save();
+  ctx.globalAlpha=.5; outline(st,0,0,col,[3,4],w2s,1.2); ctx.globalAlpha=1;
+  if(S.view.s>5&&a.devAt.below){
+    var tl=w2s(st.t==="rect"?st.x:st.x-st.r, st.t==="rect"?st.y+st.h:st.y+st.r);
+    ctx.font="500 10.5px 'IBM Plex Mono', monospace"; ctx.fillStyle=col; ctx.globalAlpha=.85;
+    ctx.fillText("arrivée de "+lvName(a.devAt.below),tl.x,tl.y+13); ctx.globalAlpha=1;
+  }
+  if(ps.length>1&&!(S.tool==="route"&&rdraft&&rdraft.id===a.id)){
+    ctx.lineJoin="round"; ctx.lineCap="round";
+    ctx.beginPath(); ps.forEach(function(p,i){ if(i) ctx.lineTo(p.x,p.y); else ctx.moveTo(p.x,p.y); });
+    ctx.strokeStyle="rgba(255,255,255,.8)"; ctx.lineWidth=isSel?7.5:6; ctx.stroke();
+    ctx.strokeStyle=col; ctx.lineWidth=isSel?4:3; ctx.stroke();
+    /* flèche à l'arrivée */
+    var b=ps[ps.length-1], p0=ps[ps.length-2], an=Math.atan2(b.y-p0.y,b.x-p0.x), L=Math.min(13,Math.hypot(b.x-p0.x,b.y-p0.y)*.6);
+    if(L>4){ ctx.beginPath(); ctx.moveTo(b.x,b.y); ctx.lineTo(b.x-L*Math.cos(an-.45),b.y-L*Math.sin(an-.45));
+      ctx.lineTo(b.x-L*Math.cos(an+.45),b.y-L*Math.sin(an+.45)); ctx.closePath(); ctx.fillStyle=col; ctx.fill(); }
+    /* longueur du cheminement, sur le plus long tronçon */
+    var bi=1, bl=0; for(var j=1;j<ps.length;j++){ var dl=Math.hypot(ps[j].x-ps[j-1].x,ps[j].y-ps[j-1].y); if(dl>bl){ bl=dl; bi=j; } }
+    if(S.view.s>3||isSel) pill("dévoiement "+mTxt(routeLen(pts)),(ps[bi].x+ps[bi-1].x)/2,(ps[bi].y+ps[bi-1].y)/2-13,col);
+    /* sélectionnée : coudes à tirer (carrés), milieux pour ajouter un coude (ronds) */
+    if(isSel){
+      ctx.fillStyle="#fff"; ctx.strokeStyle=col; ctx.lineWidth=1.6;
+      for(var k=1;k<ps.length-1;k++){ ctx.beginPath(); ctx.rect(ps[k].x-4.5,ps[k].y-4.5,9,9); ctx.fill(); ctx.stroke(); }
+      for(var m=1;m<ps.length;m++){ var u=ps[m-1], v=ps[m]; if(Math.hypot(u.x-v.x,u.y-v.y)<=30) continue;
+        ctx.beginPath(); ctx.arc((u.x+v.x)/2,(u.y+v.y)/2,3.5,0,6.2832); ctx.globalAlpha=.85; ctx.fill(); ctx.stroke(); ctx.globalAlpha=1; }
+    }
+  }
+  ctx.restore();
+}
+/* poignée du cheminement sous le pointeur (écran) : coude {t:"v",i} ou milieu d'un tronçon {t:"m",i} (i = indice du coude à créer) */
+function routeHandle(a,p){
+  var ps=routeOf(a).map(function(q){ return w2s(q.X,q.Y); });
+  for(var k=1;k<ps.length-1;k++) if(Math.hypot(ps[k].x-p.x,ps[k].y-p.y)<=8) return {t:"v",i:k-1};
+  for(var m=1;m<ps.length;m++){ var u=ps[m-1], v=ps[m]; if(Math.hypot(u.x-v.x,u.y-v.y)<=30) continue;
+    if(Math.hypot((u.x+v.x)/2-p.x,(u.y+v.y)/2-p.y)<=7) return {t:"m",i:m-1}; }
+  return null;
+}
+/* le cheminement passe en tracé libre, avec ses coudes actuels */
+function routeFree(a){ var d=a.devAt.d; if(d.route!=="free"){ d.pts=routeOf(a).slice(1,-1); d.route="free"; } if(!d.pts) d.pts=[]; return d; }
+/* aimantation d'un coude : aligné à moins de 8 px sur le point précédent ou suivant ; Maj = angle droit sur le précédent */
+function alignPt(W,prev,next,shift){
+  var q={X:W.X,Y:W.Y}, tol=8/S.view.s;
+  if(shift&&prev){ if(Math.abs(q.X-prev.X)<Math.abs(q.Y-prev.Y)) q.X=prev.X; else q.Y=prev.Y; return q; }
+  [prev,next].forEach(function(r){ if(!r) return; if(Math.abs(q.X-r.X)<tol) q.X=r.X; if(Math.abs(q.Y-r.Y)<tol) q.Y=r.Y; });
+  return q;
 }
 /* contour d'une réservation, éventuellement décalée (dx,dy en m) */
 function outline(sh,dx,dy,col,dash,P,lw,fill){
@@ -1264,6 +1364,7 @@ function drawScene(tile){
       pill(nf(wq*k,2)+" × "+nf(hq*k,2)+" m  ·  "+qTxt(wq*hq*k*k,"m²"),rb.x,rb.y-20,ri.c); }
     ctx.restore(); }
   drawDraft(lv);
+  drawRouteDraft(lv);
 }
 function emptyStage(){
   var d=document.createElement("div"); d.className="drop";
@@ -1312,6 +1413,7 @@ function setTool(t){
   Array.prototype.forEach.call(document.querySelectorAll("#tools .tool"),function(b){ b.classList.toggle("on",b.dataset.tool===t); });
   cv.style.cursor = t==="pan"?"grab" : t==="select"?"default":"crosshair";
   if(t!=="meas") meas=null;
+  if(t!=="route") rdraft=null;
   if(draft&&(!isMtTool(t)||kindOfTool(t)!==draft.kind)) draft=null;
   snapAt=null;
   if(isMtTool(t)){ itemFor(kindOfTool(t)); S.selId=null; if(S.ui.lst!=="mt"&&!booting){ setListView("mt"); savePrefs(); } if(!booting) renderShapes(); }
@@ -1320,7 +1422,9 @@ function setTool(t){
   else if(t==="stamp") stampHint();
   else if(t==="org"){ hint("Cliquez le point de repère du plan — il devient l'origine (0,0) de ce niveau."); }
   else if(isMtTool(t)) draftHint();
-  else hint(t==="rect"?"Tracez le rectangle de la réservation.":t==="circle"?"Cliquez le centre puis tirez le rayon.":
+  else if(t==="route") routeHint();
+  else hint(t==="dev"?"Dévoiement : faites glisser la réservation jusqu'à sa nouvelle position (Maj : dans l'axe). Échap pour annuler.":
+       t==="rect"?"Tracez le rectangle de la réservation.":t==="circle"?"Cliquez le centre puis tirez le rayon.":
        t==="meas"?"Tirez entre deux points — Maj pour contraindre à l'horizontale ou la verticale.":
        t==="real"?"Faites glisser la réservation jusqu'à sa position réelle sur le plan.":"");
   Array.prototype.forEach.call(document.querySelectorAll("#obList .ob"),function(r){
@@ -1368,6 +1472,29 @@ cv.addEventListener("pointerdown",function(e){
     drag={m:"real",id:sh.id,dx:W.X-gx,dy:W.Y-gy};
     renderInsp(); draw(); return;
   }
+  /* dévoiement : la réservation glisse jusqu'à sa nouvelle position (un clic ailleurs l'y pose) */
+  if(S.tool==="dev"){
+    var sv=sel(); if(!sv||!onLevel(sv,lv.id)||!belowOn(sv,lv.id)){ setTool("select"); return; }
+    var av=at(sv,lv.id), c0v=centerOf(av), gxv=c0v.X, gyv=c0v.Y;
+    if(!inShape(av,W)){ gxv=W.X; gyv=W.Y; }
+    if(!sv.dev) sv.dev={};
+    var dv=sv.dev[lv.id]; if(!dv) dv=sv.dev[lv.id]={X:c0v.X,Y:c0v.Y,route:"xy"};
+    dv.X=r3(gxv); dv.Y=r3(gyv);
+    drag={m:"dmove",id:sv.id,dx:W.X-gxv,dy:W.Y-gyv,ox:c0v.X,oy:c0v.Y,fresh:true};
+    renderInsp(); draw(); return;
+  }
+  /* tracé du cheminement : un clic par coude, depuis l'arrivée du dessous */
+  if(S.tool==="route"){
+    if(e.button!==0) return;
+    var sr0=sel(), ar=sr0&&onLevel(sr0,lv.id)? at(sr0,lv.id) : null;
+    if(!ar||!ar.devAt){ setTool("select"); return; }
+    if(!rdraft||rdraft.id!==sr0.id||rdraft.lv!==lv.id) rdraft={id:sr0.id,lv:lv.id,pts:[]};
+    var rp=routeOf(ar), en=rp[rp.length-1], es=w2s(en.X,en.Y);
+    if(Math.hypot(es.x-p.x,es.y-p.y)<12||inShape(ar,W)){ finishRoute(); return; }   /* clic sur la nouvelle position : terminé */
+    var pv=rdraft.pts.length? rdraft.pts[rdraft.pts.length-1] : rp[0], q=alignPt(W,pv,en,e.shiftKey), a1=w2s(pv.X,pv.Y), a2=w2s(q.X,q.Y);
+    if(Math.hypot(a1.x-a2.x,a1.y-a2.y)<4){ draw(); return; }
+    rdraft.pts.push({X:r3(q.X),Y:r3(q.Y)}); routeHint(); draw(); return;
+  }
   if(S.tool==="org"){
     var q=w2p(lv,W.X,W.Y);
     keepView(lv,q,function(){ lv.org={x:q.x,y:q.y}; lv.rot=lv.rot||0; });
@@ -1407,6 +1534,9 @@ cv.addEventListener("pointerdown",function(e){
   if(s && onLevel(s,lv.id)){
     /* anomalie pointée : poignées rouges = dimensions réelles, intérieur = déplacer la position réelle */
     var sa=at(s,lv.id), so=obsOf(s,lv.id), rsh=(so&&so.st==="ko")?realShape(sa,so):null;
+    /* dévoiement : coudes du cheminement (tirer), milieux des tronçons (tirer pour ajouter un coude) */
+    var rh0=sa.devAt? routeHandle(sa,p) : null;
+    if(rh0){ drag={m:"rvtx",id:s.id,i:rh0.i,t:rh0.t}; return; }   /* le tracé devient libre au premier mouvement */
     if(rsh){
       var rh=handles(rsh);
       for(var j=0;j<rh.length;j++){
@@ -1415,7 +1545,7 @@ cv.addEventListener("pointerdown",function(e){
       }
       if(inShape(rsh,W)){ drag={m:"real",id:s.id,dx:W.X-so.real.X,dy:W.Y-so.real.Y,quiet:true}; return; }
     }
-    var hs=sa.from?[]:handles(s);
+    var hs=(sa.from||sa.devAt)?[]:handles(s);
     for(var i=0;i<hs.length;i++){
       if(Math.abs(hs[i].X-W.X)<tol && Math.abs(hs[i].Y-W.Y)<tol){
         drag={m:"size",id:s.id,i:hs[i].i,o:JSON.parse(JSON.stringify(s))}; return; }
@@ -1425,8 +1555,11 @@ cv.addEventListener("pointerdown",function(e){
   if(hit&&(e.ctrlKey||e.metaKey||e.shiftKey)){ toggleSel(hit.id); renderAll(); return; }   /* sélection multiple */
   if(hit){
     var ha=at(hit,lv.id); S.selId=hit.id; S.selM=null; S.msel=[];
+    /* niveau où la réservation est dévoyée : on déplace la position du dévoiement */
+    if(ha.devAt){ var hc=centerOf(ha); drag={m:"dmove",id:hit.id,dx:W.X-hc.X,dy:W.Y-hc.Y,ox:hc.X,oy:hc.Y}; renderAll(); return; }
     /* position reprise d'un niveau inférieur : on la corrige par un pointage, pas en déplaçant le projet */
-    if(ha.from){ renderAll(); if(hit.id!==(s&&s.id)) note("Position reprise de "+lvName(ha.from)+" — si elle est encore décalée ici : « Déplacer vers la position réelle »."); return; }
+    if(ha.from){ renderAll(); if(hit.id!==(s&&s.id)) note(ha.fromDev? "Position du dévoiement fait sur "+lvName(ha.from)+" — pour la changer, allez sur "+lvName(ha.from)+" ; pour dévoyer encore ici : Propriétés."
+      : "Position reprise de "+lvName(ha.from)+" — si elle est encore décalée ici : « Déplacer vers la position réelle »."); return; }
     drag={m:"move",id:hit.id,dx:W.X-hit.x,dy:W.Y-hit.y}; renderAll(); return; }
   var hm=pickMeas(lv,p);
   if(hm){
@@ -1462,10 +1595,29 @@ cv.addEventListener("pointermove",function(e){
   if(!drag){
     var lvc=active();
     if(isMtTool(S.tool)&&lvc){ if(S.tool!=="arect"&&pxm(lvc)){ var sq=snapPt(lvc,p,e.shiftKey); draftCur= draft? {x:sq.x,y:sq.y} : null; } draw(); }
-    else if(S.tool==="stamp") draw(); else status();
+    else if(S.tool==="stamp") draw();
+    else if(S.tool==="route"){ rShift=e.shiftKey; draw(); }
+    else status();
     return;
   }
   var W=cursor;
+  if(drag.m==="dmove"){
+    var sd=S.shapes.find(function(x){return x.id===drag.id;}), ld=active(), dd=sd&&ld? devOf(sd,ld.id) : null;
+    if(dd){ var nx=W.X-drag.dx, ny=W.Y-drag.dy;
+      if(e.shiftKey){ if(Math.abs(nx-drag.ox)>Math.abs(ny-drag.oy)) ny=drag.oy; else nx=drag.ox; }   /* Maj : dans l'axe */
+      dd.X=r3(nx); dd.Y=r3(ny); drag.moved=true; draw(); renderInsp(); }
+    return;
+  }
+  if(drag.m==="rvtx"){
+    var sv2=S.shapes.find(function(x){return x.id===drag.id;}), lv3=active(), av2=sv2&&lv3? at(sv2,lv3.id) : null;
+    if(av2&&av2.devAt){
+      if(!drag.moved){ var rq=routeOf(av2), d1=routeFree(av2);
+        if(drag.t==="m"){ var u0=rq[drag.i], v0=rq[drag.i+1]; d1.pts.splice(drag.i,0,{X:r3((u0.X+v0.X)/2),Y:r3((u0.Y+v0.Y)/2)}); } }
+      var PP=av2.devAt.d.pts;
+      var pv2= drag.i>0? PP[drag.i-1] : centerOf(av2.devAt.start), nx2= drag.i<PP.length-1? PP[drag.i+1] : centerOf(av2);
+      var q2=alignPt(W,pv2,nx2,e.shiftKey); PP[drag.i]={X:r3(q2.X),Y:r3(q2.Y)}; drag.moved=true; draw(); }
+    return;
+  }
   if(drag.m==="tap"){ if(Math.hypot(p.x-drag.x,p.y-drag.y)>8) drag={m:"pan",x:drag.x,y:drag.y,tx:drag.tx,ty:drag.ty}; else return; }
   if(drag.m==="arect"){ drag.b=W; draw(); return; }
   if(drag.m==="mvtx"){
@@ -1546,6 +1698,23 @@ function endPtr(e){
   if(!ptrs.size) setTimeout(function(){ if(!ptrs.size) ptTile=null; },0);
   if(!drag) return;
   if(drag.m==="cal"){ dockLine(true); drag=null; draw(); return; }
+  if(drag.m==="dmove"){
+    var sd=S.shapes.find(function(x){return x.id===drag.id;}), ld=active(), fresh=drag.fresh, mvd=drag.moved;
+    drag=null; if(S.tool==="dev") setTool("select");
+    if(sd&&ld&&devOf(sd,ld.id)){
+      var ad=at(sd,ld.id), len=Math.hypot(centerOf(ad).X-centerOf(ad.devAt.start).X,centerOf(ad).Y-centerOf(ad.devAt.start).Y);
+      if(len<.005){ delete sd.dev[ld.id]; if(!Object.keys(sd.dev).length) delete sd.dev;
+        if(fresh||mvd) note(fresh? "Position inchangée : pas de dévoiement." : "Revenue au droit de "+lvName(ad.devAt.below)+" : dévoiement supprimé."); }
+      else if(fresh) note("Dévoiement de "+mTxt(len)+" à partir de "+ld.name+" — ce n'est pas une anomalie. Choisissez le cheminement dans Propriétés, ou tirez le coude sur le plan.",6500);
+    }
+    renderAll(); if(fresh||mvd) save(); return;
+  }
+  if(drag.m==="rvtx"){
+    var sv3=S.shapes.find(function(x){return x.id===drag.id;}), lv4=active(), mv4=drag.moved; drag=null;
+    if(!mv4){ draw(); return; }
+    if(sv3&&lv4){ var a4=at(sv3,lv4.id); if(a4.devAt) a4.devAt.d.pts=routeOf(a4).slice(1,-1); }   /* coudes confondus : fusionnés */
+    renderAll(); save(); return;
+  }
   if(drag.m==="real"){
     var sr=S.shapes.find(function(x){return x.id===drag.id;}), lr=active(), quiet=drag.quiet&&!drag.moved;
     drag=null; setTool("select");
@@ -1583,7 +1752,7 @@ function endPtr(e){
 }
 cv.addEventListener("pointerup",endPtr);
 cv.addEventListener("pointercancel",endPtr);
-cv.addEventListener("dblclick",function(e){ if(draft){ e.preventDefault(); finishDraft(); } });
+cv.addEventListener("dblclick",function(e){ if(draft){ e.preventDefault(); finishDraft(); } else if(S.tool==="route"&&rdraft){ e.preventDefault(); finishRoute(); } });
 cv.addEventListener("pointerleave",function(){ if(snapAt||draftCur){ snapAt=null; draftCur=null; draw(); } });
 var spaceDown=false;
 cv.addEventListener("wheel",function(e){
@@ -1811,10 +1980,10 @@ function resRow(s){
   var el=document.createElement("div");
   el.className="res sub"+(picked(s.id)?" on":"")+(vis&&!s.hid?"":" hide");
   var nb=s.levels? s.levels.length : S.levels.length;
-  var ko=koCount(s);
+  var ko=koCount(s), dv=devCount(s);
   el.innerHTML='<span class="swatch" style="background:'+(ko?"#d8352a":colOf(s))+'"></span>'+
     '<div><div class="nm">'+esc(s.n)+(ko?' <span class="bad">'+ko+' anomalie'+(ko>1?'s':'')+'</span>':'')+'</div>'+
-    '<div class="dim">'+dimTxt(s)+' · '+nb+' niv.'+(s.hid?' · masquée':'')+'</div></div>'+
+    '<div class="dim">'+dimTxt(s)+' · '+nb+' niv.'+(dv?' · dévoyée'+(dv>1?' ×'+dv:''):'')+(s.hid?' · masquée':'')+'</div></div>'+
     '<div class="ra"><button class="btn ghost sm" data-eye title="'+(s.hid?"Afficher":"Masquer")+' la réservation">'+(s.hid?EYE_OFF:EYE)+'</button>'+
     '<button class="btn ghost sm" data-rm title="Supprimer">✕</button></div>';
   el.querySelector("[data-eye]").onclick=function(e){ e.stopPropagation(); var ids=picked(s.id)? mselIds() : [s.id]; setHidden(ids,!s.hid); };
@@ -1928,7 +2097,9 @@ function focusShape(s){
     if(!onLevel(s,l.id)||!ready(l)) return;
     var a=at(s,l.id), o=obsOf(s,l.id), list=[a];
     if(o&&o.st==="ko"&&o.real) list.push(realShape(a,o));
+    if(a.devAt) list.push(a.devAt.start);
     list.forEach(function(g){ corners(g).forEach(function(q){ X.push(q[0]); Y.push(q[1]); }); });
+    routeOf(a).forEach(function(q){ X.push(q.X); Y.push(q.Y); });
   });
   if(!X.length) corners(s).forEach(function(q){ X.push(q[0]); Y.push(q[1]); });
   var x0=Math.min.apply(null,X), x1=Math.max.apply(null,X), y0=Math.min.apply(null,Y), y1=Math.max.apply(null,Y);
@@ -1978,8 +2149,8 @@ function renderInsp(){
       S.types.map(function(t){ return '<option value="'+t.id+'"'+(t.id===s.ty?" selected":"")+'>'+esc(t.code+(t.name?" · "+t.name:""))+'</option>'; }).join("")+
     '</select></div>'+
     '<div class="row">'+
-      '<div class="fld"><label>X / repère (m)</label><input id="i_x" type="number" step="0.01" value="'+fmt(isR?s.x+s.w/2:s.x,2)+'"></div>'+
-      '<div class="fld"><label>Y / repère (m)</label><input id="i_y" type="number" step="0.01" value="'+fmt(isR?s.y+s.h/2:s.y,2)+'"></div>'+
+      '<div class="fld"><label>'+(devCount(s)?"X d'origine (m)":"X / repère (m)")+'</label><input id="i_x" type="number" step="0.01" value="'+fmt(isR?s.x+s.w/2:s.x,2)+'"></div>'+
+      '<div class="fld"><label>'+(devCount(s)?"Y d'origine (m)":"Y / repère (m)")+'</label><input id="i_y" type="number" step="0.01" value="'+fmt(isR?s.y+s.h/2:s.y,2)+'"></div>'+
     '</div>'+
     (isR?'<div class="row">'+
       '<div class="fld"><label>Largeur (cm)</label><input id="i_w" type="number" step="1" value="'+Math.round(s.w*100)+'"></div>'+
@@ -1992,9 +2163,9 @@ function renderInsp(){
       S.levels.map(function(l){ return '<button class="chip'+(onLevel(s,l.id)?" on":"")+'" data-id="'+l.id+'">'+
         (l.id===s.origin?"● ":"")+esc(l.name)+'</button>'; }).join("")+
     '</div></div>'+
-    stateBlock(s)+'</div>';
+    stateBlock(s)+devBlock(s)+'</div>';
 
-  bindState(box,s);
+  bindState(box,s); bindDev(box,s);
   function num(id){ var e=box.querySelector(id); return e?parseFloat(e.value):NaN; }
   box.querySelector("#i_n").oninput=function(){ s.n=this.value; renderShapes(); draw(); save(); };
   box.querySelector("#i_ly").onchange=function(){ s.ly=this.value; var L=layerOf(s); if(L){ L.vis=true; L.open=true; } renderAll(); save(); };
@@ -2083,14 +2254,64 @@ function copyAt(W){
   }
   var src=stampSrc(); if(!src) return null;
   var c=JSON.parse(JSON.stringify(src)); c.id=uid(); c.n=nextName(src.n); delete c.obs;
+  var o0=centerOf(c);
   if(c.t==="rect"){ c.x=W.X-c.w/2; c.y=W.Y-c.h/2; } else { c.x=W.X; c.y=W.Y; }
-  round(c); return c;
+  round(c); var o1=centerOf(c); shiftDev(c,o1.X-o0.X,o1.Y-o0.Y); return c;
 }
 function placeCopy(W){
   var c=copyAt(W); if(!c){ setTool("select"); return; }
   var m=c.n.match(/^RÉS\s+(\d+)$/i); if(m) S.seq=Math.max(S.seq,parseInt(m[1],10)+1);
   var L=layerOf(c); if(L) L.vis=true;
   S.shapes.push(c); S.selId=c.id; renderAll(); save(); stampHint();
+}
+/* ============ dévoiement : le réseau passe à l'horizontale, la réservation change de place à partir d'un niveau ============ */
+var rdraft=null, rShift=false;
+function startDev(s){ S.selId=s.id; S.selM=null; S.msel=[]; renderAll(); setTool("dev"); }
+function startRoute(s,lv){ S.selId=s.id; S.selM=null; S.msel=[]; rdraft={id:s.id,lv:lv.id,pts:[]}; setTool("route"); renderAll(); }
+/* anomalie pointée qui est en fait un dévoiement voulu : la position réelle devient la position prévue, l'anomalie disparaît */
+function toDev(s,lv){
+  var o=obsOf(s,lv.id); if(!o||!o.real) return;
+  var sa=at(s,lv.id), rs=realShape(sa,o), old=devOf(s,lv.id), d={X:r3(o.real.X),Y:r3(o.real.Y),route:old&&old.route||"xy"};
+  if(old&&old.pts) d.pts=old.pts;
+  if(rs.t==="rect"){ if(Math.round(rs.w*100)!==Math.round(s.w*100)) d.w=r3(rs.w); if(Math.round(rs.h*100)!==Math.round(s.h*100)) d.h=r3(rs.h); }
+  else if(Math.round(rs.r*200)!==Math.round(s.r*200)) d.r=r3(rs.r);
+  if(!s.dev) s.dev={}; s.dev[lv.id]=d; o.st=""; o.real=null; delete o.prop;
+  renderAll(); save();
+  note("Anomalie changée en dévoiement voulu sur "+lv.name+" : elle n'est plus comptée comme anomalie. Choisissez le cheminement dans Propriétés.",5000);
+}
+function removeDev(s,lv){
+  if(s.dev){ delete s.dev[lv.id]; if(!Object.keys(s.dev).length) delete s.dev; }
+  renderAll(); save(); note("Dévoiement supprimé : "+lv.name+" reprend la position du dessous.",3000);
+}
+function routeHint(){
+  var s=sel(), lv=active(), a=s&&lv&&onLevel(s,lv.id)? at(s,lv.id) : null;
+  var n=rdraft? rdraft.pts.length : 0, from=a&&a.devAt&&a.devAt.below? lvName(a.devAt.below) : "dessous";
+  hint("Cheminement depuis l'arrivée de "+from+" : un clic par coude"+(n?" ("+n+" posé"+(n>1?"s":"")+")":"")+
+    " — clic sur la nouvelle position ou Entrée pour finir · Maj : angle droit · Échap : annuler",true);
+}
+function finishRoute(){
+  var r=rdraft; rdraft=null;
+  var s=r&&S.shapes.find(function(x){ return x.id===r.id; }), d=s&&devOf(s,r.lv);
+  if(d){ d.route="free"; d.pts=r.pts.slice(); var a=at(s,r.lv); d.pts=routeOf(a).slice(1,-1); }
+  setTool("select"); renderAll();
+  if(d){ save(); note("Cheminement enregistré : "+mTxt(routeLen(routeOf(at(s,r.lv))))+(d.pts.length? ", "+plural(d.pts.length,"coude") : " en ligne droite")+". Tirez les coudes pour l'ajuster.",4000); }
+}
+/* tracé du cheminement en cours : coudes posés, tronçon sous le pointeur, fin vers la nouvelle position */
+function drawRouteDraft(lv){
+  if(S.tool!=="route"||!rdraft||rdraft.lv!==lv.id) return;
+  var s=S.shapes.find(function(x){ return x.id===rdraft.id; }); if(!s) return;
+  var a=at(s,lv.id); if(!a.devAt) return;
+  var rp=routeOf(a), st=rp[0], en=rp[rp.length-1], pts=[st].concat(rdraft.pts), last=pts[pts.length-1];
+  var cur=cursor? alignPt(cursor,last,en,rShift) : null, col=colOf(s);
+  var all=cur? pts.concat([cur]) : pts, ps=all.map(function(q){ return w2s(q.X,q.Y); }), e=w2s(en.X,en.Y);
+  ctx.save(); ctx.lineJoin="round"; ctx.lineCap="round";
+  ctx.beginPath(); ps.forEach(function(p,i){ if(i) ctx.lineTo(p.x,p.y); else ctx.moveTo(p.x,p.y); });
+  ctx.strokeStyle="rgba(255,255,255,.8)"; ctx.lineWidth=6; ctx.stroke(); ctx.strokeStyle=col; ctx.lineWidth=3; ctx.stroke();
+  var z=ps[ps.length-1]; ctx.setLineDash([5,5]); ctx.lineWidth=1.5; ctx.beginPath(); ctx.moveTo(z.x,z.y); ctx.lineTo(e.x,e.y); ctx.stroke(); ctx.setLineDash([]);
+  ctx.fillStyle="#fff"; ctx.strokeStyle=col; ctx.lineWidth=1.6;
+  ps.slice(1,cur?-1:undefined).forEach(function(p){ ctx.beginPath(); ctx.rect(p.x-4,p.y-4,8,8); ctx.fill(); ctx.stroke(); });
+  if(cur){ var c=ps[ps.length-1]; pill(mTxt(routeLen(all.concat([en]))),c.x,c.y-20,col); }
+  ctx.restore();
 }
 function stateBlock(s){
   var lv=active(); if(!lv) return "";
@@ -2099,13 +2320,14 @@ function stateBlock(s){
   var up=(o.st==="ko"&&o.real)? heirs(s,lv.id) : [];
   return '<div class="fld" style="border-top:1px dashed var(--line);padding-top:9px">'+
     '<label>État sur '+esc(lv.name)+'</label>'+
-    (sa.from?'<p class="inh">↳ Position attendue reprise de la correction pointée sur <b>'+esc(lvName(sa.from))+'</b> ('+
+    (sa.from&&!sa.fromDev?'<p class="inh">↳ Position attendue reprise de la correction pointée sur <b>'+esc(lvName(sa.from))+'</b> ('+
       dimTxt(sa)+', X '+fmt(centerOf(sa).X,2)+' · Y '+fmt(centerOf(sa).Y,2)+' m).</p>':'')+
     '<div class="st"><button id="s_ok" class="'+(o.st==="ok"?"ok":"")+'">Conforme</button>'+
     '<button id="s_ko" class="'+(o.st==="ko"?"ko":"")+'">Anomalie</button></div>'+
     '<input id="s_c" type="text" placeholder="observation (ex. décalée vers la file 2)" value="'+esc(o.c||"")+'" style="margin-top:6px">'+
     '<div class="qk" style="margin-top:6px"><button id="s_pt">⇢ Déplacer vers la position réelle</button>'+
-    (o.real?'<button id="s_rm">Effacer le pointage</button>':'')+'</div>'+
+    (o.real?'<button id="s_rm">Effacer le pointage</button>':'')+
+    (o.st==="ko"&&o.real&&belowOn(s,lv.id)?'<button id="s_dv" title="Le réseau a été dévoyé exprès : cette position devient la position prévue de ce niveau et des suivants">⤳ Dévoiement voulu, pas une anomalie</button>':'')+'</div>'+
     (ec?'<p style="margin:0;font-family:var(--f-num);font-size:11px;color:#d8352a">écart '+Math.round(ec.d*100)+' cm — ΔX '+
         (ec.dx>0?"+":"")+Math.round(ec.dx*100)+' cm, ΔY '+(ec.dy>0?"+":"")+Math.round(ec.dy*100)+' cm</p>':'')+
     (o.real?realDims(sa,o):'')+
@@ -2142,6 +2364,67 @@ function bindState(box,s){
       if(v>0&&o.real){ o.real[f[1]]=Math.round(v*1000)/1000; draw(); renderShapes(); save(); } };
   });
   var rm=box.querySelector("#s_rm"); if(rm) rm.onclick=function(){ var o=obs(s,lv.id); o.real=null; renderAll(); save(); };
+  var sdv=box.querySelector("#s_dv"); if(sdv) sdv.onclick=function(){ toDev(s,lv); };
+}
+/* Propriétés : dévoiement sur le niveau courant (nouvelle position voulue, cheminement au choix) */
+function devBlock(s){
+  var lv=active(); if(!lv||!onLevel(s,lv.id)) return "";
+  var a=at(s,lv.id), bl=belowOn(s,lv.id), mut='<p style="margin:0;font-size:11px;color:var(--muted)">';
+  var h='<div class="fld dvb"><label>Dévoiement sur '+esc(lv.name)+'</label>';
+  if(a.devAt){
+    var c=centerOf(a), c0=centerOf(a.devAt.start), dx=c.X-c0.X, dy=c.Y-c0.Y, pts=routeOf(a), r=a.devAt.d.route||"xy", eq=r==="xy"||r==="yx", up=heirs(s,lv.id);
+    h+='<p class="inh">Le réseau est dévoyé à l\'horizontale : à partir de ce niveau, la réservation est prévue ici. <b>Ce n\'est pas une anomalie.</b></p>'+
+      '<p class="dvn">décalage '+mTxt(Math.hypot(dx,dy))+' depuis '+esc(a.devAt.below?lvName(a.devAt.below):"le dessous")+' — ΔX '+cm(dx)+', ΔY '+cm(dy)+'</p>'+
+      '<div class="row"><div class="fld"><label>Nouveau X (m)</label><input id="d_x" type="number" step="0.01" value="'+fmt(c.X,2)+'"></div>'+
+      '<div class="fld"><label>Nouveau Y (m)</label><input id="d_y" type="number" step="0.01" value="'+fmt(c.Y,2)+'"></div></div>'+
+      (s.t==="rect"
+        ? '<div class="row"><div class="fld"><label>Largeur ici (cm)</label><input id="d_w" type="number" step="1" min="1" value="'+Math.round(a.w*100)+'"></div>'+
+          '<div class="fld"><label>Hauteur ici (cm)</label><input id="d_h" type="number" step="1" min="1" value="'+Math.round(a.h*100)+'"></div></div>'
+        : '<div class="row"><div class="fld"><label>Diamètre ici (cm)</label><input id="d_d" type="number" step="1" min="1" value="'+Math.round(a.r*200)+'"></div><div></div></div>')+
+      '<label style="margin-top:3px">Cheminement · '+mTxt(routeLen(pts))+(pts.length>2?' · '+plural(pts.length-2,"coude"):'')+'</label>'+
+      '<div class="seg" id="d_rt"><button data-r="eq" class="'+(eq?"on":"")+'" title="Deux tronçons à angle droit">Équerre</button>'+
+        '<button data-r="direct" class="'+(r==="direct"?"on":"")+'" title="En ligne droite, en biais">Droit</button>'+
+        '<button data-r="free" class="'+(r==="free"?"on":"")+'" title="Coudes choisis sur le plan">Libre</button></div>'+
+      '<div class="qk" style="margin-top:6px">'+(eq?'<button id="d_sw">⇄ Passer par l\'autre angle</button>':'')+
+        '<button id="d_tr">✎ Tracer le cheminement</button><button id="d_rm">Supprimer le dévoiement</button></div>'+
+      mut+'Sur le plan : tirez un coude (carré) pour le déplacer, un rond pour en ajouter ; clic droit sur un coude pour le supprimer.'+
+        (up.length?' Position reprise sur '+esc(up.join(", "))+'.':'')+'</p>';
+  }else if(a.from&&a.fromDev){
+    h+='<p class="inh">↳ Position du dévoiement fait sur <b>'+esc(lvName(a.from))+'</b> (pas une anomalie).</p>'+
+      '<div class="qk" style="margin-top:6px"><button id="d_go">⤳ Dévoyer encore à partir de ce niveau</button></div>';
+  }else if(bl){
+    h+='<div class="qk"><button id="d_go">⤳ Dévoyer à partir de ce niveau</button></div>'+
+      mut+'Le réseau passe à l\'horizontale depuis '+esc(bl.name)+' : la réservation change de place ici et aux niveaux du dessus, sans être une anomalie. Vous choisissez ensuite le cheminement.</p>';
+  }else return "";
+  return h+'</div>';
+}
+function bindDev(box,s){
+  var lv=active(); if(!lv) return;
+  var go=box.querySelector("#d_go"); if(go) go.onclick=function(){ startDev(s); };
+  var d=devOf(s,lv.id); if(!d||!box.querySelector("#d_rt")) return;
+  function num(id){ return parseFloat(box.querySelector(id).value); }
+  ["#d_x","#d_y"].forEach(function(id){ var el=box.querySelector(id);
+    el.oninput=function(){ var X=num("#d_x"), Y=num("#d_y"); if(isNaN(X)||isNaN(Y)) return; d.X=r3(X); d.Y=r3(Y); draw(); save(); };
+    el.onchange=function(){ renderInsp(); }; });
+  /* dimensions à partir de ce niveau : gardées seulement si elles diffèrent du projet */
+  [["#d_w","w",100,s.w],["#d_h","h",100,s.h],["#d_d","r",200,s.r]].forEach(function(f){
+    var el=box.querySelector(f[0]); if(!el) return;
+    el.oninput=function(){ var v=parseFloat(this.value)/f[2]; if(!(v>0)) return;
+      if(Math.round(v*f[2])===Math.round(f[3]*f[2])) delete d[f[1]]; else d[f[1]]=r3(v);
+      draw(); renderShapes(); save(); };
+  });
+  box.querySelector("#d_rt").addEventListener("click",function(e){
+    var b=e.target.closest("button"); if(!b) return;
+    var r=b.dataset.r;
+    if(r==="eq") d.route= d.route==="yx"? "yx" : "xy";
+    else if(r==="free"){ if(d.route==="free") return;
+      if(d.pts&&d.pts.length) d.route="free"; else routeFree(at(s,lv.id));   /* reprend le tracé libre précédent, sinon le cheminement actuel */
+      note("Tracé libre : tirez les coudes sur le plan, ou « Tracer le cheminement » pour le redessiner.",3500); }
+    else d.route=r;
+    renderAll(); save(); });
+  var sw=box.querySelector("#d_sw"); if(sw) sw.onclick=function(){ d.route= d.route==="yx"? "xy" : "yx"; renderAll(); save(); };
+  box.querySelector("#d_tr").onclick=function(){ startRoute(s,lv); };
+  box.querySelector("#d_rm").onclick=function(){ removeDev(s,lv); };
 }
 function renderLists(){ renderShapes(); renderMetre(); }
 function renderAll(){ ordLabel(); renderLevels(); renderUnder(); renderLists(); renderInsp(); renderNav(); draw(); }
@@ -2380,12 +2663,12 @@ function annotate(info,l,rows,F,title,Tz,scaleLine,opt){
   }
 
   /* cartouche */
-  var kos=rows.filter(function(r){ return r.ko; }).length;
+  var kos=rows.filter(function(r){ return r.ko; }).length, devs=rows.filter(function(r){ return r.sh.devAt; }).length;
   var head=[{t:win(l.name+" — contrôle des réservations"),b:1,s:Tz*HEAD_S[0]},
     {t:win([title,today()].filter(Boolean).join("  ·  ")),s:Tz*HEAD_S[1],c:GREY},
     {t:win(scaleLine),b:1,s:Tz*HEAD_S[2]},
-    {t:win(rows.length+" réservation(s)  ·  "+kos+" anomalie(s)"),b:1,s:Tz*HEAD_S[3],c:kos?RED:L.rgb(0,0,0)},
-    {t:win("Trait plein : position attendue  ·  Pointillé rouge : position réelle"),s:Tz*HEAD_S[4],c:GREY},
+    {t:win(rows.length+" réservation(s)  ·  "+kos+" anomalie(s)"+(devs?"  ·  "+devs+" dévoiement(s)":"")),b:1,s:Tz*HEAD_S[3],c:kos?RED:L.rgb(0,0,0)},
+    {t:win("Trait plein : position attendue  ·  Pointillé rouge : position réelle"+(devs?"  ·  Trait épais fléché : dévoiement prévu (pas une anomalie)":"")),s:Tz*HEAD_S[4],c:GREY},
     {t:win("Écart X + vers la droite, Y + vers le bas du plan"),s:Tz*HEAD_S[5],c:GREY}];
   /* le cartouche va dans un bandeau ajouté au-dessus du plan : rien du plan n'est masqué */
   var hm=measure(head), hb={x:Tz*.6,y:Hd+Tz*.6,w:hm.w,h:hm.h};
@@ -2397,7 +2680,17 @@ function annotate(info,l,rows,F,title,Tz,scaleLine,opt){
   /* contours : projet d'origine (si correction reprise), position attendue, position réelle */
   rows.forEach(function(r){
     var c=col(colOf(r.orig));
-    if(r.sh.from) shape(r.orig,{color:GREY,fill:undefined,op:0,width:lw*.6,dash:[lw*2,lw*2]});
+    if(r.sh.des) shape(r.sh.des,{color:GREY,fill:undefined,op:0,width:lw*.6,dash:[lw*2,lw*2]});
+    if(r.sh.devAt){
+      /* dévoiement : arrivée du dessous en filigrane, cheminement fléché jusqu'à la nouvelle position */
+      shape(r.sh.devAt.start,{color:GREY,fill:undefined,op:0,width:lw*.6,dash:[lw*2,lw*2]});
+      var rp=routeOf(r.sh), tp=rp.map(function(q){ return td(q.X,q.Y); });
+      if(tp.length>1){
+        page.drawSvgPath("M "+tp.map(function(q){ return q.x.toFixed(2)+" "+q.y.toFixed(2); }).join(" L "),
+          {x:0,y:Hd,borderColor:c,borderWidth:lw*2.2,borderOpacity:1,borderLineCap:L.LineCapStyle.Round});
+        arrow(bu(rp[rp.length-2].X,rp[rp.length-2].Y),bu(rp[rp.length-1].X,rp[rp.length-1].Y),c,lw*2.2);
+      }
+    }
     shape(r.sh,{color:c,fill:c,op:.15,width:lw});
     if(r.ko&&r.o.real) shape(realShape(r.sh,r.o),{color:RED,fill:RED,op:.12,width:lw*1.1,dash:[lw*4,lw*2.5]});
   });
@@ -2410,11 +2703,22 @@ function annotate(info,l,rows,F,title,Tz,scaleLine,opt){
     if(Math.abs(R.Y-C.Y)>=.005) arrow(m,b,RED,lw*.9);
     page.drawCircle({x:a.x,y:a.y,size:lw*1.3,color:RED});
   });
+  /* longueur des dévoiements, sur le plus long tronçon du cheminement */
+  rows.forEach(function(r){
+    if(!r.sh.devAt) return;
+    var rp=routeOf(r.sh); if(rp.length<2) return;
+    var bi=1, bl=-1; for(var j=1;j<rp.length;j++){ var dl=Math.hypot(rp[j].X-rp[j-1].X,rp[j].Y-rp[j-1].Y); if(dl>bl){ bl=dl; bi=j; } }
+    var m=bu((rp[bi].X+rp[bi-1].X)/2,(rp[bi].Y+rp[bi-1].Y)/2), c=col(colOf(r.orig));
+    var t=win("dévoiement "+mTxt(routeLen(rp))+(r.sh.devAt.below?" depuis "+lvName(r.sh.devAt.below):"")), sz=Tz*.72, w=F.b.widthOfTextAtSize(t,sz)+pad, h=sz*1.4;
+    var b=place(w,h,m.x,m.y,1,1,Tz*.5);
+    page.drawRectangle({x:b.x,y:b.y,width:b.w,height:b.h,color:WHITE,opacity:.88,borderColor:c,borderWidth:lw*.6});
+    page.drawText(t,{x:b.x+pad/2,y:b.y+sz*.38,size:sz,font:F.b,color:c});
+  });
   /* noms des réservations conformes ou non contrôlées */
   rows.forEach(function(r){
     if(r.ko) return;
     var s=r.sh, tl=bu(s.t==="rect"?s.x:s.x-s.r, s.t==="rect"?s.y:s.y-s.r);
-    var t=win(s.n+(s.from?" (repris de "+lvName(s.from)+")":"")), sz=Tz*.7, w=F.b.widthOfTextAtSize(t,sz)+pad, h=sz*1.3;
+    var t=win(s.n+(s.devAt?" (dévoyée)":s.from?(s.fromDev?" (dévoiement de ":" (repris de ")+lvName(s.from)+")":"")), sz=Tz*.7, w=F.b.widthOfTextAtSize(t,sz)+pad, h=sz*1.3;
     var b={x:Math.min(Math.max(BX+BM,tl.x),BW-w-BM), y:Math.min(tl.y+lw,BH-h-BM), w:w, h:h};
     page.drawRectangle({x:b.x,y:b.y,width:b.w,height:b.h,color:WHITE,opacity:.8});
     page.drawText(t,{x:b.x+pad/2,y:b.y+sz*.3,size:sz,font:F.b,color:col(colOf(r.orig))});
@@ -2429,7 +2733,8 @@ function annotate(info,l,rows,F,title,Tz,scaleLine,opt){
     else lines.push({t:win("position réelle non pointée"),s:Tz*.8,c:RED});
     if(rs&&dimsChanged(s,o)) lines.push({t:win("réel "+dimTxt(rs)+"  (prévu "+dimTxt(s)+")"),s:Tz*.8});
     if(o.c) wrap(o.c,F.r,Tz*.8,Tz*24).slice(0,3).forEach(function(t){ lines.push({t:t,s:Tz*.8}); });
-    if(s.from) lines.push({t:win("position attendue reprise de "+lvName(s.from)),s:Tz*.72,c:GREY});
+    if(s.devAt) lines.push({t:win("position prévue : dévoiement sur ce niveau"),s:Tz*.72,c:GREY});
+    else if(s.from) lines.push({t:win((s.fromDev?"position du dévoiement de ":"position attendue reprise de ")+lvName(s.from)),s:Tz*.72,c:GREY});
     var anchor=rs? bu(centerOf(rs).X,centerOf(rs).Y) : bu(centerOf(s).X,centerOf(s).Y);
     var px=ec&&ec.dx<0?-1:1, py=ec&&ec.dy>0?-1:1, mz=measure(lines);
     var b=place(mz.w,mz.h,anchor.x,anchor.y,px,py,Tz*2.5);
@@ -2517,9 +2822,12 @@ function resList(pick){
 /* emprise de la réservation sur un niveau (attendue, réelle, projet d'origine), en points du niveau, bas → haut */
 function resBox(sh,l,base){
   var k=base.k, xs=[], ys=[], sa=at(sh,l.id), o=obsOf(sh,l.id), list=[sa];
-  if(sa.from) list.push(sh);
+  if(sa.des) list.push(sa.des);
+  if(sa.devAt) list.push(sa.devAt.start);
   if(o&&o.st==="ko"&&o.real) list.push(realShape(sa,o));
-  list.forEach(function(s){ corners(s).forEach(function(q){ var p=w2p(l,q[0],q[1]); xs.push(p.x*k); ys.push(base.Hd-p.y*k); }); });
+  function add(X,Y){ var p=w2p(l,X,Y); xs.push(p.x*k); ys.push(base.Hd-p.y*k); }
+  list.forEach(function(s){ corners(s).forEach(function(q){ add(q[0],q[1]); }); });
+  routeOf(sa).forEach(function(q){ add(q.X,q.Y); });
   var x0=Math.min.apply(null,xs), x1=Math.max.apply(null,xs), y0=Math.min.apply(null,ys), y1=Math.max.apply(null,ys);
   return {cx:(x0+x1)/2, cy:(y0+y1)/2, w:x1-x0, h:y1-y0};
 }
@@ -2588,7 +2896,8 @@ function exportByRes(fmt,ori,pick,prog){
         var o=obsOf(sh,l.id), sa=at(sh,l.id), ec=o&&o.st==="ko"? ecart(sa,o) : null;
         var st= o&&o.st==="ko"? (ec?"Anomalie — écart "+Math.round(ec.d*100)+" cm (X "+cm(ec.dx)+", Y "+cm(ec.dy)+")":"Anomalie — position réelle non pointée")
               : o&&o.st==="ok"? "Conforme" : "Non contrôlée";
-        if(sa.from) st+="  ·  position reprise de "+lvName(sa.from);
+        if(sa.devAt) st+="  ·  dévoiement "+mTxt(routeLen(routeOf(sa)))+(sa.devAt.below?" depuis "+lvName(sa.devAt.below):"");
+        else if(sa.from) st+=(sa.fromDev?"  ·  position du dévoiement de ":"  ·  position reprise de ")+lvName(sa.from);
         page.drawText(fitTxt(l.name,F.b,10.5,g.pw),{x:px,y:yTop-11,size:10.5,font:F.b,color:BLACK});
         page.drawText(fitTxt(st,F.r,8,g.pw),{x:px,y:yTop-22,size:8,font:F.r,color:o&&o.st==="ko"?RED:o&&o.st==="ok"?GREEN:GREY});
         /* plan d'origine recadré, zoomé, avec la seule réservation annotée */
@@ -2760,14 +3069,15 @@ function exportResCsv(pick){
   var lvs=levelsUp(), list=S.shapes.filter(function(s){ return !pick||pick.has(s.id); });
   if(!list.length) return Promise.reject(new Error("aucune réservation cochée"));
   var rows=[["Chantier",S.title||""],["Édité le",today()],[],
-    ["Réservation","Calque","Objet","Forme","Dimensions prévues","X repère (m)","Y repère (m)","Niveau","État","Écart (cm)","Écart X (cm)","Écart Y (cm)","Dimensions réelles","Position reprise de","Observation"]];
+    ["Réservation","Calque","Objet","Forme","Dimensions prévues","X repère (m)","Y repère (m)","Niveau","État","Écart (cm)","Écart X (cm)","Écart Y (cm)","Dimensions réelles","Position reprise de","Dévoiement (m)","Observation"]];
   list.forEach(function(s){
     var ly=layerOf(s), ty=s.ty&&typeOf(s.ty);
     lvs.filter(function(l){ return onLevel(s,l.id); }).forEach(function(l){
       var sa=at(s,l.id), o=obsOf(s,l.id), ec=o&&o.st==="ko"? ecart(sa,o) : null, c=centerOf(sa), rs=o&&o.real? realShape(sa,o) : null;
       rows.push([s.n,ly?ly.name:"",ty?ty.code:"",s.t==="rect"?"Rectangulaire":"Ronde",dimTxt(sa),Math.round(c.X*100)/100,Math.round(c.Y*100)/100,l.name,
         o&&o.st==="ok"?"Conforme":o&&o.st==="ko"?"Anomalie":"Non contrôlée", ec?Math.round(ec.d*100):"", ec?Math.round(ec.dx*100):"", ec?Math.round(ec.dy*100):"",
-        rs&&dimsChanged(sa,o)?dimTxt(rs):"", sa.from?lvName(sa.from):"", o&&o.c||""]);
+        rs&&dimsChanged(sa,o)?dimTxt(rs):"", sa.from?lvName(sa.from)+(sa.fromDev?" (dévoiement)":""):"",
+        sa.devAt?Math.round(routeLen(routeOf(sa))*100)/100:"", o&&o.c||""]);
     });
   });
   return Promise.resolve(download(csvText(rows),"text/csv;charset=utf-8",fname("Reservations").replace(/\.pdf$/,".csv")));
@@ -3013,6 +3323,10 @@ document.addEventListener("keydown",function(e){
   }
   if(e.altKey) return;
   if(draft&&e.key==="Enter"){ e.preventDefault(); finishDraft(); return; }
+  if(S.tool==="route"&&rdraft){
+    if(e.key==="Enter"){ e.preventDefault(); finishRoute(); return; }
+    if(e.key==="Backspace"||e.key==="Delete"){ e.preventDefault(); rdraft.pts.pop(); routeHint(); draw(); return; }
+  }
   if(draft&&(e.key==="Backspace"||e.key==="Delete")){ e.preventDefault(); draft.pts.pop(); if(!draft.pts.length) draft=null; draftHint(); draw(); return; }
   if(e.key==="Escape"){
     closeMenu();
@@ -3049,7 +3363,9 @@ function levelStep(dir){
 /* décalage au clavier : 1 cm, 10 cm avec Maj */
 function nudge(key,big){
   var d=big?.10:.01, dx=key==="ArrowLeft"?-d:key==="ArrowRight"?d:0, dy=key==="ArrowUp"?-d:key==="ArrowDown"?d:0;
-  var s=sel(); if(s){ s.x+=dx; s.y+=dy; round(s); renderAll(); save(); return true; }
+  var s=sel(), lvn=active();
+  if(s&&lvn&&onLevel(s,lvn.id)&&devOf(s,lvn.id)){ var dn=devOf(s,lvn.id); dn.X=r3(dn.X+dx); dn.Y=r3(dn.Y+dy); renderAll(); save(); return true; }   /* niveau dévoyé : on décale le dévoiement */
+  if(s){ s.x+=dx; s.y+=dy; round(s); renderAll(); save(); return true; }
   var m=selM(), lv=m&&lvById(m.lv);
   if(m&&lv){ var o=w2p(lv,0,0), q, sc=ready(lv)? 1 : (pxm(lv)||1);
     q=w2p(lv,dx*sc,dy*sc); m.pts.forEach(function(p){ p.x+=q.x-o.x; p.y+=q.y-o.y; }); renderAll(); save(); return true; }
@@ -3079,7 +3395,7 @@ function paste(at){
     var cc=centerOf(c), tx=W? W.X : cc.X+.5, ty=W? W.Y : cc.Y+.5;
     if(c.t==="rect"){ c.x=tx-c.w/2; c.y=ty-c.h/2; } else { c.x=tx; c.y=ty; }
     if(!onLevel(c,lv.id)){ c.levels=idsFrom(lv.id,true); c.origin=lv.id; }
-    round(c); S.shapes.push(c); S.selId=c.id; S.selM=null; var L=layerOf(c); if(L) L.vis=true;
+    round(c); var cn=centerOf(c); shiftDev(c,cn.X-cc.X,cn.Y-cc.Y); S.shapes.push(c); S.selId=c.id; S.selM=null; var L=layerOf(c); if(L) L.vis=true;
     renderAll(); save(); note("« "+c.n+" » collée.",1600); return;
   }
   var src=lvById(clip.d.lv), m=JSON.parse(JSON.stringify(clip.d)); m.id=uid(); m.lv=lv.id;
@@ -3101,6 +3417,12 @@ function resMenuItems(s,lv){
     it.push({t:"Conforme sur "+lv.name,i:"ok",on:!!(o&&o.st==="ok"),fn:function(){ setObs(s,lv,"ok"); }});
     it.push({t:"Anomalie sur "+lv.name,i:"ko",on:!!(o&&o.st==="ko"),fn:function(){ setObs(s,lv,"ko"); }});
     it.push({t:"Déplacer vers la position réelle",i:"move",fn:function(){ S.selId=s.id; S.selM=null; renderAll(); setTool("real"); }});
+    var ad=at(s,lv.id);
+    if(o&&o.st==="ko"&&o.real&&belowOn(s,lv.id)) it.push({t:"Dévoiement voulu, pas une anomalie",i:"dev",fn:function(){ toDev(s,lv); }});
+    if(ad.devAt){
+      it.push({t:"Tracer le cheminement du dévoiement",i:"dev",fn:function(){ startRoute(s,lv); }});
+      it.push({t:"Supprimer le dévoiement",i:"minus",fn:function(){ removeDev(s,lv); }});
+    }else if(belowOn(s,lv.id)) it.push({t:"Dévoyer à partir de ce niveau",i:"dev",fn:function(){ startDev(s); }});
     it.push("-");
   }
   it.push({t:"Dupliquer (tampon)",i:"stamp",k:kk("Ctrl+D"),fn:function(){ S.selId=s.id; startStamp(s); }});
@@ -3135,7 +3457,18 @@ function canvasMenu(cx,cy,p){
   var lv=active(); if(!lv) return;
   if(draft){ finishDraft(); return; }                 /* clic droit pendant un tracé : terminer */
   if(S.tool==="stamp"){ setTool("select"); return; }  /* fin de la pose en série */
+  if(S.tool==="route"){ finishRoute(); return; }      /* fin du tracé du cheminement */
+  if(S.tool==="dev"){ setTool("select"); return; }
   var W=s2w(p.x,p.y), items;
+  /* coude du cheminement d'un dévoiement */
+  var sR=sel(), aR=sR&&onLevel(sR,lv.id)&&ready(lv)? at(sR,lv.id) : null, rv=aR&&aR.devAt? routeHandle(aR,p) : null;
+  if(rv&&rv.t==="v"){
+    openMenu(cx,cy,[{h:"Cheminement de "+sR.n},
+      {t:"Supprimer ce coude",i:"minus",fn:function(){ var d=routeFree(aR); d.pts.splice(rv.i,1); renderAll(); save(); }},
+      {t:"Retracer le cheminement",i:"dev",fn:function(){ startRoute(sR,lv); }},
+      {t:"Cheminement en équerre",i:"dev",fn:function(){ aR.devAt.d.route="xy"; renderAll(); save(); }}]);
+    return;
+  }
   var ms=selM(), vtx=null;
   if(ms&&ms.lv===lv.id){ var h=measHandle(lv,ms,p); if(h&&h.t==="v") vtx=h.i; }
   var hr= vtx==null&&ready(lv)? pick(W,lv) : null, hm= vtx!=null? ms : pickMeas(lv,p);
@@ -3189,6 +3522,9 @@ function openHelp(){
       row("Surface (polygone)","S")+row("Surface rectangulaire","Maj+S")+row("Linéaire","L")+row("Comptage","N")+row("Mesurer une distance","M")+row("Échelle du plan","E")+row("Repère 0,0","P")+
     '<h4>Pendant un tracé de métré</h4>'+row("Poser un point","Clic")+row("Terminer","Double-clic / Entrée")+row("Fermer la surface","Clic sur le 1er point")+row("Enlever le dernier point","Retour arrière")+
       row("Angles droits / 45°","Maj")+row("Terminer (menu)","Clic droit")+row("Abandonner","Échap")+row("Aimantation","sommets existants")+
+    '<h4>Dévoiement d\'un réseau</h4>'+row("Dévoyer à partir du niveau courant","Clic droit / Propriétés")+row("Nouvelle position dans l\'axe","Maj")+
+      row("Tracer le cheminement : poser un coude","Clic")+row("Terminer le cheminement","Entrée / Double-clic")+row("Coude à angle droit","Maj")+
+      row("Déplacer / ajouter un coude","Tirer le carré / le rond")+
     '<h4>Édition</h4>'+row("Annuler","Ctrl+Z")+row("Rétablir","Ctrl+Maj+Z / Ctrl+Y")+row("Copier / Coller sous le pointeur","Ctrl+C / Ctrl+V")+row("Couper","Ctrl+X")+
       row("Tout sélectionner","Ctrl+A")+row("Ajouter / retirer de la sélection","Ctrl+clic / Maj+clic")+
       row("Dupliquer","Ctrl+D")+row("Supprimer","Suppr")+row("Décaler de 1 cm (10 cm)","Flèches / Maj")+row("Désélectionner, quitter l'outil","Échap")+
