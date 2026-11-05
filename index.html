@@ -1119,6 +1119,24 @@ function idsFrom(id,up){   /* niveaux à partir de id, vers le haut ou vers le b
   var i=lvIndex(id); if(i<0) return null;
   return ((up===S.asc)? S.levels.slice(i) : S.levels.slice(0,i+1)).map(function(l){ return l.id; });
 }
+/* ajoute le niveau id à la réservation, avec les niveaux intermédiaires pour que le réseau reste continu */
+function extendTo(sh,id){
+  if(onLevel(sh,id)) return false;
+  var t=lvIndex(id), on=S.levels.map(function(l,i){ return onLevel(sh,l.id)? i : -1; }).filter(function(i){ return i>=0; });
+  var near=on.length? on.reduce(function(a,b){ return Math.abs(b-t)<Math.abs(a-t)? b : a; }) : t;
+  for(var i=Math.min(near,t);i<=Math.max(near,t);i++){ var lid=S.levels[i].id; if(sh.levels.indexOf(lid)<0) sh.levels.push(lid); }
+  if(sh.levels.length>=S.levels.length) sh.levels=null;
+  return true;
+}
+function setLevels(list,q,base){
+  list.forEach(function(sh){
+    if(q==="up") sh.levels=idsFrom(base,true);
+    else if(q==="dn") sh.levels=idsFrom(base,false);
+    else if(q==="one") sh.levels=[base];
+    else if(q==="add") extendTo(sh,base);
+    else sh.levels=null;
+  });
+}
 function corners(sh){
   if(sh.t==="rect") return [[sh.x,sh.y],[sh.x+sh.w,sh.y],[sh.x+sh.w,sh.y+sh.h],[sh.x,sh.y+sh.h]];
   return [[sh.x-sh.r,sh.y-sh.r],[sh.x+sh.r,sh.y-sh.r],[sh.x+sh.r,sh.y+sh.r],[sh.x-sh.r,sh.y+sh.r]];
@@ -2196,11 +2214,7 @@ function renderInsp(){
   box.querySelector("#i_q").addEventListener("click",function(e){
     var b=e.target.closest("button"); if(!b) return;
     var base=S.activeId||(s.origin||(S.levels[0]&&S.levels[0].id));
-    if(b.dataset.q==="up") s.levels=idsFrom(base,true);
-    else if(b.dataset.q==="dn") s.levels=idsFrom(base,false);
-    else if(b.dataset.q==="one") s.levels=[base];
-    else s.levels=null;
-    renderAll(); save();
+    setLevels([s],b.dataset.q,base); renderAll(); save();
   });
   box.querySelector("#i_lv").addEventListener("click",function(e){
     var b=e.target.closest(".chip"); if(!b) return;
@@ -2223,11 +2237,19 @@ function renderMultiInsp(box,ids){
       '<button class="btn sm" id="m_del" style="margin-left:auto;color:var(--accent)">Supprimer…</button></div>'+
     '<div class="fld"><label>Ranger dans le calque</label><select id="m_ly"><option value="">—</option>'+
       S.layers.map(function(l){ return '<option value="'+l.id+'">'+esc(l.name)+'</option>'; }).join("")+'</select></div>'+
+    '<div class="fld"><label>Niveaux concernés · par rapport à '+esc((active()||{}).name||"")+'</label><div class="qk" id="m_q">'+
+      '<button data-q="add">+ Ajouter ce niveau</button><button data-q="up">↑ Ce niveau et au-dessus</button><button data-q="dn">↓ Ce niveau et en dessous</button>'+
+      '<button data-q="one">Seul</button><button data-q="all">Tous</button></div></div>'+
     '<div class="picks" style="max-height:260px">'+list.map(function(s){
       return '<label style="padding-left:8px"><span class="swatch" style="background:'+colOf(s)+'"></span>'+esc(s.n)+(s.hid?' <small style="color:var(--muted)">(masquée)</small>':'')+'</label>'; }).join("")+'</div>'+
     '<p style="margin:0;font-size:11.5px;color:var(--muted)">Ctrl+clic ou Maj+clic (plan ou liste) pour ajouter / retirer · Échap pour désélectionner.</p>'+
     '<button class="btn sm" id="m_none">Désélectionner</button></div>';
   box.querySelector("#m_hide").onclick=function(){ setHidden(ids,true); };
+  box.querySelector("#m_q").addEventListener("click",function(e){
+    var b=e.target.closest("[data-q]"), lv=active(); if(!b||!lv) return;
+    setLevels(list,b.dataset.q,lv.id); renderAll(); save();
+    note(plural(list.length,"réservation","réservations")+" : "+b.textContent.replace(/^[+↑↓] /,"").toLowerCase()+(b.dataset.q==="all"?" les niveaux":" ("+lv.name+")")+".",2600);
+  });
   box.querySelector("#m_show").onclick=function(){ setHidden(ids,false); };
   box.querySelector("#m_ly").onchange=function(){ var L=S.layers.find(function(l){ return l.id===this.value; },this); if(!L) return;
     list.forEach(function(s){ s.ly=L.id; }); L.vis=true; renderAll(); save(); note(plural(list.length,"réservation rangée","réservations rangées")+" dans « "+L.name+" ».",2400); };
@@ -3317,8 +3339,16 @@ function openExport(force){
       var zs=zoneSheet(sf.value,so.value,zl.length,zoneNeed(zl,z)), pc=pick();
       var vis=S.shapes.filter(function(s){ return zl.some(function(l){ return inZone(s,l,z); }); });
       var nIn=vis.filter(function(s){ return shown(s)&&pc.has(s.id); }).length, nH=vis.filter(function(s){ return !shown(s); }).length;
+      /* réservations de la zone absentes d'un des niveaux choisis : à l'écran elles y sont en pointillé, mais ne sortent pas */
+      var miss=vis.filter(function(s){ return shown(s)&&pc.has(s.id)&&zl.some(function(l){ return !onLevel(s,l.id); }); });
+      var mTxt2= miss.length? "<br><span style=\"color:var(--accent)\"><b>Pas sur tous les niveaux choisis</b> : "+miss.slice(0,6).map(function(s){
+          return esc(s.n)+" (absente de "+esc(zl.filter(function(l){ return !onLevel(s,l.id); }).map(function(l){ return l.name; }).join(", "))+")"; }).join(" · ")+(miss.length>6?" …":"")+
+        "</span><br><button class=\"btn sm\" id=\"r_zall\" style=\"margin-top:4px\">Les reporter sur tous les niveaux choisis</button>" : "";
       sc.innerHTML=plural(nIn,"réservation exportée","réservations exportées")+" dans la zone"+(nH?" · <b>"+plural(nH,"masquée","masquées")+", non exportée"+(nH>1?"s":"")+"</b>":"")+
-        "<br>Échelle à l'impression <b>"+esc(ratioTxt(zs.g.N))+"</b> — "+esc(zs.t.name)+", "+zs.g.c+" × "+zs.g.r+" vue"+(zl.length>1?"s":"")+". Étiquettes imprimées à 9 pt.";
+        "<br>Échelle à l'impression <b>"+esc(ratioTxt(zs.g.N))+"</b> — "+esc(zs.t.name)+", "+zs.g.c+" × "+zs.g.r+" vue"+(zl.length>1?"s":"")+". Étiquettes imprimées à 9 pt."+mTxt2;
+      var za=sc.querySelector("#r_zall");
+      if(za) za.onclick=function(){ miss.forEach(function(s){ zl.forEach(function(l){ extendTo(s,l.id); }); }); renderAll(); save(); preview();
+        note(plural(miss.length,"réservation reportée","réservations reportées")+" sur "+zl.map(function(l){ return l.name; }).join(", ")+".",3000); };
       return;
     }
     if(res){
@@ -3581,6 +3611,13 @@ function setObs(s,lv,st){ var o=obs(s,lv.id); o.st=(o.st===st?"":st); renderAll(
 function resMenuItems(s,lv){
   var o=lv&&onLevel(s,lv.id)? obsOf(s,lv.id) : null, here=lv&&onLevel(s,lv.id);
   var it=[{h:s.n+" · "+dimTxt(s)}];
+  var grp0=picked(s.id)&&mselIds().length>1? S.shapes.filter(function(x){ return mselIds().indexOf(x.id)>=0&&!onLevel(x,lv.id); }) : [s];
+  if(lv&&!here){
+    it.push({t:(grp0.length>1?"Reporter les "+grp0.length+" sélectionnées sur ":"Reporter aussi sur ")+lv.name,i:"ok",fn:function(){
+      grp0.forEach(function(x){ extendTo(x,lv.id); }); renderAll(); save();
+      note((grp0.length>1? plural(grp0.length,"réservation reportée","réservations reportées") : s.n+" reportée")+" sur "+lv.name+" — elle sort maintenant dans les exports de ce niveau.",3200); }});
+    it.push("-");
+  }
   if(here){
     it.push({t:"Conforme sur "+lv.name,i:"ok",on:!!(o&&o.st==="ok"),fn:function(){ setObs(s,lv,"ok"); }});
     it.push({t:"Anomalie sur "+lv.name,i:"ko",on:!!(o&&o.st==="ko"),fn:function(){ setObs(s,lv,"ko"); }});

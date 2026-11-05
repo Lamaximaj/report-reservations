@@ -68,7 +68,10 @@ déplacer, utiliser **Enregistrer**.
 
 - **Dessiner** une réservation rectangulaire (`R`) ou ronde (`C`). Elle est stockée en
   mètres par rapport au repère et se reporte sur les autres niveaux : par défaut celui
-  où elle est créée et tous ceux du dessus.
+  où elle est créée et tous ceux du dessus. Sur un niveau où elle n'est pas, elle
+  apparaît en **pointillé** et ne sort pas à l'export. Pour l'y reporter (une chute EU
+  dessinée au RDC qui descend au R-1, par exemple) : clic droit dessus → « Reporter aussi
+  sur R-1 » (aussi pour une sélection multiple), ou Propriétés → Niveaux concernés.
 - **Contrôler** : « Superposer » affiche un autre niveau en transparence sous le plan
   courant. `Pg↑` / `Pg↓` passent au niveau du dessus / du dessous en gardant le même
   endroit à l'écran. L'outil Mesure (`M`) donne les distances réelles.
