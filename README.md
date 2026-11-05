@@ -135,11 +135,16 @@ déplacer, utiliser **Enregistrer**.
   linéaires, comptages) et sa légende dans le cartouche.
 - **Réservation par réservation** : une page par réservation, tous ses niveaux zoomés
   côte à côte à la même échelle ronde, seule cette réservation affichée.
+- **Zone tracée** : outil **Zone** (`Z`) dans la barre du haut, tirez un cadre sur le plan.
+  Le même cadre est recadré sur chaque niveau de la vue côte à côte (choix des niveaux dans
+  la fenêtre d'export) et posé sur une seule feuille A0 à A4, à la même échelle ronde.
+  La zone est mémorisée dans le projet ; « Retracer la zone » pour la changer.
+- **Réservations masquées** (œil, ou calque masqué) : elles ne sortent dans aucun export.
 - **Rapport de métré (PDF A4)** : récapitulatif par poste (quantités par niveau, prix,
   total HT), puis le détail de chaque mesure.
 - **Métré pour Excel (CSV)** et **Liste des réservations pour Excel (CSV)** :
   séparateur « ; » et virgule décimale, à ouvrir directement dans Excel.
-- **Réservations à exporter** (plans, réservation par réservation, liste CSV) : une liste
+- **Réservations à exporter** (plans, réservation par réservation, zone, liste CSV) : une liste
   à cocher par objet ou par calque, avec Toutes / Aucune / Anomalies seulement /
   Sélectionnée. Le choix est mémorisé dans le projet ; les nouvelles réservations sont
   cochées d'office.

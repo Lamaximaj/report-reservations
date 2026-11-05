@@ -372,6 +372,7 @@ kbd{font-family:var(--f-num);font-size:10.5px;background:var(--panel-2);border:1
   <symbol id="i-org" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.5"/><path d="M12 2.5v5M12 16.5v5M2.5 12h5M16.5 12h5"/></symbol>
   <symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></symbol>
   <symbol id="i-redo" viewBox="0 0 24 24"><path d="M15 14l5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></symbol>
+  <symbol id="i-zone" viewBox="0 0 24 24"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/><path d="M9 9h6v6H9z" stroke-dasharray="2 2"/></symbol>
   <symbol id="i-export" viewBox="0 0 24 24"><path d="M12 4v11M7.5 10.5L12 15l4.5-4.5M5 20h14"/></symbol>
   <symbol id="i-import" viewBox="0 0 24 24"><path d="M12 15V4M7.5 8.5L12 4l4.5 4.5M5 20h14"/></symbol>
   <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2.2-2.4 3.6"/><path d="M12 17.2h.01"/></symbol>
@@ -428,6 +429,7 @@ kbd{font-family:var(--f-num);font-size:10.5px;background:var(--panel-2);border:1
         <button class="tool" data-tool="meas" title="Mesurer une distance (M)"><svg class="i"><use href="#i-meas"/></svg><span>Mesure</span></button>
         <button class="tool" data-tool="scale" title="Échelle du plan (E)"><svg class="i"><use href="#i-scale"/></svg><span>Échelle</span></button>
         <button class="tool" data-tool="org" title="Point de repère 0,0 (P)"><svg class="i"><use href="#i-org"/></svg><span>Repère</span></button>
+        <button class="tool" data-tool="zone" title="Zone à exporter : tracez un cadre, il est exporté sur les niveaux côte à côte, à la même échelle (Z)"><svg class="i"><use href="#i-zone"/></svg><span>Zone</span></button>
       </div>
     </nav>
     <span class="sp"></span>
@@ -706,7 +708,7 @@ function projMeta(id){ return PROJS.find(function(p){ return p.id===id; })||null
 function pack(){ return { levels:S.levels.map(function(l){
     return {id:l.id,name:l.name,src:l.src,w:l.w,h:l.h,scale:l.scale,org:l.org,rot:l.rot,pdf:l.pdf}; }),
     shapes:S.shapes, activeId:S.activeId, seq:S.seq, demo:S.demo, asc:S.asc, title:S.title,
-    layers:S.layers, activeLayer:S.activeLayer, types:S.types, items:S.items, meas:S.meas, activeItem:S.activeItem, ui:S.ui, expOff:S.expOff, multiOff:S.multiOff }; }
+    layers:S.layers, activeLayer:S.activeLayer, types:S.types, items:S.items, meas:S.meas, activeItem:S.activeItem, ui:S.ui, expOff:S.expOff, multiOff:S.multiOff, zone:S.zone||null }; }
 function counts(p){ return {nl:(p.levels||[]).length, nr:(p.shapes||[]).length, nm:(p.meas||[]).length}; }
 var saveT=null, saveErr=false;
 function persist(){
@@ -767,7 +769,7 @@ document.getElementById("redoBtn").onclick=redo;
 /* ============ ouverture / création de projets ============ */
 function blank(){
   S.levels=[]; S.shapes=[]; S.items=[]; S.meas=[]; S.layers=[]; S.types=undefined; S.activeLayer=null; S.activeItem=null;
-  S.activeId=null; S.selId=null; S.selM=null; S.seq=1; S.asc=true; S.demo=false; S.under=""; S.title=""; S.expOff=[]; S.multiOff=[]; S.msel=[];
+  S.activeId=null; S.selId=null; S.selM=null; S.seq=1; S.asc=true; S.demo=false; S.under=""; S.title=""; S.expOff=[]; S.multiOff=[]; S.msel=[]; S.zone=null;
   S.view={s:0,tx:0,ty:0}; meas=null; calLine=null; drag=null; draft=null; lvPool={};
   fixLayers(); fixItems();
 }
@@ -779,6 +781,7 @@ function applyPack(p){
   S.layers=p.layers||[]; S.activeLayer=p.activeLayer||null; S.types=p.types; S.items=p.items||[]; S.meas=p.meas||[]; S.activeItem=p.activeItem||null;
   S.expOff=Array.isArray(p.expOff)? p.expOff.filter(function(x){ return typeof x==="string"; }) : [];
   S.multiOff=Array.isArray(p.multiOff)? p.multiOff.filter(function(x){ return S.levels.some(function(l){ return l.id===x; }); }) : [];
+  var z=p.zone; S.zone= z&&[z.x0,z.y0,z.x1,z.y1].every(isFinite)&&z.x1>z.x0&&z.y1>z.y0? {x0:z.x0,y0:z.y0,x1:z.x1,y1:z.y1} : null;
   fixLayers(); fixItems();
   if(!hasPrefs&&p.ui){ ["lv","ly","pr"].forEach(function(k){ if(typeof p.ui[k]==="boolean") S.ui[k]=p.ui[k]; }); if(p.ui.lst) S.ui.lst=p.ui.lst;
     if(p.ui.exp&&(PAPER_PT[p.ui.exp.fmt]||p.ui.exp.fmt==="orig")) S.ui.exp={fmt:p.ui.exp.fmt,ori:/^(auto|p|l)$/.test(p.ui.exp.ori)?p.ui.exp.ori:"auto",mode:p.ui.exp.mode==="res"?"res":"plans",ko:!!p.ui.exp.ko}; }
@@ -1365,6 +1368,7 @@ function drawScene(tile){
     ctx.restore(); }
   drawDraft(lv);
   drawRouteDraft(lv);
+  drawZone(lv);
 }
 function emptyStage(){
   var d=document.createElement("div"); d.className="drop";
@@ -1423,7 +1427,8 @@ function setTool(t){
   else if(t==="org"){ hint("Cliquez le point de repère du plan — il devient l'origine (0,0) de ce niveau."); }
   else if(isMtTool(t)) draftHint();
   else if(t==="route") routeHint();
-  else hint(t==="dev"?"Dévoiement : faites glisser la réservation jusqu'à sa nouvelle position (Maj : dans l'axe). Échap pour annuler.":
+  else hint(t==="zone"?"Zone à exporter : tracez le cadre — le même cadre vaut pour tous les niveaux côte à côte. Échap pour annuler.":
+       t==="dev"?"Dévoiement : faites glisser la réservation jusqu'à sa nouvelle position (Maj : dans l'axe). Échap pour annuler.":
        t==="rect"?"Tracez le rectangle de la réservation.":t==="circle"?"Cliquez le centre puis tirez le rayon.":
        t==="meas"?"Tirez entre deux points — Maj pour contraindre à l'horizontale ou la verticale.":
        t==="real"?"Faites glisser la réservation jusqu'à sa position réelle sur le plan.":"");
@@ -1453,6 +1458,10 @@ cv.addEventListener("pointerdown",function(e){
   closeMenu();
   if(e.button===2) return;                       /* clic droit : menu contextuel */
   if(spaceDown&&e.button===0){ drag={m:"pan",x:p.x,y:p.y,tx:S.view.tx,ty:S.view.ty}; cv.style.cursor="grabbing"; return; }
+  if(S.tool==="zone"&&e.button===0){
+    if(!ready(lv)){ note("Niveau non calé (échelle + repère) : tracez la zone sur un niveau calé.",2600); return; }
+    drag={m:"zone",a:W,b:W}; return;
+  }
   if(isMtTool(S.tool)&&e.button===0){
     if(!metreReady(lv)) return;
     if(S.tool==="arect"){ drag={m:"arect",a:W,b:W}; return; }
@@ -1619,7 +1628,7 @@ cv.addEventListener("pointermove",function(e){
     return;
   }
   if(drag.m==="tap"){ if(Math.hypot(p.x-drag.x,p.y-drag.y)>8) drag={m:"pan",x:drag.x,y:drag.y,tx:drag.tx,ty:drag.ty}; else return; }
-  if(drag.m==="arect"){ drag.b=W; draw(); return; }
+  if(drag.m==="arect"||drag.m==="zone"){ drag.b=W; draw(); return; }
   if(drag.m==="mvtx"){
     var mv=S.meas.find(function(x){ return x.id===drag.id; }), lvv=active();
     if(mv&&lvv){ var nb=mv.pts[drag.i-1]||null, q=snapPt(lvv,p,e.shiftKey,{id:mv.id,i:drag.i,prev:nb?p2s(lvv,nb):null});
@@ -1731,6 +1740,7 @@ function endPtr(e){
   }
   if(drag.m==="tap"){ var lt=active(); drag=null; if(lt&&ptrs.size===0){ var pp=tapPt; if(S.tool==="count") addCount(lt,pp); else addDraftPt(lt,pp,false); } return; }
   if(drag.m==="arect"){ var la=active(), dr=drag; drag=null; if(la) addRect(la,dr.a,dr.b); draw(); return; }
+  if(drag.m==="zone"){ var dz=drag; drag=null; setZone(dz.a,dz.b); return; }
   if(drag.m==="mvtx"||drag.m==="mmove"){ var mvd=drag.moved; drag=null; snapAt=null;
     if(mvd){ var mz=selM(); if(mz) mz.pts.forEach(function(pt){ pt.x=Math.round(pt.x*100)/100; pt.y=Math.round(pt.y*100)/100; }); renderAll(); save(); } else draw(); return; }
   if(drag.m==="draw"&&drag.prev){
@@ -2920,6 +2930,113 @@ function exportByRes(fmt,ori,pick,prog){
   });
 }
 
+/* ============ zone : un cadre tracé sur le plan, exporté sur les niveaux de la vue côte à côte, à la même échelle ============ */
+var zoneVis=false;   /* cadre affiché tant que la fenêtre d'export est sur « Zone » */
+function zoneOf(a,b){ return {x0:Math.min(a.X,b.X),y0:Math.min(a.Y,b.Y),x1:Math.max(a.X,b.X),y1:Math.max(a.Y,b.Y)}; }
+function zoneTxt(z){ return nf(z.x1-z.x0,2)+" × "+nf(z.y1-z.y0,2)+" m"; }
+function setZone(a,b){
+  var z=zoneOf(a,b);
+  if((z.x1-z.x0)*S.view.s<12||(z.y1-z.y0)*S.view.s<12){ draw(); note("Zone trop petite : tirez un cadre autour de la partie à exporter.",2400); return; }
+  S.zone={x0:r3(z.x0),y0:r3(z.y0),x1:r3(z.x1),y1:r3(z.y1)}; save(); setTool("select"); openExport("zone");
+}
+function drawZone(lv){
+  if(!ready(lv)) return;
+  var z= drag&&drag.m==="zone"? zoneOf(drag.a,drag.b) : S.zone&&(S.tool==="zone"||zoneVis)? S.zone : null;
+  if(!z) return;
+  var a=w2s(z.x0,z.y0), b=w2s(z.x1,z.y1), w=b.x-a.x, h=b.y-a.y, c=css("--blue");
+  ctx.save();
+  ctx.fillStyle="rgba(15,18,24,.3)"; ctx.beginPath(); ctx.rect(-1e5,-1e5,2e5,2e5); ctx.rect(a.x,a.y,w,h); ctx.fill("evenodd");
+  ctx.setLineDash([8,5]); ctx.strokeStyle=c; ctx.lineWidth=2; ctx.strokeRect(a.x,a.y,w,h); ctx.setLineDash([]);
+  pill("Zone "+zoneTxt(z),a.x+w/2,a.y-14,c);
+  ctx.restore();
+}
+/* niveaux exportés : ceux de la vue côte à côte, dans le même ordre, s'ils sont calés */
+function zoneLevels(){ return tileLevels().filter(ready); }
+/* emprise de la zone sur un niveau, en pixels du plan (haut → bas) */
+function zonePx(l,z){
+  var xs=[], ys=[];
+  [[z.x0,z.y0],[z.x1,z.y0],[z.x1,z.y1],[z.x0,z.y1]].forEach(function(q){ var p=w2p(l,q[0],q[1]); xs.push(p.x); ys.push(p.y); });
+  return {x0:Math.min.apply(null,xs),x1:Math.max.apply(null,xs),y0:Math.min.apply(null,ys),y1:Math.max.apply(null,ys)};
+}
+/* place à réserver pour chaque vue, en mètres : la plus grande emprise parmi les niveaux (plans tournés compris) */
+function zoneNeed(lvs,z){ var w=0,h=0;
+  lvs.forEach(function(l){ var b=zonePx(l,z), s=cal(l).s; w=Math.max(w,(b.x1-b.x0)/s); h=Math.max(h,(b.y1-b.y0)/s); });
+  return {w:w,h:h}; }
+function zoneSheet(fmt,ori,n,need){
+  if(!PAPER_PT[fmt]) fmt="a3";
+  if(ori==="auto"){ var tp=paperFor(fmt,"p",1,1), tl=paperFor(fmt,"l",1,1), gp=resGrid(tp,n,need.w,need.h), gl=resGrid(tl,n,need.w,need.h);
+    return gl.s>=gp.s? {t:tl,g:gl} : {t:tp,g:gp}; }
+  var t=paperFor(fmt,ori,1,1); return {t:t,g:resGrid(t,n,need.w,need.h)};
+}
+/* emprise d'une réservation sur un niveau, en mètres : position attendue, réelle, d'origine, cheminement */
+function worldBox(sh,l){
+  var sa=at(sh,l.id), o=obsOf(sh,l.id), list=[sa], xs=[], ys=[];
+  if(sa.des) list.push(sa.des);
+  if(sa.devAt) list.push(sa.devAt.start);
+  if(o&&o.st==="ko"&&o.real) list.push(realShape(sa,o));
+  list.forEach(function(s){ corners(s).forEach(function(q){ xs.push(q[0]); ys.push(q[1]); }); });
+  routeOf(sa).forEach(function(q){ xs.push(q.X); ys.push(q.Y); });
+  return {x0:Math.min.apply(null,xs),y0:Math.min.apply(null,ys),x1:Math.max.apply(null,xs),y1:Math.max.apply(null,ys)};
+}
+function hitBox(a,b){ return a.x0<=b.x1&&b.x0<=a.x1&&a.y0<=b.y1&&b.y0<=a.y1; }
+function inZone(sh,l,z){ return onLevel(sh,l.id)&&hitBox(worldBox(sh,l),z); }
+function exportZone(fmt,ori,pick,prog,withMt){
+  var L=window.PDFLib;
+  if(!L) return Promise.reject(new Error("module PDF non chargé"));
+  var z=S.zone; if(!z) return Promise.reject(new Error("aucune zone tracée"));
+  var lvs=zoneLevels(); if(!lvs.length) return Promise.reject(new Error("aucun niveau calé parmi les niveaux choisis"));
+  var zs=zoneSheet(fmt,ori,lvs.length,zoneNeed(lvs,z)), t=zs.t, g=zs.g;
+  var out, F={}, cache=new Map(), title=S.title||"";
+  var GREY=L.rgb(.45,.45,.45), RED=L.rgb(.78,.16,.12), BLACK=L.rgb(0,0,0);
+  function fitTxt(s,font,size,maxW){ s=win(s); while(s.length>1&&font.widthOfTextAtSize(s,size)>maxW) s=s.slice(0,-2)+"…"; return win(s); }
+  /* seules les réservations visibles (ni masquées, ni sur un calque masqué) et cochées, qui touchent la zone */
+  function rowsOf(l){ return exportRows(l,pick).filter(function(r){ return hitBox(worldBox(r.orig,l),z); }); }
+  return L.PDFDocument.create().then(function(d){ out=d;
+    return Promise.all([out.embedFont(L.StandardFonts.Helvetica),out.embedFont(L.StandardFonts.HelveticaBold)]); })
+  .then(function(f){ F.r=f[0]; F.b=f[1]; prog("Plans de la zone…"); return Promise.all(lvs.map(function(l){ return levelBase(out,l,cache); })); })
+  .then(function(bs){
+    var page=out.addPage([t.w,t.h]), M=EXP_MARGIN, top=t.h-M;
+    var all=lvs.map(rowsOf), ids=new Set(), kos=0, devs=0;
+    all.forEach(function(rows){ rows.forEach(function(r){ ids.add(r.orig.id); if(r.ko) kos++; if(r.sh.devAt) devs++; }); });
+    var nh=S.shapes.filter(function(s){ return !shown(s)&&lvs.some(function(l){ return inZone(s,l,z); }); }).length;
+    /* en-tête */
+    page.drawText(fitTxt("Zone "+zoneTxt(z)+(title?"  —  "+title:""),F.b,14,t.w-2*M),{x:M,y:top-14,size:14,font:F.b,color:BLACK});
+    page.drawText(fitTxt([plural(lvs.length,"niveau","niveaux")+" : "+lvs.map(function(l){ return l.name; }).join(", "),
+      plural(ids.size,"réservation"),kos? plural(kos,"anomalie") : "aucune anomalie",devs? plural(devs,"dévoiement") : "",
+      nh? plural(nh,"masquée non exportée","masquées non exportées") : ""].filter(Boolean).join("  ·  "),F.b,9,t.w-2*M),
+      {x:M,y:top-29,size:9,font:F.b,color:kos?RED:BLACK});
+    page.drawText(fitTxt([today(),"Échelle à l'impression : "+ratioTxt(g.N)+" — "+t.name+", imprimer à 100 % (taille réelle)",
+      "X "+nf(z.x0,2)+" à "+nf(z.x1,2)+" m, Y "+nf(z.y0,2)+" à "+nf(z.y1,2)+" m du repère"].join("  ·  "),F.r,8.5,t.w-2*M),
+      {x:M,y:top-42,size:8.5,font:F.r,color:BLACK});
+    page.drawText(fitTxt(["Trait plein : position attendue",kos?"Pointillé rouge : position réelle":"",devs?"Trait épais fléché : dévoiement prévu (pas une anomalie)":"",
+      kos?"Écart X + vers la droite, Y + vers le bas":""].filter(Boolean).join("  ·  "),F.r,7.5,t.w-2*M),{x:M,y:top-54,size:7.5,font:F.r,color:GREY});
+    /* une vue par niveau, exactement la zone, centrée dans sa case */
+    lvs.forEach(function(l,i){
+      var b=bs[i], k=b.k, f=g.s/(cal(l).s*k), zp=zonePx(l,z);
+      var zx=zp.x0*k, zy=b.Hd-zp.y1*k, zw=(zp.x1-zp.x0)*k, zh=(zp.y1-zp.y0)*k, vw=zw*f, vh=zh*f;
+      var col=i%g.c, row=Math.floor(i/g.c), cx=M+col*(g.pw+RES_GAP), yTop=top-RES_HEAD-row*(RES_CAP+g.ph+RES_GAP);
+      var vx=cx+(g.pw-vw)/2, vy=yTop-RES_CAP-vh, rows=all[i], nk=rows.filter(function(r){ return r.ko; }).length;
+      page.drawText(fitTxt(l.name,F.b,10.5,Math.max(vw,60)),{x:vx,y:yTop-11,size:10.5,font:F.b,color:BLACK});
+      page.drawText(fitTxt(plural(rows.length,"réservation")+(nk?"  ·  "+plural(nk,"anomalie"):""),F.r,8,Math.max(vw,60)),{x:vx,y:yTop-22,size:8,font:F.r,color:nk?RED:GREY});
+      page.pushOperators(L.pushGraphicsState(), L.rectangle(vx,vy,vw,vh), L.clip(), L.endPath(),
+        L.concatTransformationMatrix(f,0,0,f,vx-zx*f,vy-zy*f));
+      b.draw(page);
+      var info={page:page,Wd:b.Wd,Hd:b.Hd,k:k};
+      if(withMt) drawMetrePdf(info,l,F,PRINT_PT/f);
+      annotate(info,l,rows,F,title,PRINT_PT/f,"",{clip:{x:zx,y:zy,w:zw,h:zh}});
+      page.pushOperators(L.popGraphicsState());
+      page.drawRectangle({x:vx,y:vy,width:vw,height:vh,borderColor:GREY,borderWidth:.6});
+    });
+    prog("Écriture du PDF…"); return out.save();
+  }).then(function(bytes){
+    var f=fname("Zone_"+t.name.split(" ")[0]), a=document.createElement("a");
+    a.href=URL.createObjectURL(new Blob([bytes],{type:"application/pdf"})); a.download=f;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function(){ URL.revokeObjectURL(a.href); },60000);
+    return f;
+  });
+}
+
 /* ============ métré : dessin sur les plans exportés, rapport PDF, tableaux pour Excel ============ */
 function measOnLevel(l){ return S.meas.filter(function(m){ return m.lv===l.id&&itemVis(itemOf(m)); }); }
 /* métré d'un niveau, en vectoriel, sur la page du plan (coordonnées du niveau, k = points PDF par pixel du plan) */
@@ -3066,7 +3183,7 @@ function exportMetreCsv(){
   return Promise.resolve(download(csvText(rows),"text/csv;charset=utf-8",fname("Metre").replace(/\.pdf$/,".csv")));
 }
 function exportResCsv(pick){
-  var lvs=levelsUp(), list=S.shapes.filter(function(s){ return !pick||pick.has(s.id); });
+  var lvs=levelsUp(), list=S.shapes.filter(shown).filter(function(s){ return !pick||pick.has(s.id); });
   if(!list.length) return Promise.reject(new Error("aucune réservation cochée"));
   var rows=[["Chantier",S.title||""],["Édité le",today()],[],
     ["Réservation","Calque","Objet","Forme","Dimensions prévues","X repère (m)","Y repère (m)","Niveau","État","Écart (cm)","Écart X (cm)","Écart Y (cm)","Dimensions réelles","Position reprise de","Dévoiement (m)","Observation"]];
@@ -3099,18 +3216,19 @@ function pickList(){
           esc(s.n)+(ko?' <span class="bad">'+ko+' anomalie'+(ko>1?'s':'')+'</span>':'')+'</label>'; }).join("");
   }).join("");
 }
-document.getElementById("repBtn").onclick=function(){
+function openExport(force){
   var old=document.getElementById("expSheet"); if(old) old.remove();
   closeMenu();
   var lvs=levelsUp(), skip=S.levels.length-lvs.length, h=hiddenLayers(), imgs=lvs.filter(function(l){ return !l.pdf; }).length;
   var d=document.createElement("div"); d.className="sheet"; d.id="expSheet";
-  var ex=S.ui.exp||{fmt:"orig",ori:"auto"}, MODES=["plans","res","metre","csvm","csvr"], mode=MODES.indexOf(ex.mode)>=0? ex.mode : "plans";
+  var ex=S.ui.exp||{fmt:"orig",ori:"auto"}, MODES=["plans","res","zone","metre","csvm","csvr"], mode=force||(MODES.indexOf(ex.mode)>=0? ex.mode : "plans");
   var hasMt=S.meas.some(function(m){ return lvIndex(m.lv)>=0; });
   var fmts=[["orig","Format d'origine du plan (100 %)"],["a0","A0 — 841 × 1189 mm"],["a1","A1 — 594 × 841 mm"],["a2","A2 — 420 × 594 mm"],["a3","A3 — 297 × 420 mm"],["a4","A4 — 210 × 297 mm"]];
   d.innerHTML='<h3>Exporter</h3>'+
     '<div class="fld"><label>Contenu</label><select id="r_m">'+
       '<option value="plans"'+(mode==="plans"?" selected":"")+'>Plans de tous les niveaux — une page par niveau</option>'+
       '<option value="res"'+(mode==="res"?" selected":"")+'>Réservation par réservation — vue zoomée de ses niveaux</option>'+
+      '<option value="zone"'+(mode==="zone"?" selected":"")+'>Zone tracée — ses niveaux côte à côte, à la même échelle</option>'+
       '<option value="metre"'+(mode==="metre"?" selected":"")+'>Rapport de métré — PDF (A4)</option>'+
       '<option value="csvm"'+(mode==="csvm"?" selected":"")+'>Métré pour Excel — CSV</option>'+
       '<option value="csvr"'+(mode==="csvr"?" selected":"")+'>Liste des réservations pour Excel — CSV</option></select></div>'+
@@ -3121,6 +3239,9 @@ document.getElementById("repBtn").onclick=function(){
       '<div class="fld"><label>Orientation</label><select id="r_ori">'+
         [["auto","Automatique"],["p","Portrait"],["l","Paysage"]].map(function(o){ return '<option value="'+o[0]+'"'+(o[0]===ex.ori?" selected":"")+'>'+o[1]+'</option>'; }).join("")+'</select></div>'+
     '</div>'+
+    '<div class="fld" id="r_zw" style="margin-top:10px"><label>Zone · <span id="r_zt"></span></label>'+
+      '<div class="qk" style="margin:3px 0 0"><button data-z="draw">'+(S.zone?"Retracer la zone":"Tracer la zone sur le plan")+'</button>'+(S.zone?'<button data-z="see">Cadrer la vue sur la zone</button>':'')+'</div>'+
+      '<label style="margin-top:8px">Niveaux côte à côte · <span id="r_zn"></span></label><div class="chips" id="r_zl" style="margin-top:4px"></div></div>'+
     '<div class="fld" id="r_pkw" style="margin-top:10px"><label>Réservations à exporter · <span id="r_cnt"></span></label>'+
       '<div class="qk" style="margin:3px 0 0"><button data-pk="all">Toutes</button><button data-pk="none">Aucune</button>'+
       '<button data-pk="ko">Anomalies seulement</button>'+(sel()?'<button data-pk="sel">Sélectionnée</button>':'')+'</div>'+
@@ -3138,14 +3259,35 @@ document.getElementById("repBtn").onclick=function(){
   var pk=d.querySelector("#r_pk");
   function boxes(){ return Array.prototype.slice.call(pk.querySelectorAll("input[data-id]")); }
   function pick(){ return new Set(boxes().filter(function(c){ return c.checked; }).map(function(c){ return c.dataset.id; })); }
-  function usesPick(md){ return md==="plans"||md==="res"||md==="csvr"; }
+  function usesPick(md){ return md==="plans"||md==="res"||md==="zone"||md==="csvr"; }
+  /* niveaux de la zone = niveaux de la vue côte à côte (au moins un reste affiché) */
+  function zChips(){
+    var off=S.multiOff||[];
+    d.querySelector("#r_zl").innerHTML=S.levels.map(function(l){ var ok=ready(l), on=ok&&off.indexOf(l.id)<0;
+      return '<button class="chip'+(on?' on':'')+'" data-lv="'+l.id+'"'+(ok?'':' disabled title="Niveau non calé (échelle + repère)"')+'>'+esc(l.name)+'</button>'; }).join("");
+  }
+  d.querySelector("#r_zl").addEventListener("click",function(e){
+    var c=e.target.closest("[data-lv]"); if(!c||c.disabled) return;
+    var o=(S.multiOff||[]).slice(), i=o.indexOf(c.dataset.lv);
+    if(i>=0) o.splice(i,1); else if(S.levels.length-o.length>1) o.push(c.dataset.lv); else { note("Il faut au moins un niveau.",1800); return; }
+    S.multiOff=o; var vis=tileLevels();
+    if(!vis.some(function(l){ return l.id===S.activeId; })) S.activeId=vis[0].id;
+    save(); layoutTiles(); renderNav(); renderLevels(); preview();
+  });
+  d.querySelector("#r_zw .qk").addEventListener("click",function(e){
+    var b=e.target.closest("[data-z]"); if(!b) return;
+    if(b.dataset.z==="draw"){ d.remove(); setTool("zone"); return; }
+    d.remove(); fitZone();
+  });
   /* aperçu : échelle à laquelle chaque niveau sortira sur la feuille choisie */
   function preview(){
-    var res=sm.value==="res", oo=sf.querySelector('option[value="orig"]'), md=sm.value, paper=md==="plans"||md==="res";
+    var res=sm.value==="res", oo=sf.querySelector('option[value="orig"]'), md=sm.value, zone=md==="zone", paper=md==="plans"||md==="res"||zone;
     d.querySelector("#r_fo").style.display=paper?"grid":"none";
-    d.querySelector("#r_mtw").style.display=md==="plans"?"flex":"none";
+    d.querySelector("#r_zw").style.display=zone?"":"none";
+    d.querySelector("#r_mtw").style.display=md==="plans"||zone?"flex":"none";
     d.querySelector("#r_pkw").style.display=usesPick(md)?"":"none";
-    ["#r_info","#r_img"].forEach(function(q){ var e=d.querySelector(q); if(e) e.style.display=paper?"":"none"; });
+    ["#r_info","#r_img"].forEach(function(q){ var e=d.querySelector(q); if(e) e.style.display=paper&&!zone?"":"none"; });
+    if(zoneVis!==zone){ zoneVis=zone; draw(); }
     d.querySelector("#goP").textContent= md==="csvm"||md==="csvr"? "Télécharger le tableau" : "Exporter";
     d.querySelector("#goP").disabled= usesPick(md)&&!pick().size;
     if(!paper){
@@ -3159,10 +3301,26 @@ document.getElementById("repBtn").onclick=function(){
       return;
     }
     /* la vue zoomée se pose sur une feuille A0 à A4 : pas de « format d'origine » */
-    oo.disabled=res;
-    sf.value= res&&lastFmt==="orig"? "a3" : lastFmt;
+    oo.disabled=res||zone;
+    sf.value= (res||zone)&&lastFmt==="orig"? "a3" : lastFmt;
     so.disabled=sf.value==="orig";
     S.ui.exp={fmt:lastFmt,ori:so.value,mode:sm.value,mt:smt.checked}; savePrefs();
+    if(zone){
+      var z=S.zone, zl=zoneLevels(), sc=d.querySelector("#r_sc"), go=d.querySelector("#goP");
+      d.querySelector("#r_zt").textContent= z? zoneTxt(z) : "aucune zone tracée";
+      d.querySelector("#r_zn").textContent=zl.length+" / "+S.levels.length;
+      zChips();
+      d.querySelector("#r_d").textContent="Un PDF d'une page : la zone tracée, recadrée sur chaque niveau choisi et posée côte à côte (dans l'ordre de la vue Tous les niveaux), à la même échelle. Seules les réservations visibles et cochées apparaissent : les réservations masquées ne sont pas exportées.";
+      go.disabled=!z||!zl.length;
+      if(!z){ sc.innerHTML="<b>Tracez d'abord la zone</b> : « Tracer la zone sur le plan », puis tirez un cadre autour de la partie à exporter."; return; }
+      if(!zl.length){ sc.innerHTML="<b>Aucun niveau calé choisi.</b>"; return; }
+      var zs=zoneSheet(sf.value,so.value,zl.length,zoneNeed(zl,z)), pc=pick();
+      var vis=S.shapes.filter(function(s){ return zl.some(function(l){ return inZone(s,l,z); }); });
+      var nIn=vis.filter(function(s){ return shown(s)&&pc.has(s.id); }).length, nH=vis.filter(function(s){ return !shown(s); }).length;
+      sc.innerHTML=plural(nIn,"réservation exportée","réservations exportées")+" dans la zone"+(nH?" · <b>"+plural(nH,"masquée","masquées")+", non exportée"+(nH>1?"s":"")+"</b>":"")+
+        "<br>Échelle à l'impression <b>"+esc(ratioTxt(zs.g.N))+"</b> — "+esc(zs.t.name)+", "+zs.g.c+" × "+zs.g.r+" vue"+(zl.length>1?"s":"")+". Étiquettes imprimées à 9 pt.";
+      return;
+    }
     if(res){
       var rl=resList(pick());
       d.querySelector("#r_d").textContent="Un PDF, une page par réservation : tous les niveaux où elle passe, zoomés côte à côte (du bas vers le haut du bâtiment), à la même échelle. Seule cette réservation est affichée, avec son écart éventuel.";
@@ -3203,12 +3361,22 @@ document.getElementById("repBtn").onclick=function(){
     S.title=d.querySelector("#r_t").value; save(); b.disabled=true;
     var pg=function(t){ p.textContent=t; }, pr, pc=pick();
     try{ var md=sm.value;
-      pr= md==="res"? exportByRes(sf.value,so.value,pc,pg) : md==="metre"? exportMetrePdf(pg) : md==="csvm"? exportMetreCsv() : md==="csvr"? exportResCsv(pc)
+      pr= md==="res"? exportByRes(sf.value,so.value,pc,pg) : md==="zone"? exportZone(sf.value,so.value,pc,pg,smt.checked&&!smt.disabled) : md==="metre"? exportMetrePdf(pg) : md==="csvm"? exportMetreCsv() : md==="csvr"? exportResCsv(pc)
         : exportPlans(sf.value,so.value,pg,smt.checked&&!smt.disabled,pc); }catch(err){ pr=Promise.reject(err); }
     pr.then(function(f){ p.textContent="Fichier généré : "+f; b.disabled=false; })
       .catch(function(err){ p.textContent=""; b.disabled=false; note("Export impossible : "+(err&&err.message||err)); });
   };
-};
+  /* le cadre de la zone n'est montré sur le plan que pendant que la fenêtre est ouverte */
+  new MutationObserver(function(_,ob){ if(!document.body.contains(d)){ ob.disconnect(); if(zoneVis){ zoneVis=false; draw(); } } }).observe(document.body,{childList:true});
+}
+document.getElementById("repBtn").onclick=function(){ openExport(); };
+/* vue cadrée sur la zone (sur tous les niveaux côte à côte) */
+function fitZone(){
+  var z=S.zone; if(!z) return;
+  var vz=viewSize(), m=multiOn()?24:70, s=Math.min((vz.W-2*m)/Math.max(z.x1-z.x0,1e-6),(vz.H-2*m)/Math.max(z.y1-z.y0,1e-6));
+  S.view.s=s; S.view.tx=vz.W/2-(z.x0+z.x1)/2*s; S.view.ty=vz.H/2-(z.y0+z.y1)/2*s+(multiOn()?10:0);
+  setTool("zone"); draw(); scheduleRefine();
+}
 
 /* ============ exemple ============ */
 function planPNG(kind,ppm,rot){
@@ -3343,7 +3511,7 @@ document.addEventListener("keydown",function(e){
   if(e.key==="?"||e.key==="F1"){ e.preventDefault(); openHelp(); return; }
   if(e.key==="+"||e.key==="="){ zoomBy(1.35); return; }
   if(e.key==="-"||e.key==="_"){ zoomBy(1/1.35); return; }
-  var map={v:"select",h:"pan",r:"rect",c:"circle",s:e.shiftKey?"arect":"area",l:"line",n:"count",m:"meas",e:"scale",p:"org"};
+  var map={v:"select",h:"pan",r:"rect",c:"circle",s:e.shiftKey?"arect":"area",l:"line",n:"count",m:"meas",e:"scale",p:"org",z:"zone"};
   if(map[k]){ e.preventDefault(); setTool(map[k]); return; }
   if(k==="f"){ fit(); return; }
   if(k==="g"){ setGrid(!S.grid); return; }
@@ -3484,6 +3652,8 @@ function canvasMenu(cx,cy,p){
       {t:"Comptage",i:"count",k:"N",fn:function(){ setTool("count"); }},
       {t:"Réservation rectangulaire",i:"rect",k:"R",fn:function(){ setTool("rect"); }},
       {t:"Mesurer une distance",i:"meas",k:"M",fn:function(){ setTool("meas"); }},
+      {t:"Zone à exporter (niveaux côte à côte)",i:"zone",k:"Z",fn:function(){ setTool("zone"); }},
+      S.zone? {t:"Exporter la zone tracée…",i:"export",fn:function(){ openExport("zone"); }} : null,
       "-",
       {t:"Poser le repère 0,0 ici",i:"org",fn:function(){ var q=w2p(lv,W.X,W.Y); keepView(lv,q,function(){ lv.org={x:q.x,y:q.y}; lv.rot=lv.rot||0; });
         renderAll(); save(); note("Repère posé sur "+lv.name+(lv.scale?"":" — il reste l'échelle à définir.")); }},
@@ -3519,7 +3689,7 @@ function openHelp(){
   d.innerHTML='<h3>Raccourcis et gestes</h3>'+
     '<div class="keys">'+
     '<h4>Outils</h4>'+row("Sélection","V")+row("Main (déplacer la vue)","H / Espace")+row("Réservation rectangulaire","R")+row("Réservation ronde","C")+
-      row("Surface (polygone)","S")+row("Surface rectangulaire","Maj+S")+row("Linéaire","L")+row("Comptage","N")+row("Mesurer une distance","M")+row("Échelle du plan","E")+row("Repère 0,0","P")+
+      row("Surface (polygone)","S")+row("Surface rectangulaire","Maj+S")+row("Linéaire","L")+row("Comptage","N")+row("Mesurer une distance","M")+row("Échelle du plan","E")+row("Repère 0,0","P")+row("Zone à exporter","Z")+
     '<h4>Pendant un tracé de métré</h4>'+row("Poser un point","Clic")+row("Terminer","Double-clic / Entrée")+row("Fermer la surface","Clic sur le 1er point")+row("Enlever le dernier point","Retour arrière")+
       row("Angles droits / 45°","Maj")+row("Terminer (menu)","Clic droit")+row("Abandonner","Échap")+row("Aimantation","sommets existants")+
     '<h4>Dévoiement d\'un réseau</h4>'+row("Dévoyer à partir du niveau courant","Clic droit / Propriétés")+row("Nouvelle position dans l\'axe","Maj")+
