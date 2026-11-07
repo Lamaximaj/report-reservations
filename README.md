@@ -13,11 +13,12 @@ En ligne : https://lamaximaj.github.io/report-reservations/
 
 Ou ouvrir `index.html` dans un navigateur, ou le servir depuis un NAS.
 
-L'écran : la **barre d'outils** en haut (outils, Annuler / Rétablir, panneaux, thème,
-aide `?`, Exporter), à gauche les **niveaux** et les listes **Calques / Objets / Métré**,
-au centre le plan (zoom, recadrage, trame et superposition en haut à droite), à droite
-les **Propriétés** de ce qui est sélectionné. Sur téléphone, les panneaux deviennent des
-onglets sous le plan.
+L'écran : la **barre d'outils** en haut, rangée par groupes (Vue, Réservations avec l'**objet
+actif**, Métré, Plan, Export) ; à gauche les **niveaux** (avec leur altitude) et les onglets
+**Réservations** (calques › objets › réservations) et **Métré** ; au centre les **vues**, avec
+au-dessus la barre de disposition (1 à 4 vues, tous les niveaux), le zoom, la trame et la
+superposition ; à droite les **Propriétés** de ce qui est sélectionné, en sections.
+Sur téléphone, les panneaux deviennent des onglets sous le plan.
 
 ### Installer l'appli sur l'ordinateur (sans droits administrateur)
 
@@ -37,7 +38,7 @@ déplacer, utiliser **Enregistrer**.
   Téléchargements. Pour le rouvrir : Projets → Ouvrir un fichier projet. Le projet reste
   aussi enregistré automatiquement dans le navigateur.
 - **Taille des panneaux** : tirer les bords entre les panneaux et le plan (largeur) ou
-  entre Niveaux et Calques (hauteur) ; double-clic pour revenir à la taille par défaut.
+  entre Niveaux et Réservations (hauteur) ; double-clic pour revenir à la taille par défaut.
 
 ### Projets
 
@@ -64,9 +65,32 @@ déplacer, utiliser **Enregistrer**.
    poteaux, angle de trémie). Le métré n'a besoin que de l'échelle ; les réservations
    ont besoin de l'échelle et du repère.
 
+### Calques, objets, réservations
+
+Une seule règle : **chaque réservation est un objet, et chaque objet est rangé dans un calque**.
+
+- **Objet** : un type de réservation (EU, EV, GT, VH, TR…) avec sa forme, ses cotes et sa
+  couleur. Les réservations d'un objet sont numérotées à la suite (« GT 1 », « GT 2 »…) et
+  renommées si l'on change le code de l'objet.
+- **Calque** : un rangement d'objets (Plomberie, CVC, Structure…), qui se masque d'un coup.
+  Une réservation est toujours dans le calque de son objet.
+- **Par défaut** : le « Calque par défaut » et l'objet **RÉS** (Réservation).
+- L'onglet **Réservations** montre l'arbre calques › objets › réservations : œil pour masquer
+  un calque, un objet ou une réservation ; `+ objet` sur un calque ; `⋯` pour les réglages
+  d'un objet (forme, cotes, calque), le ranger ailleurs, sélectionner ses réservations, le
+  supprimer (en gardant ou non ses réservations). `+` en haut : nouvel objet ou nouveau calque.
+- **Objet actif** : le bouton à côté de Rectangle / Ronde dans la barre d'outils. Les
+  réservations dessinées au rectangle ou au rond sont de cet objet (avec les cotes tracées) ;
+  cliquer la ligne d'un objet dans l'arbre le rend actif et le **pose** (un clic sur le plan
+  par réservation, aux cotes de l'objet ; `Échap` pour finir).
+- **Changer d'objet** une réservation (ou une sélection) : Propriétés → Objet, ou clic droit.
+  Elle change de calque avec lui, et « GT 3 » devient « VH n ».
+- Les projets d'avant cette version sont repris : une réservation sans objet prend l'objet
+  tiré de son nom (« EU 3 » → EU), sinon RÉS, dans son calque et à sa couleur.
+
 ### Réservations
 
-- **Dessiner** une réservation rectangulaire (`R`) ou ronde (`C`). Elle est stockée en
+- **Dessiner** une réservation rectangulaire (`R`) ou ronde (`C`), de l'objet actif. Elle est stockée en
   mètres par rapport au repère et se reporte sur les autres niveaux : par défaut celui
   où elle est créée et tous ceux du dessus. Sur un niveau où elle n'est pas, elle
   apparaît en **pointillé** et ne sort pas à l'export. Pour l'y reporter (une chute EU
@@ -79,8 +103,6 @@ déplacer, utiliser **Enregistrer**.
   (Propriétés ou clic droit), avec observation. « Déplacer vers la position réelle »
   permet de la faire glisser là où elle est réellement tombée : l'écart est calculé et
   coté. Ses poignées rouges reprennent ses dimensions réelles.
-- **Calques** (couleur, visibilité, calque actif) et **Objets** (types GT, VH, VB… posés
-  en série, numérotés à la suite) comme avant.
 - **Report des corrections** : une anomalie pointée devient la position attendue des
   niveaux du dessus (marquée « ↳ R+1 »), sauf si l'on décoche « Reporter cette
   correction aux niveaux du dessus ».
@@ -93,21 +115,49 @@ déplacer, utiliser **Enregistrer**.
   par coude, `Maj` : angle droit), ou tirer les coudes sur le plan (rond : ajouter un coude, clic
   droit : le supprimer). Une anomalie déjà pointée peut être requalifiée en « Dévoiement voulu,
   pas une anomalie ». Les exports montrent le cheminement fléché et sa longueur.
-- **Tous les niveaux** (bouton au-dessus du plan, `T`) : chaque niveau dans sa tuile, côte
-  à côte, avec le même zoom et la même position — zoomer ou déplacer dans une tuile fait
-  de même dans toutes. Pour travailler **par réservation** : un clic dans la liste, ou
-  ◀ ▶ (`Pg↑` / `Pg↓` dans cette vue), cadre la réservation sur tous les niveaux à la fois,
-  avec ses positions réelles et les corrections reportées. Cliquer dans une tuile en fait
-  le niveau courant ; tous les outils (anomalies, métré, clic droit…) y fonctionnent.
-  Le bouton **Niveaux n/N** choisit les niveaux affichés (mémorisé dans le projet).
 - **Sélection multiple** : `Ctrl+A` ou « Tout sélectionner », `Ctrl+clic` / `Maj+clic`
-  sur le plan ou dans la liste. Propriétés propose alors Masquer, Afficher, Ranger dans
-  un calque, Supprimer.
+  sur le plan ou dans la liste. Propriétés propose alors Masquer, Afficher, changer
+  d'objet, Niveaux concernés, Supprimer.
 - **Masquer une réservation** : l'œil de sa ligne, le bouton Masquer de Propriétés ou le
   clic droit. Masquée, elle n'apparaît ni sur le plan ni dans les exports ; « Tout
   afficher » en haut de la liste les remet.
-- **Couleurs** : la position attendue garde la couleur de son objet ou calque, même en
-  anomalie ; le rouge est réservé à la position réelle (pointillé) et aux alertes.
+- **Couleurs** : la position attendue garde la couleur de son objet, même en anomalie ;
+  le rouge est réservé à la position réelle (pointillé) et aux alertes.
+
+### Vues simultanées
+
+La barre au-dessus du plan choisit la **disposition** : 1 vue, 2 côte à côte, 2 l'une
+sur l'autre, 3, 4, ou **Tous les niveaux** (`T`).
+
+- Chaque vue a son en-tête : la liste choisit son **contenu** (un niveau, ou l'**élévation**),
+  la **chaîne** la lie aux autres (même zoom, même position) ou la rend **libre** (zoom et
+  position à part, par exemple un niveau entier à côté d'un détail du même niveau), `⤢` la
+  recadre. Le contenu de chaque disposition est mémorisé.
+- Cliquer dans une vue la rend **active** (cadre orange) : son niveau devient le niveau
+  courant et tous les outils y fonctionnent. La molette zoome la vue sous le pointeur.
+- Tirer le **séparateur** entre deux vues change leur taille ; double-clic : tailles égales.
+- **Tous les niveaux** : chaque niveau dans sa tuile, côte à côte, liées. Le bouton
+  **Niveaux n/N** choisit les niveaux affichés (mémorisé dans le projet).
+- Pour travailler **par réservation** : un clic dans la liste, ou ◀ ▶ (`Pg↑` / `Pg↓` avec
+  plusieurs vues), cadre la réservation dans toutes les vues de plan à la fois, avec ses
+  positions réelles et les corrections reportées.
+
+### Élévation schématique
+
+Une coupe verticale schématique : les niveaux empilés à leur **altitude**, chaque
+réservation qui traverse les dalles, reliée d'un niveau à l'autre par son réseau.
+
+- **Hauteurs d'étage** : la distance d'un niveau au suivant, de dalle à dalle (2,80 m par
+  défaut). Clic sur l'altitude d'un niveau dans la liste des niveaux, ou bouton `↕` de la
+  vue Élévation : hauteur par défaut, hauteur de chaque étage, niveau de référence ±0,00
+  (le RDC d'office).
+- **Vue Élévation** (contenu « Élévation » d'une vue, par exemple 2 vues l'une sur l'autre :
+  plan + élévation) : coupe selon **X** ou selon **Y**. Elle montre la sélection multiple,
+  sinon les réservations de la zone tracée, sinon toutes les réservations visibles.
+  Clic sur un réseau : sélectionne la réservation (les autres s'estompent).
+- Lecture : trait de couleur = réseau prévu ; trait épais = **dévoiement** (en plafond du
+  niveau du dessous, avec sa longueur) ; pointillé rouge = position réelle et décalage
+  (anomalie, avec l'écart). Dalles (22 cm) et passages restent schématiques.
 
 ### Métré
 
@@ -141,21 +191,26 @@ déplacer, utiliser **Enregistrer**.
 - **Zone tracée** : outil **Zone** (`Z`) dans la barre du haut, tirez un cadre sur le plan.
   Le même cadre est recadré sur chaque niveau de la vue côte à côte (choix des niveaux dans
   la fenêtre d'export) et posé sur une seule feuille A0 à A4, à la même échelle ronde.
-  La zone est mémorisée dans le projet ; « Retracer la zone » pour la changer.
-- **Réservations masquées** (œil, ou calque masqué) : elles ne sortent dans aucun export.
+  La zone est mémorisée dans le projet ; « Retracer la zone » pour la changer. Option :
+  ajouter l'**élévation** des réservations de la zone (pages suivantes).
+- **Élévation schématique** : une page par coupe (X, Y ou les deux), A0 à A4, à l'échelle
+  ronde (1/50, 1/100…) la plus grande qui tient, avec les altitudes des niveaux. Réservations
+  cochées, ou seulement celles de la zone tracée. En mode **réservation par réservation**,
+  une option ajoute l'élévation X et Y de la réservation à droite de chaque page.
+- **Réservations masquées** (œil, objet ou calque masqué) : elles ne sortent dans aucun export.
 - **Rapport de métré (PDF A4)** : récapitulatif par poste (quantités par niveau, prix,
   total HT), puis le détail de chaque mesure.
 - **Métré pour Excel (CSV)** et **Liste des réservations pour Excel (CSV)** :
   séparateur « ; » et virgule décimale, à ouvrir directement dans Excel.
-- **Réservations à exporter** (plans, réservation par réservation, zone, liste CSV) : une liste
-  à cocher par objet ou par calque, avec Toutes / Aucune / Anomalies seulement /
+- **Réservations à exporter** (plans, réservation par réservation, zone, élévation, liste CSV) :
+  une liste à cocher par calque › objet, avec Toutes / Aucune / Anomalies seulement /
   Sélectionnée. Le choix est mémorisé dans le projet ; les nouvelles réservations sont
   cochées d'office.
 
 ## Clic droit et raccourcis
 
 Clic droit sur le plan (appui long au doigt) : menu d'actions selon ce qui est dessous —
-réservation (conforme / anomalie, position réelle, dupliquer, copier, calque, supprimer),
+réservation (conforme / anomalie, position réelle, dupliquer, copier, objet, supprimer),
 métré (déduction, poste, sommet, dupliquer, supprimer) ou plan vide (coller, outils,
 repère, trame, superposer, niveau du dessus / dessous, exporter). Clic droit aussi dans
 les listes.
@@ -167,7 +222,7 @@ les listes.
 | `S` surface | `Maj+S` surface rect. | `Ctrl+D` dupliquer | `Suppr` supprimer |
 | `L` linéaire | `N` comptage | flèches : 1 cm (`Maj` : 10 cm) | `Échap` désélectionner |
 | `M` mesure | `E` échelle, `P` repère | `F` recadrer, `+` / `−` zoom | `G` trame, `Pg↑` / `Pg↓` niveaux |
-| `T` tous les niveaux | | | |
+| `T` tous les niveaux / disposition précédente | | | |
 
 `Ctrl+O` projets · `Ctrl+I` importer des plans · `Ctrl+E` exporter · `?` aide (sur Mac,
 `⌘` à la place de `Ctrl`).
@@ -176,10 +231,12 @@ les listes.
 
 - Un seul fichier, sans build. pdf.js pour la lecture et la re-rastérisation des PDF au
   zoom, pdf-lib pour les exports PDF vectoriels (chargés depuis cdnjs).
-- Chaque niveau porte son propre calage (origine, rotation, échelle) ; les réservations
+- Chaque niveau porte son propre calage (origine, rotation, échelle) et sa hauteur d'étage ;
+  les réservations
   sont en coordonnées monde (mètres), les mesures de métré en pixels du plan (elles
   restent collées au plan si l'on reprend le repère ; seule l'échelle compte pour les
   quantités).
 - IndexedDB : `projects` (liste), `cur` (projet ouvert), `p:<id>` (contenu d'un projet).
   Annuler / Rétablir garde 150 étapes en mémoire pendant la session.
-- Préférences de l'appareil (panneaux, thème, réglages d'export) dans `localStorage`.
+- Préférences de l'appareil (panneaux, disposition des vues, thème, réglages d'export) dans
+  `localStorage`.
