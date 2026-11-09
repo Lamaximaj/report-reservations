@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <style>html{color-scheme:light}body{margin:0;font:14px system-ui}img{max-width:100%}[hidden]{display:none!important}</style>
-<title>Report &amp; métré</title>
+<title>Superplan</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#c8492a">
@@ -493,9 +493,9 @@ kbd{font-family:var(--f-num);font-size:10.5px;background:var(--panel-2);border:1
 </svg>
 <div id="app">
   <header class="top" id="top">
-    <div class="brand" title="Report de réservations et métré">
+    <div class="brand" title="Superplan — report des réservations d'un niveau à l'autre, anomalies et métré">
       <span class="logo"><svg class="i"><use href="#i-logo"/></svg></span>
-      <div><b>Report &amp; métré</b><small>RÉSERVATIONS · QUANTITÉS</small></div>
+      <div><b>Superplan</b><small>RÉSERVATIONS · MÉTRÉ</small></div>
     </div>
     <button class="proj" id="projBtn" title="Projets : ouvrir, créer, renommer… (Ctrl+O)"><svg class="i s"><use href="#i-folder"/></svg><span id="projName">Projet</span><svg class="i s"><use href="#i-chev"/></svg></button>
     <nav class="tbar" id="tools" aria-label="Outils">
@@ -970,7 +970,7 @@ function applyPack(p){
     if(p.ui.exp&&(PAPER_PT[p.ui.exp.fmt]||p.ui.exp.fmt==="orig")) S.ui.exp={fmt:p.ui.exp.fmt,ori:/^(auto|p|l)$/.test(p.ui.exp.ori)?p.ui.exp.ori:"auto",mode:p.ui.exp.mode==="res"?"res":"plans",ko:!!p.ui.exp.ko}; }
   return Promise.all(S.levels.map(loadImg));
 }
-function projLabel(){ var e=document.getElementById("projName"); if(e) e.textContent=S.title||(projMeta(PID)||{}).name||"Projet"; document.title=(S.title?S.title+" — ":"")+"Report & métré"; }
+function projLabel(){ var e=document.getElementById("projName"); if(e) e.textContent=S.title||(projMeta(PID)||{}).name||"Projet"; document.title=(S.title?S.title+" — ":"")+"Superplan"; }
 function afterOpen(){ closeMenu(); var na=document.querySelector(".hint.auto"); if(na) na.remove(); setTool("select"); setListView(S.ui.lst); layout(); fit(); histReset(); renderAll(); projLabel(); }
 function openProject(id){
   return saveNow().then(function(){ return kvGet("p:"+id); }).then(function(p){
@@ -3959,7 +3959,7 @@ function exportMetrePdf(prog){
         });
       });
     }
-    pages.forEach(function(pg,i){ page=pg; txt("Report & métré  ·  page "+(i+1)+" / "+pages.length,W-M,M-16,{s:7.5,col:GREY,r:1}); });
+    pages.forEach(function(pg,i){ page=pg; txt("Superplan  ·  page "+(i+1)+" / "+pages.length,W-M,M-16,{s:7.5,col:GREY,r:1}); });
     prog("Écriture du PDF…"); return doc.save();
   });
   return chain.then(function(bytes){ return download(bytes,"application/pdf",fname("Metre")); });
@@ -4788,7 +4788,7 @@ function saveToFile(as){
   return projectJSON(PID).then(function(r){
     if(window.showSaveFilePicker){
       var h=!as&&FILE_H[PID];
-      var hp=h? Promise.resolve(h) : window.showSaveFilePicker({suggestedName:r.name,types:[{description:"Projet Report & métré",accept:{"application/json":[".json"]}}]});
+      var hp=h? Promise.resolve(h) : window.showSaveFilePicker({suggestedName:r.name,types:[{description:"Projet Superplan",accept:{"application/json":[".json"]}}]});
       return hp.then(function(fh){ FILE_H[PID]=fh;
         return fh.createWritable().then(function(w){ return w.write(r.text).then(function(){ return w.close(); }); })
           .then(function(){ note("Projet enregistré dans « "+fh.name+" » — Ctrl+S pour réenregistrer, Ctrl+Maj+S : enregistrer sous.",4000); }); });
@@ -4809,7 +4809,7 @@ document.getElementById("projFile").onchange=function(e){
     return kvPut("p:"+id,pk).then(function(){ return kvPut("projects",PROJS); }).then(function(){
       var s=document.getElementById("projSheet"); if(s) s.remove(); return openProject(id); })
       .then(function(){ note("Projet « "+nm+" » ouvert.",4000); });
-  }).catch(function(){ note("Ce fichier n'est pas un projet « Report & métré » lisible."); });
+  }).catch(function(){ note("Ce fichier n'est pas un projet Superplan lisible."); });
 };
 
 /* ============ métré : postes (surface, linéaire, comptage) et mesures ============ */

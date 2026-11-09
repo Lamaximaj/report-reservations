@@ -1,7 +1,7 @@
 {
-  "name": "Report & métré — réservations",
-  "short_name": "Report & métré",
-  "description": "Report des réservations d'un niveau à l'autre, anomalies, métré et export des plans.",
+  "name": "Superplan",
+  "short_name": "Superplan",
+  "description": "Superplan : report des réservations d'un niveau à l'autre, anomalies, métré et export des plans.",
   "lang": "fr",
   "start_url": "./",
   "scope": "./",
