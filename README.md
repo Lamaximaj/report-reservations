@@ -32,6 +32,8 @@ déplacer, utiliser **Enregistrer**.
 
 ### Enregistrer, panneaux
 
+- **Renommer le projet** : le crayon à côté du nom en haut, ou `F2`.
+
 - **Enregistrer** (disquette en haut, `Ctrl+S`) : tout le projet, plans compris, dans un
   fichier `.json`. Dans Chrome ou Edge, on choisit le fichier une fois, puis `Ctrl+S`
   réenregistre dedans (`Ctrl+Maj+S` : enregistrer sous) ; ailleurs, le fichier part dans
@@ -79,6 +81,8 @@ Une seule règle : **chaque réservation est un objet, et chaque objet est rang�
   un calque, un objet ou une réservation ; `+ objet` sur un calque ; `⋯` pour les réglages
   d'un objet (forme, cotes, calque), le ranger ailleurs, sélectionner ses réservations, le
   supprimer (en gardant ou non ses réservations). `+` en haut : nouvel objet ou nouveau calque.
+- **Couleur** : chaque nouvel objet reçoit automatiquement une couleur encore libre (le
+  rouge reste réservé aux anomalies) ; cliquer la pastille pour la changer.
 - **Objet actif** : le bouton à côté de Rectangle / Ronde dans la barre d'outils. Les
   réservations dessinées au rectangle ou au rond sont de cet objet (avec les cotes tracées) ;
   cliquer la ligne d'un objet dans l'arbre le rend actif et le **pose** (un clic sur le plan
@@ -88,8 +92,28 @@ Une seule règle : **chaque réservation est un objet, et chaque objet est rang�
 - Les projets d'avant cette version sont repris : une réservation sans objet prend l'objet
   tiré de son nom (« EU 3 » → EU), sinon RÉS, dans son calque et à sa couleur.
 
+### Plans liés (structure, techniques…)
+
+Chaque niveau peut recevoir d'autres plans que le plan archi : structure, CVC, plomberie,
+électricité… Menu `⋯` d'un niveau (ou clic droit sur le plan) → **Lier un plan à ce niveau**.
+
+- Le plan lié a son propre **calage** : échelle, puis repère au même endroit physique que sur
+  le plan archi (barre de calage en bas à droite ; « Même calage que l'archi » si les deux
+  feuilles ont le même cadrage). Une fois calé, il se **superpose en transparence**, teinté
+  dans sa couleur (bleu pour la structure…), sous les réservations : on y lit les poutres,
+  les gaines, pour poser les réservations au bon endroit.
+- Sous le niveau, dans la liste : œil, couleur, type, curseur de transparence, `⋯`
+  (recaler, teinter ou non, retirer). Un plan lié n'est pas un niveau : il n'a ni
+  réservations ni métré propres.
+- Export : case « Dessiner aussi les plans liés » (plans, zone, réservation par réservation).
+
 ### Réservations
 
+- **Accrochage aux objets** (`A`, aimant au-dessus du plan) : en dessinant, déplaçant,
+  posant ou redimensionnant une réservation, le point s'aimante aux coins, centres et
+  milieux des autres réservations, à leurs positions réelles, aux sommets du métré et au
+  repère ; sinon il s'aligne dessus (guides pointillés). `Alt` enfoncé : sans accrochage
+  le temps d'un geste. Le métré s'accroche aussi aux réservations.
 - **Dessiner** une réservation rectangulaire (`R`) ou ronde (`C`), de l'objet actif. Elle est stockée en
   mètres par rapport au repère et se reporte sur les autres niveaux : par défaut celui
   où elle est créée et tous ceux du dessus. Sur un niveau où elle n'est pas, elle
