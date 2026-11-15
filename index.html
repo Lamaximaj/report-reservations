@@ -106,6 +106,8 @@ input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color])
 .tool:hover{background:var(--panel-2);color:var(--ink)}
 .tool.on{background:linear-gradient(135deg,var(--accent),var(--accent-2));color:#fff;box-shadow:0 6px 14px -8px rgba(228,87,46,.8)}
 .tool.on.mt{background:linear-gradient(135deg,var(--blue),#5b8cff);box-shadow:0 6px 14px -8px rgba(47,109,246,.8)}
+/* écrans d'ordinateur portable : outils un peu resserrés pour que la barre tienne en entier */
+@media (max-width:1800px){ .tool{padding:3px 3px} .objchip{max-width:140px} }
 .sp{flex:1 1 0;min-width:0}
 .acts{display:flex;align-items:center;gap:3px;flex:none}
 .ib{width:34px;height:34px;display:grid;place-items:center;border:0;background:transparent;border-radius:9px;color:var(--muted);flex:none;padding:0}
@@ -349,6 +351,19 @@ canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-acti
 .linkbar .lb1 span{color:var(--muted);white-space:nowrap}
 .linkbar .lb1 .i{color:var(--blue)}
 .linkbar .lb2{display:flex;gap:5px;flex-wrap:wrap}
+/* barre des poutres */
+.beambar{position:absolute;left:10px;bottom:44px;z-index:6;background:var(--panel);border:1px solid var(--line-soft);border-radius:14px;padding:9px 11px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:7px;max-width:min(440px,calc(100% - 20px))}
+.beambar .bb1{display:flex;align-items:center;gap:7px;font-size:12.5px;min-width:0}
+.beambar .bb1 .i{color:var(--blue)}
+.beambar .bb1 span{color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.beambar .bb2{display:flex;gap:7px;flex-wrap:wrap;align-items:center}
+.beambar .bb2 label{display:flex;align-items:center;gap:4px;font-size:11.5px;color:var(--muted);white-space:nowrap}
+.beambar input,.beambar select{background:var(--panel-2);border:1px solid var(--line);border-radius:7px;padding:3px 6px;font-size:12px;color:var(--ink)}
+.beambar input{font-family:var(--f-num);width:56px}
+.beambar input[type=text]{width:84px}
+.beambar select{max-width:210px}
+.tag.bm{background:var(--panel-2);color:var(--blue);border:1px solid var(--line)}
+.tag.bm.off{color:var(--muted);opacity:.7}
 .status{position:absolute;left:10px;right:auto;bottom:10px;display:flex;gap:4px 14px;flex-wrap:wrap;padding:6px 12px;max-width:calc(100% - 20px);border-radius:999px;
   font-family:var(--f-num);font-size:10.5px;color:#aab4c3;background:var(--glass);border:1px solid var(--glass-line);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);font-variant-numeric:tabular-nums;pointer-events:none}
 .status span{white-space:nowrap}
@@ -459,6 +474,11 @@ kbd{font-family:var(--f-num);font-size:10.5px;background:var(--panel-2);border:1
   #repBtn span{display:none}
   .acts{gap:1px}
   .dock{left:10px;right:10px;width:auto}
+  .beambar{left:8px;right:8px;max-width:none;bottom:40px;padding:7px 9px;gap:5px}
+  .beambar .bb1 span{display:none}
+  .beambar .bb2 label{font-size:11px}
+  .beambar input{width:48px}
+  .beambar select{max-width:150px}
   .vbar .zv{min-width:44px}
 }
 </style>
@@ -521,6 +541,7 @@ kbd{font-family:var(--f-num);font-size:10.5px;background:var(--panel-2);border:1
   <symbol id="i-height" viewBox="0 0 24 24"><path d="M12 3.5v17M8.5 7L12 3.5 15.5 7M8.5 17l3.5 3.5 3.5-3.5"/><path d="M4 3.5h4M4 20.5h4"/></symbol>
   <symbol id="i-layer" viewBox="0 0 24 24"><path d="M12 3.5l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/></symbol>
   <symbol id="i-magnet" viewBox="0 0 24 24"><path d="M5 4v8.5a7 7 0 0 0 14 0V4"/><path d="M5 4h4.5v8.5M14.5 4H19v8.5"/></symbol>
+  <symbol id="i-beam" viewBox="0 0 24 24"><rect x="3" y="9" width="18" height="6" rx=".5"/><path d="M8.5 9L6 15M13.5 9L11 15M18.5 9L16 15"/></symbol>
   <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s-6.5-6.2-6.5-11a6.5 6.5 0 0 1 13 0c0 4.8-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.4"/></symbol>
 </svg>
 <div id="app">
@@ -550,6 +571,7 @@ kbd{font-family:var(--f-num);font-size:10.5px;background:var(--panel-2);border:1
         <button class="tool" data-tool="meas" title="Mesurer une distance (M)"><svg class="i"><use href="#i-meas"/></svg><span>Mesure</span></button>
         <button class="tool" data-tool="scale" title="Échelle du plan (E)"><svg class="i"><use href="#i-scale"/></svg><span>Échelle</span></button>
         <button class="tool" data-tool="org" title="Point de repère 0,0 (P)"><svg class="i"><use href="#i-org"/></svg><span>Repère</span></button>
+        <button class="tool" data-tool="beam" title="Poutre : tracer une poutre sur le plan structure lié — elle s'affiche avec ou sans le fond de ce plan (B)"><svg class="i"><use href="#i-beam"/></svg><span>Poutre</span></button>
       </div>
       <div class="grp" data-cap="Export">
         <button class="tool" data-tool="zone" title="Zone à exporter : tracez un cadre, il est exporté sur les niveaux côte à côte, à la même échelle (Z)"><svg class="i"><use href="#i-zone"/></svg><span>Zone</span></button>
@@ -673,7 +695,8 @@ var S={ levels:[], shapes:[], activeId:null, selId:null, tool:"select",
         asc:true,            /* true : le 1er de la liste est le niveau le plus bas */
         title:"", layers:[], activeLayer:null, types:undefined, activeType:null, ui:{lv:true,ly:true,pr:true,lst:"ly",exp:{fmt:"orig",ori:"auto"}},
         items:[], meas:[], activeItem:null, selM:null, expOff:[], msel:[], multiOff:[],
-        hEt:2.8, zRef:null };   /* hauteur d'étage par défaut (m), niveau à ±0,00 */
+        hEt:2.8, zRef:null,
+        selB:null, beam:{w:.2,h:.5} };   /* poutre choisie ; largeur et retombée des nouvelles poutres (m) */   /* hauteur d'étage par défaut (m), niveau à ±0,00 */
 /* couleurs des objets : pas de rouge, réservé à la position réelle des anomalies ;
    un nouvel objet prend la première couleur libre, puis des teintes calculées quand toutes sont prises */
 var PAL=["#2563eb","#059669","#7c3aed","#d97706","#0891b2","#4f46e5","#65a30d","#c026d3","#0d9488","#ca8a04",
@@ -931,10 +954,11 @@ var PID=null, PROJS=[];
 function projMeta(id){ return PROJS.find(function(p){ return p.id===id; })||null; }
 function pack(){ return { levels:S.levels.map(function(l){
     return {id:l.id,name:l.name,src:l.src,w:l.w,h:l.h,scale:l.scale,org:l.org,rot:l.rot,pdf:l.pdf,hf:l.hf,
-      links:links(l).map(function(k){ return {id:k.id,name:k.name,kind:k.kind,src:k.src,w:k.w,h:k.h,pdf:k.pdf,scale:k.scale,org:k.org,rot:k.rot,vis:k.vis,op:k.op,col:k.col,tint:k.tint}; })}; }),
+      bvis:l.bvis,bOn:l.bOn,beams:beams(l),
+      links:links(l).map(function(k){ return {id:k.id,name:k.name,kind:k.kind,src:k.src,w:k.w,h:k.h,pdf:k.pdf,scale:k.scale,org:k.org,rot:k.rot,vis:k.vis,op:k.op,col:k.col,tint:k.tint,bg:k.bg,bvis:k.bvis,beams:beams(k)}; })}; }),
     shapes:S.shapes, activeId:S.activeId, seq:S.seq, demo:S.demo, asc:S.asc, title:S.title,
     layers:S.layers, activeLayer:S.activeLayer, types:S.types, activeType:S.activeType, items:S.items, meas:S.meas, activeItem:S.activeItem, ui:S.ui, expOff:S.expOff, multiOff:S.multiOff, zone:S.zone||null,
-    hEt:S.hEt, zRef:S.zRef }; }
+    hEt:S.hEt, zRef:S.zRef, beam:S.beam }; }
 function counts(p){ return {nl:(p.levels||[]).length, nr:(p.shapes||[]).length, nm:(p.meas||[]).length}; }
 var saveT=null, saveErr=false;
 function persist(){
@@ -956,8 +980,8 @@ var H={u:[],r:[],cur:null,t:null,lock:false}, lvPool={};
 function snapState(){
   S.levels.forEach(function(l){ lvPool[l.id]=l; links(l).forEach(function(k){ lkPool[k.id]=k; }); });
   function noOpen(a){ return (a||[]).map(function(x){ var c=Object.assign({},x); delete c.open; return c; }); }
-  return JSON.stringify({lv:S.levels.map(function(l){ return {id:l.id,name:l.name,scale:l.scale,org:l.org,rot:l.rot,hf:l.hf,
-      links:links(l).map(function(k){ return {id:k.id,name:k.name,kind:k.kind,scale:k.scale,org:k.org,rot:k.rot,vis:k.vis,op:k.op,col:k.col,tint:k.tint}; })}; }),
+  return JSON.stringify({lv:S.levels.map(function(l){ return {id:l.id,name:l.name,scale:l.scale,org:l.org,rot:l.rot,hf:l.hf,bvis:l.bvis,bOn:l.bOn,beams:beams(l),
+      links:links(l).map(function(k){ return {id:k.id,name:k.name,kind:k.kind,scale:k.scale,org:k.org,rot:k.rot,vis:k.vis,op:k.op,col:k.col,tint:k.tint,bg:k.bg,bvis:k.bvis,beams:beams(k)}; })}; }),
     shapes:S.shapes, layers:noOpen(S.layers), types:noOpen(S.types), items:noOpen(S.items), meas:S.meas,
     asc:S.asc, seq:S.seq, title:S.title, activeLayer:S.activeLayer, hEt:S.hEt, zRef:S.zRef});
 }
@@ -973,6 +997,7 @@ function restoreSnap(js){
   function reopen(a){ (a||[]).forEach(function(x){ if(keep[x.id]!==undefined) x.open=keep[x.id]; }); return a; }
   H.lock=true;
   S.levels=o.lv.map(function(x){ var l=lvPool[x.id]; if(!l) return null; l.name=x.name; l.scale=x.scale; l.org=x.org; l.rot=x.rot; l.hf=x.hf;
+    l.beams=x.beams||[]; l.bvis=x.bvis; l.bOn=x.bOn;
     l.links=(x.links||[]).map(function(m){ var k=lkPool[m.id]; if(!k) return null; Object.assign(k,m); return k; }).filter(Boolean); return l; }).filter(Boolean);
   fixLinks();
   S.shapes=o.shapes; S.layers=reopen(o.layers); S.types=reopen(o.types); S.items=reopen(o.items||[]); S.meas=o.meas||[];
@@ -999,7 +1024,7 @@ document.getElementById("redoBtn").onclick=redo;
 function blank(){
   S.levels=[]; S.shapes=[]; S.items=[]; S.meas=[]; S.layers=[]; S.types=undefined; S.activeType=null; S.activeLayer=null; S.activeItem=null;
   S.activeId=null; S.selId=null; S.selM=null; S.seq=1; S.asc=true; S.demo=false; S.under=""; S.title=""; S.expOff=[]; S.multiOff=[]; S.msel=[]; S.zone=null;
-  S.hEt=2.8; S.zRef=null;
+  S.hEt=2.8; S.zRef=null; S.selB=null; S.beam={w:.2,h:.5};
   resetViews(); meas=null; calLine=null; drag=null; draft=null; lvPool={}; lkPool={}; S.editLink=null;
   fixLayers(); fixItems();
 }
@@ -1010,6 +1035,7 @@ function applyPack(p){
   S.seq=p.seq||(S.shapes.length+1); S.demo=!!p.demo; if(p.asc!==undefined) S.asc=p.asc;
   S.layers=p.layers||[]; S.activeLayer=p.activeLayer||null; S.types=p.types; S.activeType=p.activeType||null; S.items=p.items||[]; S.meas=p.meas||[]; S.activeItem=p.activeItem||null;
   S.hEt=p.hEt>0? +p.hEt : 2.8; S.zRef=p.zRef||null;
+  S.beam= p.beam&&p.beam.w>0? {w:+p.beam.w, h:p.beam.h>0?+p.beam.h:0} : {w:.2,h:.5};
   S.levels.forEach(function(l){ if(!(l.hf>0)) delete l.hf; }); fixLinks();
   S.expOff=Array.isArray(p.expOff)? p.expOff.filter(function(x){ return typeof x==="string"; }) : [];
   S.multiOff=Array.isArray(p.multiOff)? p.multiOff.filter(function(x){ return S.levels.some(function(l){ return l.id===x; }); }) : [];
@@ -1813,6 +1839,7 @@ function drawScene(tile){
     var rs=pxm(lv); if(rs){ var wq=Math.abs(drag.b.X-drag.a.X), hq=Math.abs(drag.b.Y-drag.a.Y), k=ready(lv)?1:1/rs;
       pill(nf(wq*k,2)+" × "+nf(hq*k,2)+" m  ·  "+qTxt(wq*hq*k*k,"m²"),rb.x,rb.y-20,ri.c); }
     ctx.restore(); }
+  if(drag&&drag.m==="beam"&&drag.lv===lv.id&&ready(lv)) drawBeamDraft(lv);
   drawDraft(lv);
   drawRouteDraft(lv);
   drawZone(lv);
@@ -1874,6 +1901,7 @@ function setTool(t){
   else if(t==="org"){ hint("Cliquez le point de repère du plan — il devient l'origine (0,0) de ce niveau."); }
   else if(isMtTool(t)) draftHint();
   else if(t==="route") routeHint();
+  else if(t==="beam") hint("");
   else hint(t==="zone"?"Zone à exporter : tracez le cadre — le même cadre vaut pour tous les niveaux côte à côte. Échap pour annuler.":
        t==="dev"?"Dévoiement : faites glisser la réservation jusqu'à sa nouvelle position (Maj : dans l'axe). Échap pour annuler.":
        t==="rect"?"Tracez le rectangle de la réservation — objet « "+activeObj().code+" » ("+(layerById(activeObj().ly)||{}).name+").":
@@ -1884,7 +1912,7 @@ function setTool(t){
   Array.prototype.forEach.call(document.querySelectorAll("#rsList .ob"),function(r){
     r.classList.toggle("pose",t==="stamp"&&!!objId&&r.dataset.id===objId); });
   renderObjChip();
-  if(!booting){ renderMetre(); renderInsp(); }
+  if(!booting){ renderMetre(); renderInsp(); beamBar(); }
   draw();
 }
 
@@ -1899,7 +1927,7 @@ function round(s){
    archi, il se superpose en transparence, teinté dans sa couleur ; on y lit les poutres, les gaines… pour poser les
    réservations. Il n'est pas un niveau : pas de réservations ni de métré propres. */
 var LKIND={structure:{t:"Structure",c:"#2458d6"},cvc:{t:"CVC",c:"#0b7d8c"},plomb:{t:"Plomberie",c:"#15803d"},elec:{t:"Électricité",c:"#b45309"},autre:{t:"Autre",c:"#6b7280"}};
-var lkPool={}, expLinks=false;
+var lkPool={}, expLinks=false, expBeams=false;
 function links(l){ return (l&&Array.isArray(l.links))? l.links : []; }
 function linkById(id){ if(!id) return null; for(var i=0;i<S.levels.length;i++){ var k=links(S.levels[i]).find(function(x){ return x.id===id; }); if(k) return k; } return null; }
 function linkParent(id){ return S.levels.find(function(l){ return links(l).some(function(x){ return x.id===id; }); })||null; }
@@ -1916,13 +1944,18 @@ function guessKind(fn){ fn=String(fn||"").toLowerCase();
 function fixLinks(){
   S.levels.forEach(function(l){
     l.links=links(l).filter(function(k){ return k&&k.id&&k.src; });
+    fixBeams(l);
     l.links.forEach(function(k){
       if(!LKIND[k.kind]) k.kind="autre"; k.name=String(k.name||LKIND[k.kind].t);
       if(!/^#[0-9a-f]{6}$/i.test(k.col||"")) k.col=LKIND[k.kind].c;
       if(!(k.op>0&&k.op<=1)) k.op=.65; if(k.tint===undefined) k.tint=true; if(k.vis===undefined) k.vis=true; if(!(k.rot>=0||k.rot<0)) k.rot=0;
+      if(k.bg===undefined) k.bg=true;
+      fixBeams(k);
       lkPool[k.id]=k;
     });
+    if(l.bOn&&l.bOn!==l.id&&!links(l).some(function(k){ return k.id===l.bOn; })) l.bOn=null;
   });
+  if(S.selB&&!beamById(S.selB)) S.selB=null;
   if(S.editLink&&!linkById(S.editLink)) S.editLink=null;
 }
 function allLinks(){ var a=[]; S.levels.forEach(function(l){ links(l).forEach(function(k){ a.push(k); }); }); return a; }
@@ -1995,7 +2028,8 @@ function drawLevelPlans(lv){
   var ek=calPlanFor(lv); ek= ek!==lv? ek : null;
   if(ek){ drawPlan(lv,.28); drawPlan(ek,1); }
   else drawPlan(lv,1);
-  links(lv).forEach(function(k){ if(k===ek||k.vis===false||!ready(k)||!k.img) return; drawPlan(k,k.op,{tint:k.tint?k.col:null,blend:"multiply"}); });
+  links(lv).forEach(function(k){ if(k===ek||k.vis===false||k.bg===false||!ready(k)||!k.img) return; drawPlan(k,k.op,{tint:k.tint?k.col:null,blend:"multiply"}); });
+  drawBeams(lv);
 }
 /* image teintée : le blanc reste blanc, les traits prennent la couleur (mise en cache) */
 function tinted(src,col,holder){
@@ -2041,14 +2075,17 @@ function withLinks(out,l,cache,base){
 }
 /* ---- liste des niveaux : rangées des plans liés ---- */
 function linkRow(lv,k){
-  var el=document.createElement("div"), on=S.editLink===k.id, vis=k.vis!==false, ok=ready(k);
+  var el=document.createElement("div"), on=S.editLink===k.id, vis=k.vis!==false, ok=ready(k), nb=beams(k).length;
   el.className="lnk"+(on?" on":"")+(vis?"":" off"); el.dataset.id=k.id;
   el.innerHTML='<button class="eye" data-eye title="'+(vis?"Masquer":"Afficher")+' ce plan lié">'+(vis?EYE:EYE_OFF)+'</button>'+
     '<label class="lsw" style="background:'+k.col+'" title="Couleur de teinte"><input type="color" value="'+k.col+'"></label>'+
     '<div class="nm"><input class="lnm" value="'+esc(k.name)+'" spellcheck="false" title="Renommer"><div class="meta">'+
       '<button class="tag kd" data-kd title="Type du plan lié">'+esc(LKIND[k.kind].t)+'</button>'+
       '<button class="tag '+(k.scale?"ok":"warn")+'" data-sc>'+(k.scale?scaleTxt(k):"échelle ?")+'</button>'+
-      '<button class="tag '+(k.org?"ok":"warn")+'" data-og>'+(k.org?"repère ✓":"repère ?")+'</button>'+(on?'<span class="tag alt">calage en cours</span>':'')+'</div></div>'+
+      '<button class="tag '+(k.org?"ok":"warn")+'" data-og>'+(k.org?"repère ✓":"repère ?")+'</button>'+
+      (nb?'<button class="tag bm'+(k.bvis===false?" off":"")+'" data-bm title="'+(k.bvis===false?"Afficher":"Masquer")+' les poutres tracées sur ce plan">'+nb+' poutre'+(nb>1?"s":"")+'</button>'+
+          '<button class="tag bm'+(k.bg===false?" off":"")+'" data-bgf title="'+(k.bg===false?"Afficher":"Masquer")+' le fond de ce plan — les poutres restent, seules, sur le plan archi">fond</button>':'')+
+      (on?'<span class="tag alt">calage en cours</span>':'')+'</div></div>'+
     '<input type="range" class="op" min="10" max="100" value="'+Math.round(k.op*100)+'" title="Transparence : '+Math.round(k.op*100)+' %"'+(ok?"":" disabled")+'>'+
     '<button class="mn" data-mn title="Actions">⋯</button>';
   el.querySelector("[data-eye]").onclick=function(){ k.vis=!vis; renderLevels(); draw(); save(); };
@@ -2056,6 +2093,12 @@ function linkRow(lv,k){
   ci.oninput=function(){ k.col=this.value; el.querySelector(".lsw").style.background=this.value; draw(); };
   ci.onchange=function(){ save(); };
   var ni=el.querySelector(".lnm"); ni.oninput=function(){ k.name=this.value; save(); }; ni.onkeydown=function(e){ if(e.key==="Enter") this.blur(); }; ni.onchange=function(){ linkBar(); };
+  var bmt=el.querySelector("[data-bm]");
+  if(bmt) bmt.onclick=function(){ k.bvis=k.bvis===false; renderLevels(); draw(); save();
+    note(k.bvis!==false? "Poutres de « "+k.name+" » affichées." : "Poutres de « "+k.name+" » masquées.",2200); };
+  var bgt=el.querySelector("[data-bgf]");
+  if(bgt) bgt.onclick=function(){ k.bg=k.bg===false; renderLevels(); draw(); save();
+    note(k.bg!==false? "Fond de « "+k.name+" » affiché." : "Fond de « "+k.name+" » masqué : seules ses poutres restent sur le plan archi.",3200); };
   el.querySelector("[data-sc]").onclick=function(){ if(S.editLink!==k.id) startLinkCal(k); setTool("scale"); };
   el.querySelector("[data-og]").onclick=function(){ if(S.editLink!==k.id) startLinkCal(k); setTool("org"); };
   el.querySelector("[data-kd]").onclick=function(){ var b=this.getBoundingClientRect();
@@ -2069,9 +2112,186 @@ function linkRow(lv,k){
       {t:"Teinter dans sa couleur",i:"theme",on:!!k.tint,fn:function(){ k.tint=!k.tint; draw(); save(); }},
       {t:vis?"Masquer":"Afficher",i:"eye",fn:function(){ k.vis=!vis; renderLevels(); draw(); save(); }},
       "-",
-      {t:"Retirer ce plan lié",i:"trash",dg:true,fn:function(){ removeLink(k); }}]); };
+      {t:"Tracer des poutres sur ce plan",i:"beam",k:"B",fn:function(){ lv.bOn=k.id; S.activeId=lv.id; if(S.editLink) S.editLink=null; renderAll(); setTool("beam"); }},
+      nb?{t:"Afficher les poutres ("+nb+")",i:"eye",on:k.bvis!==false,fn:function(){ k.bvis=k.bvis===false; renderLevels(); draw(); save(); }}:null,
+      nb?{t:"Afficher le fond du plan",i:"layer",on:k.bg!==false,fn:function(){ k.bg=k.bg===false; renderLevels(); draw(); save(); }}:null,
+      nb?{t:"Supprimer les poutres de ce plan",i:"trash",dg:true,fn:function(){ clearBeams(k); }}:null,
+      "-",
+      {t:"Retirer ce plan lié",i:"trash",dg:true,fn:function(){ removeLink(k); }}].filter(Boolean)); };
   el.onclick=function(e){ if(e.target.closest("button,input,label")) return; if(S.activeId!==lv.id){ S.activeId=lv.id; fit(); renderAll(); } };
   return el;
+}
+
+/* ============ poutres tracées sur un plan ============ */
+/* une poutre se trace sur le plan qui la montre : le plan structure lié du niveau, ou le plan du niveau lui-même.
+   On pose son axe (deux points) et sa largeur ; elle est enregistrée dans les pixels de ce plan, donc elle suit son
+   calage. Le fond du plan lié se masque à part : les poutres restent alors seules sur le plan archi. */
+function beams(p){ return (p&&Array.isArray(p.beams))? p.beams : []; }
+function fixBeams(p){
+  p.beams=beams(p).filter(function(b){ return b&&b.a&&b.b&&isFinite(b.a.x)&&isFinite(b.a.y)&&isFinite(b.b.x)&&isFinite(b.b.y); });
+  p.beams.forEach(function(b){ if(!b.id) b.id=uid(); if(!(b.w>0)) b.w=.2; if(!(b.hh>0)) b.hh=0; b.n=String(b.n||""); });
+  if(p.bvis===undefined) p.bvis=true;
+}
+/* plans d'un niveau qui peuvent porter des poutres : son plan archi, puis ses plans liés */
+function beamHosts(lv){ return lv? [lv].concat(links(lv)) : []; }
+function hostLabel(lv,p){ return p===lv? p.name+" — plan du niveau" : p.name+(LKIND[p.kind]? " — "+LKIND[p.kind].t : ""); }
+function beamCol(lv,p){ return p===lv? "#2458d6" : p.col; }
+function beamTxt(b){ return (b.n? b.n+" · " : "")+Math.round(b.w*100)+(b.hh>0? "×"+Math.round(b.hh*100) : "")+" cm"; }
+function beamCount(lv){ var n=0; beamHosts(lv).forEach(function(p){ n+=beams(p).length; }); return n; }
+/* poutres affichées sur un niveau : plan porteur calé, affiché (œil) et poutres non masquées */
+function beamList(lv){
+  var out=[]; if(!lv||!ready(lv)) return out;
+  beamHosts(lv).forEach(function(p){
+    if(p.bvis===false||!ready(p)) return;
+    if(p!==lv&&p.vis===false) return;
+    beams(p).forEach(function(b){ out.push({lv:lv,p:p,b:b}); });
+  });
+  return out;
+}
+function beamById(id){
+  var r=null; if(!id) return null;
+  S.levels.forEach(function(l){ beamHosts(l).forEach(function(p){ beams(p).forEach(function(b){ if(b.id===id) r={lv:l,p:p,b:b}; }); }); });
+  return r;
+}
+function selB(){ var x=S.selB? beamById(S.selB) : null; if(!x) S.selB=null; return x; }
+function beamAxis(p,b){ return [p2w(p,b.a.x,b.a.y),p2w(p,b.b.x,b.b.y)]; }
+/* les 4 coins de la poutre en mètres : son axe élargi de sa largeur */
+function beamQuad(p,b){
+  var a=beamAxis(p,b), A=a[0], B=a[1];
+  var dx=B.X-A.X, dy=B.Y-A.Y, L=Math.hypot(dx,dy)||1, h=(b.w>0?b.w:.2)/2, nx=-dy/L*h, ny=dx/L*h;
+  return [{X:A.X+nx,Y:A.Y+ny},{X:B.X+nx,Y:B.Y+ny},{X:B.X-nx,Y:B.Y-ny},{X:A.X-nx,Y:A.Y-ny}];
+}
+function beamLen(p,b){ var a=beamAxis(p,b); return Math.hypot(a[1].X-a[0].X,a[1].Y-a[0].Y); }
+function inQuad(q,W){
+  var sg=0;
+  for(var i=0;i<q.length;i++){ var A=q[i], B=q[(i+1)%q.length], c=(B.X-A.X)*(W.Y-A.Y)-(B.Y-A.Y)*(W.X-A.X);
+    if(c>0) sg++; else if(c<0) sg--; }
+  return Math.abs(sg)===q.length;
+}
+/* plan qui reçoit les nouvelles poutres : celui en calage, sinon celui choisi, sinon le plan structure lié */
+function beamHost(){
+  var lv=active(); if(!lv) return null;
+  var k=editLink(); if(k&&linkParent(k.id)===lv) return k;
+  var hs=beamHosts(lv), ch=hs.filter(function(p){ return p.id===lv.bOn&&ready(p); })[0];
+  if(ch) return ch;
+  function first(f){ return hs.filter(f)[0]; }
+  return first(function(p){ return p!==lv&&p.kind==="structure"&&ready(p); })
+      || first(function(p){ return p!==lv&&beams(p).length&&ready(p); })
+      || first(function(p){ return p!==lv&&ready(p); }) || lv;
+}
+function px2(v){ return Math.round(v*100)/100; }
+function addBeam(p,A,B){
+  var a=w2p(p,A.X,A.Y), b=w2p(p,B.X,B.Y);
+  var bm={id:uid(),a:{x:px2(a.x),y:px2(a.y)},b:{x:px2(b.x),y:px2(b.y)},
+          w:(S.beam&&S.beam.w>0)?S.beam.w:.2, hh:(S.beam&&S.beam.h>0)?S.beam.h:0, n:""};
+  if(!Array.isArray(p.beams)) p.beams=[];
+  p.beams.push(bm); p.bvis=true; return bm;
+}
+function delBeam(id){
+  var x=beamById(id); if(!x) return false;
+  x.p.beams=beams(x.p).filter(function(b){ return b.id!==id; });
+  if(S.selB===id) S.selB=null;
+  renderAll(); save(); note("Poutre supprimée — Ctrl+Z pour revenir.",2600); return true;
+}
+function clearBeams(p){
+  var nb=beams(p).length; if(!nb) return;
+  p.beams=[]; S.selB=null; renderAll(); save();
+  note(plural(nb,"poutre supprimée","poutres supprimées")+" de « "+p.name+" » — Ctrl+Z pour revenir.",3200);
+}
+function moveBeam(p,b,dx,dy){
+  var a=beamAxis(p,b), q1=w2p(p,a[0].X+dx,a[0].Y+dy), q2=w2p(p,a[1].X+dx,a[1].Y+dy);
+  b.a={x:px2(q1.x),y:px2(q1.y)}; b.b={x:px2(q2.x),y:px2(q2.y)};
+}
+function setBeamEnd(p,b,which,W){ var q=w2p(p,W.X,W.Y); b[which]={x:px2(q.x),y:px2(q.y)}; }
+/* poignées : les deux bouts de l'axe, et le milieu de chaque grand côté (largeur) */
+function beamHandles(p,b){
+  var a=beamAxis(p,b), q=beamQuad(p,b);
+  return [{k:"a",X:a[0].X,Y:a[0].Y},{k:"b",X:a[1].X,Y:a[1].Y},
+          {k:"w",X:(q[0].X+q[1].X)/2,Y:(q[0].Y+q[1].Y)/2},{k:"w",X:(q[2].X+q[3].X)/2,Y:(q[2].Y+q[3].Y)/2}];
+}
+function beamHandle(x,sp){
+  var hs=beamHandles(x.p,x.b);
+  for(var i=0;i<hs.length;i++){ var q=w2s(hs[i].X,hs[i].Y); if(Math.hypot(q.x-sp.x,q.y-sp.y)<=9) return hs[i]; }
+  return null;
+}
+function pickBeam(lv,W){
+  var list=beamList(lv);
+  for(var i=list.length-1;i>=0;i--) if(inQuad(beamQuad(list[i].p,list[i].b),W)) return list[i];
+  return null;
+}
+/* dessin : bande teintée dans la couleur du plan porteur, contour, cote au milieu */
+function drawBeams(lv){
+  var list=beamList(lv); if(!list.length) return;
+  ctx.save(); ctx.lineJoin="round";
+  list.forEach(function(x){
+    var b=x.b, c=beamCol(lv,x.p), on=b.id===S.selB;
+    var q=beamQuad(x.p,b).map(function(w){ return w2s(w.X,w.Y); });
+    ctx.beginPath(); q.forEach(function(p,i){ i? ctx.lineTo(p.x,p.y) : ctx.moveTo(p.x,p.y); }); ctx.closePath();
+    ctx.globalAlpha=on?.26:.15; ctx.fillStyle=c; ctx.fill();
+    ctx.globalAlpha=1; ctx.strokeStyle=c; ctx.lineWidth=on?2.4:1.4; ctx.stroke();
+    var a=beamAxis(x.p,b), m=w2s((a[0].X+a[1].X)/2,(a[0].Y+a[1].Y)/2);
+    if(Math.hypot(q[1].x-q[0].x,q[1].y-q[0].y)>48) pill(beamTxt(b),m.x,m.y,c);
+    if(on){ ctx.lineWidth=2; ctx.fillStyle="#fff";
+      beamHandles(x.p,b).forEach(function(h){ var p=w2s(h.X,h.Y);
+        ctx.beginPath(); ctx.arc(p.x,p.y,5,0,6.2832); ctx.fill(); ctx.stroke(); }); }
+  });
+  ctx.restore();
+}
+/* poutre en cours de tracé */
+function drawBeamDraft(lv){
+  var d=drag, L=Math.hypot(d.b.X-d.a.X,d.b.Y-d.a.Y); if(!(L>0)) return;
+  var a=w2p(d.p,d.a.X,d.a.Y), b=w2p(d.p,d.b.X,d.b.Y);
+  var bm={a:{x:a.x,y:a.y},b:{x:b.x,y:b.y},w:(S.beam&&S.beam.w>0)?S.beam.w:.2,hh:(S.beam&&S.beam.h>0)?S.beam.h:0,n:""};
+  var c=beamCol(lv,d.p), q=beamQuad(d.p,bm).map(function(w){ return w2s(w.X,w.Y); });
+  ctx.save(); ctx.beginPath(); q.forEach(function(p,i){ i? ctx.lineTo(p.x,p.y) : ctx.moveTo(p.x,p.y); }); ctx.closePath();
+  ctx.globalAlpha=.2; ctx.fillStyle=c; ctx.fill();
+  ctx.globalAlpha=1; ctx.strokeStyle=c; ctx.lineWidth=1.6; ctx.setLineDash([5,4]); ctx.stroke(); ctx.setLineDash([]);
+  var m=w2s((d.a.X+d.b.X)/2,(d.a.Y+d.b.Y)/2);
+  pill(mTxt(L)+"  ·  "+beamTxt(bm),m.x,m.y,c);
+  ctx.restore();
+}
+/* barre des poutres : plan porteur, cotes de la poutre choisie ou de la suivante */
+function beamBar(){
+  var old=document.getElementById("beamBar"), lv=active(), x=selB(), on=S.tool==="beam";
+  if(!lv||(!on&&!x)||editLink()){ if(old) old.remove(); return; }
+  var d=old||document.createElement("div"); d.id="beamBar"; d.className="beambar";
+  var hs=beamHosts(lv), host= x? x.p : beamHost();
+  var w=x? x.b.w : ((S.beam&&S.beam.w>0)?S.beam.w:.2), hh=x? (x.b.hh||0) : ((S.beam&&S.beam.h>0)?S.beam.h:0);
+  var h='<div class="bb1"><svg class="i s"><use href="#i-beam"/></svg><b>'+(x?"Poutre":"Poutres")+'</b>'+
+    '<label>sur <select data-h title="Plan qui porte la poutre : son fond se masque à part">'+hs.map(function(p){
+      return '<option value="'+p.id+'"'+(p===host?" selected":"")+(ready(p)?"":" disabled")+'>'+esc(hostLabel(lv,p))+(ready(p)?"":" (non calé)")+'</option>'; }).join("")+'</select></label>'+
+    (x? '<span>'+mTxt(beamLen(x.p,x.b))+'</span>' : '<span>tracez l\'axe · Échap pour terminer</span>')+'</div>'+
+    '<div class="bb2">'+
+    (x? '<label>repère <input type="text" data-bn value="'+esc(x.b.n)+'" placeholder="ex. P12"></label>' : '')+
+    '<label>largeur <input type="number" data-w min="2" max="400" step="1" value="'+Math.round(w*100)+'"> cm</label>'+
+    '<label>retombée <input type="number" data-r min="0" max="400" step="1" value="'+Math.round(hh*100)+'"> cm</label>'+
+    (x? '<button class="btn sm" data-del>Supprimer</button>'+(on?'<button class="btn sm" data-new>Poutre suivante</button>':'') : '')+
+    '</div>';
+  d.innerHTML=h;
+  if(!old) stage.appendChild(d);
+  d.querySelector("[data-h]").onchange=function(){
+    var v=this.value, p=hs.filter(function(q){ return q.id===v; })[0]; if(!p) return;
+    if(x&&p!==x.p){ beamToHost(x,p); note("Poutre déplacée sur « "+p.name+" ».",2600); }
+    lv.bOn=p.id; renderAll(); save();
+  };
+  d.querySelector("[data-w]").oninput=function(){ var v=+this.value/100; if(!(v>0)) return;
+    S.beam.w=v; if(x) x.b.w=v; draw(); save(); };
+  d.querySelector("[data-r]").oninput=function(){ var v=+this.value/100; v=v>0?v:0;
+    S.beam.h=v; if(x) x.b.hh=v; draw(); save(); };
+  if(x){
+    d.querySelector("[data-bn]").oninput=function(){ x.b.n=this.value; draw(); save(); };
+    d.querySelector("[data-del]").onclick=function(){ delBeam(x.b.id); };
+    var nb=d.querySelector("[data-new]");
+    if(nb) nb.onclick=function(){ S.selB=null; renderAll(); };
+  }
+}
+/* la poutre change de plan porteur sans bouger sur le chantier */
+function beamToHost(x,p){
+  var a=beamAxis(x.p,x.b), q1=w2p(p,a[0].X,a[0].Y), q2=w2p(p,a[1].X,a[1].Y);
+  x.p.beams=beams(x.p).filter(function(b){ return b!==x.b; });
+  x.b.a={x:px2(q1.x),y:px2(q1.y)}; x.b.b={x:px2(q2.x),y:px2(q2.y)};
+  if(!Array.isArray(p.beams)) p.beams=[];
+  p.beams.push(x.b); p.bvis=true;
 }
 
 /* ============ accrochage aux objets ============ */
@@ -2092,6 +2312,11 @@ function snapCands(lv,excl){
     if(o&&o.st==="ko"&&o.real) keyPts(realShape(a,o)).forEach(function(q){ out.push(q); });
   });
   S.meas.forEach(function(m){ if(m.lv!==lv.id||!itemVis(itemOf(m))) return; m.pts.forEach(function(q){ var w=p2w(lv,q.x,q.y); out.push({X:w.X,Y:w.Y,k:"mt"}); }); });
+  /* poutres : coins et bouts de l'axe, pour poser une réservation au nu d'une poutre */
+  beamList(lv).forEach(function(x){
+    beamQuad(x.p,x.b).forEach(function(q){ out.push({X:q.X,Y:q.Y,k:"c"}); });
+    beamAxis(x.p,x.b).forEach(function(q){ out.push({X:q.X,Y:q.Y,k:"o"}); });
+  });
   return out;
 }
 function snapTol(){ return SNAP_PX/S.view.s; }
@@ -2227,6 +2452,15 @@ cv.addEventListener("pointerdown",function(e){
     if(!ready(lv)){ note("Définissez l'échelle et le repère de ce plan."); return; }
     placeCopy(W,e.altKey); return;
   }
+  /* poutre : on tire son axe sur le plan porteur (plan structure lié, ou plan du niveau) */
+  if(S.tool==="beam"){
+    if(e.button!==0){ setTool("select"); return; }
+    var hb=beamHost();
+    if(!hb){ note("Aucun plan ouvert."); return; }
+    if(!ready(hb)){ note(hb===lv? "Définissez l'échelle et le repère de ce plan." : "Calez d'abord le plan lié « "+hb.name+" » (échelle + repère)."); return; }
+    var Wb=snapW(W,null,e.altKey);
+    drag={m:"beam",p:hb,lv:lv.id,a:{X:Wb.X,Y:Wb.Y},b:{X:Wb.X,Y:Wb.Y}}; draw(); return;
+  }
   if(!ready(lv) && (S.tool==="rect"||S.tool==="circle")){ note("Définissez l'échelle et le repère de ce plan."); return; }
 
   if(S.tool==="meas"){
@@ -2235,6 +2469,12 @@ cv.addEventListener("pointerdown",function(e){
   }
   if(S.tool==="rect"||S.tool==="circle"){
     var Wd=snapW(W,null,e.altKey); drag={m:"draw",t:S.tool,sx:Wd.X,sy:Wd.Y,prev:null}; return;
+  }
+  /* poutre choisie : poignées des bouts (longueur) et des côtés (largeur) */
+  var bx0=selB();
+  if(bx0&&bx0.lv.id===lv.id){
+    var bh0=beamHandle(bx0,p);
+    if(bh0){ drag={m:"bvtx",id:bx0.b.id,k:bh0.k}; return; }
   }
   /* sélection : poignées de la mesure sélectionnée (sommets, milieux pour ajouter un sommet) */
   var ms=selM();
@@ -2266,24 +2506,30 @@ cv.addEventListener("pointerdown",function(e){
     }
   }
   var hit=pick(W,lv);
-  if(hit&&(e.ctrlKey||e.metaKey||e.shiftKey)){ toggleSel(hit.id); renderAll(); return; }   /* sélection multiple */
+  if(hit&&(e.ctrlKey||e.metaKey||e.shiftKey)){ S.selB=null; toggleSel(hit.id); renderAll(); return; }   /* sélection multiple */
   if(hit){
-    var ha=at(hit,lv.id); S.selId=hit.id; S.selM=null; S.msel=[];
+    var ha=at(hit,lv.id); S.selId=hit.id; S.selM=null; S.msel=[]; S.selB=null;
     /* niveau où la réservation est dévoyée : on déplace la position du dévoiement */
     if(ha.devAt){ var hc=centerOf(ha); drag={m:"dmove",id:hit.id,dx:W.X-hc.X,dy:W.Y-hc.Y,ox:hc.X,oy:hc.Y}; renderAll(); return; }
     /* position reprise d'un niveau inférieur : on la corrige par un pointage, pas en déplaçant le projet */
     if(ha.from){ renderAll(); if(hit.id!==(s&&s.id)) note(ha.fromDev? "Position du dévoiement fait sur "+lvName(ha.from)+" — pour la changer, allez sur "+lvName(ha.from)+" ; pour dévoyer encore ici : Propriétés."
       : "Position reprise de "+lvName(ha.from)+" — si elle est encore décalée ici : « Déplacer vers la position réelle »."); return; }
     drag={m:"move",id:hit.id,dx:W.X-hit.x,dy:W.Y-hit.y}; renderAll(); return; }
+  /* poutre : un clic dedans la choisit, on la déplace en tirant */
+  var hbm=pickBeam(lv,W);
+  if(hbm){
+    S.selB=hbm.b.id; S.selId=null; S.selM=null; S.msel=[]; renderAll();
+    drag={m:"bmove",id:hbm.b.id,last:W}; return;
+  }
   var hm=pickMeas(lv,p);
   if(hm){
-    var was=S.selM===hm.id; S.selM=hm.id; S.selId=null; S.activeItem=hm.it; renderAll();
+    var was=S.selM===hm.id; S.selM=hm.id; S.selId=null; S.selB=null; S.activeItem=hm.it; renderAll();
     /* une grande surface se sélectionne d'un clic ; on ne la déplace qu'une fois sélectionnée (sinon on déplace la vue) */
     if(itemOf(hm).kind==="area"&&!was&&!measOnEdge(lv,hm,p)) drag={m:"pan",x:p.x,y:p.y,tx:S.view.tx,ty:S.view.ty};
     else drag={m:"mmove",id:hm.id,last:w2p(lv,W.X,W.Y),sx:p.x,sy:p.y};
     return;
   }
-  S.selId=null; S.selM=null; S.msel=[]; renderAll();
+  S.selId=null; S.selM=null; S.msel=[]; S.selB=null; renderAll();
   drag={m:"pan",x:p.x,y:p.y,tx:S.view.tx,ty:S.view.ty};
 });
 function measOnEdge(lv,m,p){ var ps=m.pts.map(function(q){ return p2s(lv,q); });
@@ -2350,6 +2596,34 @@ cv.addEventListener("pointermove",function(e){
     var mm=S.meas.find(function(x){ return x.id===drag.id; }), lvm=active();
     if(mm&&lvm){ var np=w2p(lvm,W.X,W.Y), ddx=np.x-drag.last.x, ddy=np.y-drag.last.y;
       mm.pts.forEach(function(pt){ pt.x+=ddx; pt.y+=ddy; }); drag.last=np; drag.moved=true; draw(); }
+    return;
+  }
+  if(drag.m==="beam"){
+    var Wb=snapW(W,null,e.altKey);
+    if(e.shiftKey){ SNAP.hit=null; Wb={X:W.X,Y:W.Y};
+      if(Math.abs(W.X-drag.a.X)>Math.abs(W.Y-drag.a.Y)) Wb.Y=drag.a.Y; else Wb.X=drag.a.X; }
+    drag.b={X:Wb.X,Y:Wb.Y}; draw(); return;
+  }
+  if(drag.m==="bvtx"){
+    var xb=beamById(drag.id);
+    if(xb){
+      if(drag.k==="a"||drag.k==="b"){
+        var Wv=snapW(W,null,e.altKey);
+        if(e.shiftKey){ SNAP.hit=null; var o=beamAxis(xb.p,xb.b)[drag.k==="a"?1:0]; Wv={X:W.X,Y:W.Y};
+          if(Math.abs(W.X-o.X)>Math.abs(W.Y-o.Y)) Wv.Y=o.Y; else Wv.X=o.X; }
+        setBeamEnd(xb.p,xb.b,drag.k,Wv);
+      }else{
+        var ax=beamAxis(xb.p,xb.b), aX=ax[1].X-ax[0].X, aY=ax[1].Y-ax[0].Y, aL=Math.hypot(aX,aY)||1;
+        var dist=Math.abs((W.X-ax[0].X)*(-aY/aL)+(W.Y-ax[0].Y)*(aX/aL));
+        xb.b.w=Math.max(.02,Math.round(dist*200)/100);
+      }
+      drag.moved=true; draw(); beamBar();
+    }
+    return;
+  }
+  if(drag.m==="bmove"){
+    var xm=beamById(drag.id);
+    if(xm){ moveBeam(xm.p,xm.b,W.X-drag.last.X,W.Y-drag.last.Y); drag.last=W; drag.moved=true; draw(); }
     return;
   }
   if(drag.m==="pan"){ S.view.tx=drag.tx+(p.x-drag.x); S.view.ty=drag.ty+(p.y-drag.y); draw(); return; }
@@ -2457,6 +2731,17 @@ function endPtr(e){
   if(drag.m==="zone"){ var dz=drag; drag=null; setZone(dz.a,dz.b); return; }
   if(drag.m==="mvtx"||drag.m==="mmove"){ var mvd=drag.moved; drag=null; snapAt=null;
     if(mvd){ var mz=selM(); if(mz) mz.pts.forEach(function(pt){ pt.x=Math.round(pt.x*100)/100; pt.y=Math.round(pt.y*100)/100; }); renderAll(); save(); } else draw(); return; }
+  if(drag.m==="beam"){
+    var dp=drag; drag=null;
+    var Lb=Math.hypot(dp.b.X-dp.a.X,dp.b.Y-dp.a.Y);
+    if(Lb>.05){
+      var nb=addBeam(dp.p,dp.a,dp.b); S.selB=nb.id; S.selId=null; S.selM=null; S.msel=[];
+      renderAll(); save();
+      note("Poutre de "+mTxt(Lb)+" ("+beamTxt(nb)+") sur « "+dp.p.name+" ». Tracez la suivante, ou Échap pour terminer.",4200);
+    } else draw();
+    return;
+  }
+  if(drag.m==="bvtx"||drag.m==="bmove"){ var bmv=drag.moved; drag=null; if(bmv){ renderAll(); save(); } else draw(); return; }
   if(drag.m==="draw"&&drag.prev){
     var s=drag.prev;
     var big = s.t==="rect" ? (s.w>.02&&s.h>.02) : s.r>.02;
@@ -2601,7 +2886,8 @@ function renderLevels(){
     el.innerHTML='<div class="th" style="background-image:url('+(l.src?"'"+l.src+"'":"none")+')"></div>'+
       '<div class="nm"><input value="'+esc(l.name)+'" spellcheck="false"><div class="meta">'+
       '<span>'+(i+1)+'/'+S.levels.length+'</span>'+calTag+
-      '<button class="tag alt" data-al title="Altitude du niveau (élévation schématique) — cliquer pour régler les hauteurs d\'étage">'+altTxt(Z[l.id])+'</button></div></div>'+
+      '<button class="tag alt" data-al title="Altitude du niveau (élévation schématique) — cliquer pour régler les hauteurs d\'étage">'+altTxt(Z[l.id])+'</button>'+
+      (beams(l).length?'<button class="tag bm'+(l.bvis===false?" off":"")+'" data-bm title="'+(l.bvis===false?"Afficher":"Masquer")+' les poutres tracées sur ce plan">'+beams(l).length+' poutre'+(beams(l).length>1?"s":"")+'</button>':'')+'</div></div>'+
       '<div class="ord"><button data-up>▲</button><button data-dn>▼</button><button data-mn title="Actions : plan lié, retirer…">⋯</button></div>';
     el.onclick=function(e){ if(e.target.closest("button")||e.target.tagName==="INPUT") return;
       S.activeId=l.id; S.selId=null; fit(); renderAll(); save(); };
@@ -2609,6 +2895,8 @@ function renderLevels(){
     el.querySelector("[data-sc]").onclick=function(){ S.activeId=l.id; S.editLink=null; renderAll(); setTool("scale"); };
     el.querySelector("[data-og]").onclick=function(){ S.activeId=l.id; S.editLink=null; renderAll(); setTool("org"); };
     el.querySelector("[data-al]").onclick=function(){ openHeights(); };
+    var lbm=el.querySelector("[data-bm]");
+    if(lbm) lbm.onclick=function(){ l.bvis=l.bvis===false; renderLevels(); draw(); save(); };
     el.querySelector("[data-up]").onclick=function(){ if(i>0){ S.levels.splice(i-1,0,S.levels.splice(i,1)[0]); renderAll(); save(); } };
     el.querySelector("[data-dn]").onclick=function(){ if(i<S.levels.length-1){ S.levels.splice(i+1,0,S.levels.splice(i,1)[0]); renderAll(); save(); } };
     function rmLevel(){
@@ -2622,6 +2910,7 @@ function renderLevels(){
     el.querySelector("[data-mn]").onclick=function(){ var b=this.getBoundingClientRect(); var nk=links(l).length;
       openMenu(b.right-250,b.bottom+4,[{h:l.name},
         {t:"Lier un plan à ce niveau (structure, technique…)…",i:"layer",fn:function(){ importLinks(l); }},
+        {t:"Tracer des poutres",i:"beam",k:"B",fn:function(){ S.activeId=l.id; if(S.editLink) S.editLink=null; renderAll(); setTool("beam"); }},
         {t:"Hauteurs d'étage…",i:"height",fn:openHeights},
         {t:"Échelle du plan",i:"scale",fn:function(){ S.activeId=l.id; if(S.editLink) S.editLink=null; renderAll(); setTool("scale"); }},
         {t:"Repère 0,0",i:"org",fn:function(){ S.activeId=l.id; if(S.editLink) S.editLink=null; renderAll(); setTool("org"); }},
@@ -3224,7 +3513,7 @@ function bindDev(box,s){
   box.querySelector("#d_rm").onclick=function(){ removeDev(s,lv); };
 }
 function renderLists(){ renderShapes(); renderMetre(); }
-function renderAll(){ ordLabel(); renderLevels(); renderUnder(); renderLists(); renderInsp(); renderNav(); linkBar(); draw(); }
+function renderAll(){ ordLabel(); renderLevels(); renderUnder(); renderLists(); renderInsp(); renderNav(); linkBar(); beamBar(); draw(); }
 
 /* ============ panneaux : masquables sur ordinateur, en onglets sur téléphone ============ */
 mobTab="ly";
@@ -3474,6 +3763,18 @@ function annotate(info,l,rows,F,title,Tz,scaleLine,opt){
     page.setSize(Wd,Hd+bandH(Tz));
     page.drawLine({start:{x:0,y:Hd},end:{x:Wd,y:Hd},thickness:lw*.6,color:GREY});
   }
+
+  /* poutres tracées : bande teintée dans la couleur du plan porteur, cotée au milieu */
+  if(expBeams) beamList(l).forEach(function(bx){
+    var bc=col(beamCol(l,bx.p)), q=beamQuad(bx.p,bx.b).map(function(w){ return td(w.X,w.Y); });
+    page.drawSvgPath("M "+q.map(function(w){ return w.x.toFixed(2)+" "+w.y.toFixed(2); }).join(" L ")+" Z",
+      {x:0,y:Hd,color:bc,opacity:.14,borderColor:bc,borderWidth:lw*.9,borderOpacity:1});
+    var ax=beamAxis(bx.p,bx.b), mid=bu((ax[0].X+ax[1].X)/2,(ax[0].Y+ax[1].Y)/2);
+    var t=win(beamTxt(bx.b)), sz=Tz*.62, tw=F.b.widthOfTextAtSize(t,sz);
+    var len=Math.hypot(ax[1].X-ax[0].X,ax[1].Y-ax[0].Y)*ppm;
+    if(len>tw*1.3 && mid.x-tw/2>BX+BM && mid.x+tw/2<BW-BM && mid.y>BY+BM && mid.y<BH-BM)
+      page.drawText(t,{x:mid.x-tw/2,y:mid.y-sz*.35,size:sz,font:F.b,color:bc});
+  });
 
   /* contours : projet d'origine (si correction reprise), position attendue, position réelle */
   rows.forEach(function(r){
@@ -4343,6 +4644,7 @@ function openExport(force){
   var ex=S.ui.exp||{fmt:"orig",ori:"auto"}, MODES=["plans","res","zone","elev","metre","csvm","csvr"], mode=force||(MODES.indexOf(ex.mode)>=0? ex.mode : "plans");
   var eAx= /^(x|y|xy)$/.test(ex.ax)? ex.ax : "x";
   var hasMt=S.meas.some(function(m){ return lvIndex(m.lv)>=0; }), hasLk=allLinks().some(function(k){ return k.vis!==false&&ready(k); });
+  var hasBm=S.levels.some(function(l){ return beamList(l).length>0; });
   var fmts=[["orig","Format d'origine du plan (100 %)"],["a0","A0 — 841 × 1189 mm"],["a1","A1 — 594 × 841 mm"],["a2","A2 — 420 × 594 mm"],["a3","A3 — 297 × 420 mm"],["a4","A4 — 210 × 297 mm"]];
   d.innerHTML='<h3>Exporter</h3>'+
     '<div class="fld"><label>Contenu</label><select id="r_m">'+
@@ -4374,6 +4676,7 @@ function openExport(force){
       '<div class="picks" id="r_pk">'+pickList()+'</div></div>'+
     '<label class="ck" id="r_mtw" style="display:flex;gap:7px;align-items:center;margin-top:8px;font-size:12px"><input type="checkbox" id="r_mt"'+(hasMt&&ex.mt!==false?" checked":"")+(hasMt?"":" disabled")+'> Dessiner aussi le métré (surfaces, linéaires, comptages) et sa légende</label>'+
     '<label class="ck" id="r_lkw" style="display:flex;gap:7px;align-items:center;margin-top:6px;font-size:12px"><input type="checkbox" id="r_lk"'+(hasLk&&ex.lk!==false?" checked":"")+(hasLk?"":" disabled")+'> Dessiner aussi les plans liés (structure, technique…) en transparence'+(hasLk?"":" — aucun plan lié calé")+'</label>'+
+    '<label class="ck" id="r_bmw" style="display:flex;gap:7px;align-items:center;margin-top:6px;font-size:12px"><input type="checkbox" id="r_bm"'+(hasBm&&ex.bm!==false?" checked":"")+(hasBm?"":" disabled")+'> Dessiner aussi les poutres tracées (avec leurs cotes)'+(hasBm?"":" — aucune poutre affichée")+'</label>'+
     '<p id="r_sc" style="margin:7px 0 0;font-size:11.5px;color:var(--muted);line-height:1.5"></p>'+
     '<p id="r_info" style="margin:9px 0 0;font-size:12px">'+lvs.length+' niveau'+(lvs.length>1?"x":"")+
       (skip?' · <b>'+skip+' niveau'+(skip>1?"x":"")+' non calé'+(skip>1?"s":"")+'</b>, ignoré'+(skip>1?"s":""):'')+
@@ -4388,8 +4691,8 @@ function openExport(force){
   function pick(){ return new Set(boxes().filter(function(c){ return c.checked; }).map(function(c){ return c.dataset.id; })); }
   function usesPick(md){ return md==="plans"||md==="res"||md==="zone"||md==="elev"||md==="csvr"; }
   var sea=d.querySelector("#r_ea"), sez=d.querySelector("#r_ez");
-  var slk=d.querySelector("#r_lk");
-  function setExp(md){ S.ui.exp={fmt:lastFmt,ori:so.value,mode:md,mt:smt.checked,ax:eAx,ea:sea.checked,ez:sez.checked,lk:slk.checked}; savePrefs(); }
+  var slk=d.querySelector("#r_lk"), sbm=d.querySelector("#r_bm");
+  function setExp(md){ S.ui.exp={fmt:lastFmt,ori:so.value,mode:md,mt:smt.checked,ax:eAx,ea:sea.checked,ez:sez.checked,lk:slk.checked,bm:sbm.checked}; savePrefs(); }
   /* options de l'élévation : mode Élévation, ou ajout à la zone / aux réservations */
   function elevOpts(md){
     var ew=d.querySelector("#r_ew"), on=md==="elev"||((md==="zone"||md==="res")&&sea.checked);
@@ -4431,6 +4734,7 @@ function openExport(force){
     d.querySelector("#r_zw").style.display=zone?"":"none";
     d.querySelector("#r_mtw").style.display=md==="plans"||zone?"flex":"none";
     d.querySelector("#r_lkw").style.display=md==="plans"||zone||md==="res"?"flex":"none";
+    d.querySelector("#r_bmw").style.display=md==="plans"||zone||md==="res"?"flex":"none";
     d.querySelector("#r_pkw").style.display=usesPick(md)?"":"none";
     ["#r_info","#r_img"].forEach(function(q){ var e=d.querySelector(q); if(e) e.style.display=paper&&!zone?"":"none"; });
     if(zoneVis!==zone){ zoneVis=zone; draw(); }
@@ -4525,14 +4829,15 @@ function openExport(force){
   d.querySelector("#ko").onclick=function(){ d.remove(); };
   d.querySelector("#goP").onclick=function(){
     var b=this, p=d.querySelector("#r_p");
-    S.title=d.querySelector("#r_t").value; save(); b.disabled=true; expLinks=!!(slk.checked&&!slk.disabled);
+    S.title=d.querySelector("#r_t").value; save(); b.disabled=true;
+    expLinks=!!(slk.checked&&!slk.disabled); expBeams=!!(sbm.checked&&!sbm.disabled);
     var pg=function(t){ p.textContent=t; }, pr, pc=pick();
     try{ var md=sm.value;
       pr= md==="res"? exportByRes(sf.value,so.value,pc,pg,sea.checked) : md==="zone"? exportZone(sf.value,so.value,pc,pg,smt.checked&&!smt.disabled,sea.checked?eAx:null)
         : md==="elev"? exportElev(sf.value,so.value,pc,pg,eAx,sez.checked&&!!S.zone) : md==="metre"? exportMetrePdf(pg) : md==="csvm"? exportMetreCsv() : md==="csvr"? exportResCsv(pc)
         : exportPlans(sf.value,so.value,pg,smt.checked&&!smt.disabled,pc); }catch(err){ pr=Promise.reject(err); }
-    pr.then(function(f){ p.textContent="Fichier généré : "+f; b.disabled=false; expLinks=false; })
-      .catch(function(err){ p.textContent=""; b.disabled=false; expLinks=false; note("Export impossible : "+(err&&err.message||err)); });
+    pr.then(function(f){ p.textContent="Fichier généré : "+f; b.disabled=false; expLinks=false; expBeams=false; })
+      .catch(function(err){ p.textContent=""; b.disabled=false; expLinks=false; expBeams=false; note("Export impossible : "+(err&&err.message||err)); });
   };
   /* le cadre de la zone n'est montré sur le plan que pendant que la fenêtre est ouverte */
   new MutationObserver(function(_,ob){ if(!document.body.contains(d)){ ob.disconnect(); if(zoneVis){ zoneVis=false; draw(); } } }).observe(document.body,{childList:true});
@@ -4685,7 +4990,7 @@ document.addEventListener("keydown",function(e){
     if(draft){ cancelDraft(); return; }
     if(S.tool!=="select"){ setTool("select"); return; }
     if(editLink()){ endLinkCal(); return; }
-    meas=null; calLine=null; closeDock(); hint(""); S.selId=null; S.selM=null; S.msel=[]; renderAll(); return;
+    meas=null; calLine=null; closeDock(); hint(""); S.selId=null; S.selM=null; S.msel=[]; S.selB=null; renderAll(); return;
   }
   if(e.key==="Delete"||e.key==="Backspace"){ if(delSel()) e.preventDefault(); return; }
   if(e.key.indexOf("Arrow")===0){ if(nudge(e.key,e.shiftKey)) e.preventDefault(); return; }
@@ -4697,7 +5002,7 @@ document.addEventListener("keydown",function(e){
   if(e.key==="F2"){ e.preventDefault(); renameProject(); return; }
   if(e.key==="+"||e.key==="="){ zoomBy(1.35); return; }
   if(e.key==="-"||e.key==="_"){ zoomBy(1/1.35); return; }
-  var map={v:"select",h:"pan",r:"rect",c:"circle",s:e.shiftKey?"arect":"area",l:"line",n:"count",m:"meas",e:"scale",p:"org",z:"zone"};
+  var map={v:"select",h:"pan",r:"rect",c:"circle",s:e.shiftKey?"arect":"area",l:"line",n:"count",m:"meas",e:"scale",p:"org",z:"zone",b:"beam"};
   if(map[k]){ e.preventDefault(); setTool(map[k]); return; }
   if(k==="f"){ fit(); return; }
   if(k==="g"){ setGrid(!S.grid); return; }
@@ -4718,6 +5023,8 @@ function levelStep(dir){
 /* décalage au clavier : 1 cm, 10 cm avec Maj */
 function nudge(key,big){
   var d=big?.10:.01, dx=key==="ArrowLeft"?-d:key==="ArrowRight"?d:0, dy=key==="ArrowUp"?-d:key==="ArrowDown"?d:0;
+  var bn=selB();
+  if(bn){ moveBeam(bn.p,bn.b,dx,dy); renderAll(); save(); return true; }
   var s=sel(), lvn=active();
   if(s&&lvn&&onLevel(s,lvn.id)&&devOf(s,lvn.id)){ var dn=devOf(s,lvn.id); dn.X=r3(dn.X+dx); dn.Y=r3(dn.Y+dy); renderAll(); save(); return true; }   /* niveau dévoyé : on décale le dévoiement */
   if(s){ s.x+=dx; s.y+=dy; round(s); renderAll(); save(); return true; }
@@ -4739,6 +5046,7 @@ function delSel(){
   var ms=mselIds();
   if(ms.length>1){ S.shapes=S.shapes.filter(function(s){ return ms.indexOf(s.id)<0; }); S.selId=null; S.msel=[]; renderAll(); save();
     note(plural(ms.length,"réservation supprimée","réservations supprimées")+" — Ctrl+Z pour revenir."); return true; }
+  if(selB()){ return delBeam(S.selB); }
   if(sel()){ delShape(S.selId); return true; } if(selM()){ delMeas(S.selM); return true; } return false; }
 function dupSel(){ var s=sel(), m=selM(); if(s){ startStamp(s); return true; } if(m){ dupMeas(m); note("Copie décalée — déplacez-la à sa place.",2000); return true; } return false; }
 function paste(at){
@@ -4893,9 +5201,12 @@ function openHelp(){
   d.innerHTML='<h3>Raccourcis et gestes</h3>'+
     '<div class="keys">'+
     '<h4>Outils</h4>'+row("Sélection","V")+row("Main (déplacer la vue)","H / Espace")+row("Réservation rectangulaire","R")+row("Réservation ronde","C")+
-      row("Surface (polygone)","S")+row("Surface rectangulaire","Maj+S")+row("Linéaire","L")+row("Comptage","N")+row("Mesurer une distance","M")+row("Échelle du plan","E")+row("Repère 0,0","P")+row("Zone à exporter","Z")+
+      row("Surface (polygone)","S")+row("Surface rectangulaire","Maj+S")+row("Linéaire","L")+row("Comptage","N")+row("Mesurer une distance","M")+row("Échelle du plan","E")+row("Repère 0,0","P")+row("Poutre","B")+row("Zone à exporter","Z")+
     '<h4>Pendant un tracé de métré</h4>'+row("Poser un point","Clic")+row("Terminer","Double-clic / Entrée")+row("Fermer la surface","Clic sur le 1er point")+row("Enlever le dernier point","Retour arrière")+
       row("Angles droits / 45°","Maj")+row("Terminer (menu)","Clic droit")+row("Abandonner","Échap")+row("Aimantation","sommets existants")+
+    '<h4>Poutres</h4>'+row("Tracer une poutre (axe)","Tirer")+row("Dans l\'axe horizontal ou vertical","Maj")+row("Choisir une poutre","Clic dessus")+
+      row("Changer sa longueur","Tirer un bout")+row("Changer sa largeur","Tirer un côté")+row("La déplacer","Tirer son milieu")+row("La supprimer","Suppr")+
+      row("Afficher / masquer les poutres, le fond","Étiquettes du plan lié")+
     '<h4>Dévoiement d\'un réseau</h4>'+row("Dévoyer à partir du niveau courant","Clic droit / Propriétés")+row("Nouvelle position dans l\'axe","Maj")+
       row("Tracer le cheminement : poser un coude","Clic")+row("Terminer le cheminement","Entrée / Double-clic")+row("Coude à angle droit","Maj")+
       row("Déplacer / ajouter un coude","Tirer le carré / le rond")+

@@ -107,6 +107,27 @@ Chaque niveau peut recevoir d'autres plans que le plan archi : structure, CVC, p
   réservations ni métré propres.
 - Export : case « Dessiner aussi les plans liés » (plans, zone, réservation par réservation).
 
+### Poutres
+
+On relève les poutres d'un plan structure pour les garder sous les yeux **sans garder le
+fond du plan structure** : seules les poutres se posent alors sur le plan archi.
+
+- Outil **Poutre** (`B`), ou menu `⋯` du plan lié → **Tracer des poutres sur ce plan**.
+  Tirez l'**axe** de la poutre (`Maj` : à l'horizontale ou à la verticale, accrochage aux
+  réservations et aux poutres déjà tracées). Enchaînez les poutres ; `Échap` pour terminer.
+- La barre en bas à gauche donne le **plan porteur** (le plan structure lié, ou le plan du
+  niveau), la **largeur** et la **retombée**. Les cotes servent aux poutres suivantes.
+- Une poutre choisie : repère (`P12`…), largeur, retombée, **Supprimer** ; sur le plan,
+  tirez un bout pour la longueur, un côté pour la largeur, le milieu pour la déplacer
+  (`Suppr` pour l'effacer, flèches pour la décaler). Changer le plan porteur dans la barre
+  déplace la poutre d'un plan à l'autre **sans la bouger sur le chantier**.
+- Dans la liste des niveaux, le plan lié affiche deux étiquettes : **« n poutres »** et
+  **« fond »**. Un clic sur **fond** masque l'image du plan structure et **garde les
+  poutres** ; un clic sur **n poutres** masque les poutres et garde le fond. L'œil masque
+  l'ensemble. Une poutre suit le calage de son plan : recaler le plan la recale aussi.
+- Export : case « Dessiner aussi les poutres tracées » (plans, zone, réservation par
+  réservation). Les poutres sortent en **vectoriel**, cotées (`P12 · 25×55 cm`).
+
 ### Réservations
 
 - **Accrochage aux objets** (`A`, aimant au-dessus du plan) : en dessinant, déplaçant,
@@ -222,6 +243,7 @@ réservation qui traverse les dalles, reliée d'un niveau à l'autre par son ré
   cochées, ou seulement celles de la zone tracée. En mode **réservation par réservation**,
   une option ajoute l'élévation X et Y de la réservation à droite de chaque page.
 - **Réservations masquées** (œil, objet ou calque masqué) : elles ne sortent dans aucun export.
+  Idem pour les **poutres** d'un plan masqué.
 - **Rapport de métré (PDF A4)** : récapitulatif par poste (quantités par niveau, prix,
   total HT), puis le détail de chaque mesure.
 - **Métré pour Excel (CSV)** et **Liste des réservations pour Excel (CSV)** :
@@ -246,6 +268,7 @@ les listes.
 | `S` surface | `Maj+S` surface rect. | `Ctrl+D` dupliquer | `Suppr` supprimer |
 | `L` linéaire | `N` comptage | flèches : 1 cm (`Maj` : 10 cm) | `Échap` désélectionner |
 | `M` mesure | `E` échelle, `P` repère | `F` recadrer, `+` / `−` zoom | `G` trame, `Pg↑` / `Pg↓` niveaux |
+| `B` poutre | `Z` zone à exporter | `A` accrochage aux objets | `Alt` sans accrochage |
 | `T` tous les niveaux / disposition précédente | | | |
 
 `Ctrl+O` projets · `Ctrl+I` importer des plans · `Ctrl+E` exporter · `?` aide (sur Mac,
