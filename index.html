@@ -350,7 +350,10 @@ canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-acti
 .linkbar .lb1 b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .linkbar .lb1 span{color:var(--muted);white-space:nowrap}
 .linkbar .lb1 .i{color:var(--blue)}
-.linkbar .lb2{display:flex;gap:5px;flex-wrap:wrap}
+.linkbar .lb2{display:flex;gap:5px;flex-wrap:wrap;align-items:center}
+.linkbar .lbh{font-size:11.5px;color:var(--muted);line-height:1.35;max-width:380px}
+.linkbar .lbr{display:flex;align-items:center;gap:4px;font-size:11.5px;color:var(--muted)}
+.linkbar .lbr input{width:60px;background:var(--panel-2);border:1px solid var(--line);border-radius:7px;padding:3px 6px;font-family:var(--f-num);font-size:12px;color:var(--ink)}
 /* barre des poutres */
 .beambar{position:absolute;left:10px;bottom:44px;z-index:6;background:var(--panel);border:1px solid var(--line-soft);border-radius:14px;padding:9px 11px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:7px;max-width:min(440px,calc(100% - 20px))}
 .beambar .bb1{display:flex;align-items:center;gap:7px;font-size:12.5px;min-width:0}
@@ -475,6 +478,11 @@ kbd{font-family:var(--f-num);font-size:10.5px;background:var(--panel-2);border:1
   .acts{gap:1px}
   .dock{left:10px;right:10px;width:auto}
   .beambar{left:8px;right:8px;max-width:none;bottom:40px;padding:7px 9px;gap:5px}
+  .linkbar{left:8px;right:8px;max-width:none;bottom:40px;padding:7px 9px;gap:5px}
+  .linkbar .lb1 span{display:none}
+  .linkbar .lbh{font-size:11px;max-width:none}
+  .linkbar .btn.sm{padding:3px 7px;font-size:11px}
+  .linkbar .lbr input{width:52px}
   .beambar .bb1 span{display:none}
   .beambar .bb2 label{font-size:11px}
   .beambar input{width:48px}
@@ -541,6 +549,7 @@ kbd{font-family:var(--f-num);font-size:10.5px;background:var(--panel-2);border:1
   <symbol id="i-height" viewBox="0 0 24 24"><path d="M12 3.5v17M8.5 7L12 3.5 15.5 7M8.5 17l3.5 3.5 3.5-3.5"/><path d="M4 3.5h4M4 20.5h4"/></symbol>
   <symbol id="i-layer" viewBox="0 0 24 24"><path d="M12 3.5l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/></symbol>
   <symbol id="i-magnet" viewBox="0 0 24 24"><path d="M5 4v8.5a7 7 0 0 0 14 0V4"/><path d="M5 4h4.5v8.5M14.5 4H19v8.5"/></symbol>
+  <symbol id="i-align" viewBox="0 0 24 24"><rect x="3" y="3" width="13" height="13" rx="1.5"/><rect x="8" y="8" width="13" height="13" rx="1.5" stroke-dasharray="3 2.4"/><path d="M12 12h.01"/></symbol>
   <symbol id="i-beam" viewBox="0 0 24 24"><rect x="3" y="9" width="18" height="6" rx=".5"/><path d="M8.5 9L6 15M13.5 9L11 15M18.5 9L16 15"/></symbol>
   <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s-6.5-6.2-6.5-11a6.5 6.5 0 0 1 13 0c0 4.8-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.4"/></symbol>
 </svg>
@@ -899,6 +908,16 @@ function migrate(l){
   return l;
 }
 function w2p(lv,X,Y){ var c=cal(lv); return {x:c.ax+c.s*(X*c.co-Y*c.si), y:c.ay+c.s*(X*c.si+Y*c.co)}; }
+/* calage sans repère : échelle et orientation seules (pour poser un plan à la main) */
+function calS(p){ var th=(p.rot||0)*Math.PI/180, s=(p.scale&&p.scale.s>0)?p.scale.s:1;
+  return {s:s, co:Math.cos(th), si:Math.sin(th)}; }
+/* pose le plan p pour que son pixel q tombe sur le point W du chantier */
+function setPlanAt(p,q,W){ var c=calS(p);
+  p.org={x:Math.round((q.x-c.s*(W.X*c.co-W.Y*c.si))*100)/100, y:Math.round((q.y-c.s*(W.X*c.si+W.Y*c.co))*100)/100}; }
+/* décale tout le plan de dX, dY mètres */
+function movePlan(p,dX,dY){ if(!p.org) return; setPlanAt(p,{x:p.org.x,y:p.org.y},{X:dX,Y:dY}); }
+/* oriente le plan en gardant le pixel q sur le point P */
+function turnPlan(p,deg,P,q){ p.rot=Math.round(deg*100)/100; setPlanAt(p,q,P); }
 function p2w(lv,px,py){ var c=cal(lv),dx=(px-c.ax)/c.s,dy=(py-c.ay)/c.s;
   return {X:dx*c.co+dy*c.si, Y:-dx*c.si+dy*c.co}; }
 /* applique une modification de calage sans faire bouger le plan à l'écran */
@@ -1417,7 +1436,7 @@ function scheduleRefine(){ clearTimeout(refineT); refineT=setTimeout(refineAll,1
 function refineAll(){
   layoutTiles();
   function one(lv,W,H,key){ refine(lv,W,H,key); var ek=calPlanFor(lv);
-    links(lv).forEach(function(k){ if(k===ek||(k.vis!==false&&ready(k))) refine(k,W,H,key); }); }
+    links(lv).forEach(function(k){ if(k===ek||(k.vis!==false&&k.bg!==false&&ready(k))) refine(k,W,H,key); }); }
   if(!tiles.length){ one(active(),stage.clientWidth,stage.clientHeight,"0"); return; }
   var v0=S.view, rk=RK;
   tiles.forEach(function(t){ if(t.kind!=="plan"||!t.lv) return; S.view=tileView(t); one(t.lv,t.w,t.h,tileKey(t)); });
@@ -1889,8 +1908,9 @@ document.getElementById("tools").addEventListener("click",function(e){
 function setTool(t){
   S.tool=t;
   Array.prototype.forEach.call(document.querySelectorAll("#tools .tool"),function(b){ b.classList.toggle("on",b.dataset.tool===t); });
-  cv.style.cursor = t==="pan"?"grab" : t==="select"?"default":"crosshair";
+  cv.style.cursor = (t==="pan"||t==="align")?"grab" : t==="select"?"default":"crosshair";
   if(t!=="meas") meas=null;
+  if(t!=="align"){ alignPick=null; alignTwo=false; }
   if(t!=="route") rdraft=null;
   if(draft&&(!isMtTool(t)||kindOfTool(t)!==draft.kind)) draft=null;
   snapAt=null; SNAP.hit=null;
@@ -1902,6 +1922,7 @@ function setTool(t){
   else if(isMtTool(t)) draftHint();
   else if(t==="route") routeHint();
   else if(t==="beam") hint("");
+  else if(t==="align") hint("");
   else hint(t==="zone"?"Zone à exporter : tracez le cadre — le même cadre vaut pour tous les niveaux côte à côte. Échap pour annuler.":
        t==="dev"?"Dévoiement : faites glisser la réservation jusqu'à sa nouvelle position (Maj : dans l'axe). Échap pour annuler.":
        t==="rect"?"Tracez le rectangle de la réservation — objet « "+activeObj().code+" » ("+(layerById(activeObj().ly)||{}).name+").":
@@ -1912,7 +1933,7 @@ function setTool(t){
   Array.prototype.forEach.call(document.querySelectorAll("#rsList .ob"),function(r){
     r.classList.toggle("pose",t==="stamp"&&!!objId&&r.dataset.id===objId); });
   renderObjChip();
-  if(!booting){ renderMetre(); renderInsp(); beamBar(); }
+  if(!booting){ renderMetre(); renderInsp(); beamBar(); linkBar(); }
   draw();
 }
 
@@ -1984,16 +2005,18 @@ function addLinks(lv,files){
     startLinkCal(added[0]);
   });
 }
-function startLinkCal(k){
+function startLinkCal(k,hand){
   var lv=linkParent(k.id); if(!lv) return;
-  S.editLink=k.id; S.activeId=lv.id; S.selId=null; S.selM=null; S.msel=[]; closeMenu();
+  S.editLink=k.id; S.activeId=lv.id; S.selId=null; S.selM=null; S.msel=[]; alignPick=null; alignTwo=false; closeMenu();
   renderAll(); fit();
-  setTool(!k.scale? "scale" : !k.org? "org" : "select");
-  note("Calage de « "+k.name+" » sur "+lv.name+" : posez son échelle, puis son repère au même endroit physique que sur le plan archi. Il se superpose dès que les deux sont posés.",7000);
+  if(hand&&k.scale){ startHand(k); return; }
+  setTool(!k.scale? "scale" : hand? "align" : !k.org? "align" : "select");
+  if(S.tool==="align"){ startHand(k); return; }
+  note("Calage de « "+k.name+" » sur "+lv.name+" : commencez par son échelle (tracez une cote connue, ou 1/N), puis posez-le sur le plan archi — « À la main » en le tirant, ou « Repère » au même point que l'archi.",8000);
 }
 function endLinkCal(){
-  var k=editLink(); S.editLink=null; closeDock();
-  if(S.tool==="scale"||S.tool==="org") setTool("select");
+  var k=editLink(); S.editLink=null; closeDock(); alignPick=null; alignTwo=false;
+  if(S.tool==="scale"||S.tool==="org"||S.tool==="align") setTool("select");
   renderAll(); save();
   if(k) note(ready(k)? "« "+k.name+" » calé : il reste superposé en transparence (œil et curseur dans la liste des niveaux)." : "« "+k.name+" » n'est pas calé : il n'est pas affiché tant que son échelle et son repère manquent.",4500);
 }
@@ -2004,32 +2027,106 @@ function copyCal(k){
   k.scale={s:lv.scale.s*f, ratio:lv.scale.ratio||null, paper:lv.scale.paper||null}; k.org={x:lv.org.x*f,y:lv.org.y*f}; k.rot=lv.rot||0;
   renderAll(); save(); note("Calage du plan archi repris pour « "+k.name+" » — vérifiez la superposition.",3500);
 }
+/* premier repère d'un plan lié qu'on va poser à la main : celui de l'archi, ajusté à la résolution du plan */
+function seedOrg(k){
+  if(k.org) return true;
+  var lv=linkParent(k.id);
+  if(!lv||!ready(lv)||!k.scale) return false;
+  var f=(k.w&&lv.w)? k.w/lv.w : 1;
+  k.org={x:lv.org.x*f, y:lv.org.y*f}; if(!(k.rot>=0||k.rot<0)) k.rot=lv.rot||0;
+  return true;
+}
 function removeLink(k){
   var lv=linkParent(k.id); if(!lv) return;
   lv.links=links(lv).filter(function(x){ return x!==k; }); if(S.editLink===k.id) S.editLink=null;
   renderAll(); save(); note("Plan lié « "+k.name+" » retiré — Ctrl+Z pour revenir.",3000);
 }
 /* barre de calage (en bas à droite de la scène) */
+var alignPick=null, alignTwo=false;   /* point commun : pixel pris sur le plan lié ; en attente du 1er clic */
 function linkBar(){
   var old=document.getElementById("linkBar"), k=editLink();
-  if(!k){ if(old) old.remove(); return; }
-  var lv=linkParent(k.id), d=old||document.createElement("div"); d.id="linkBar"; d.className="linkbar";
+  if(!k){ if(old) old.remove(); alignPick=null; alignTwo=false; return; }
+  var lv=linkParent(k.id), hand=S.tool==="align", d=old||document.createElement("div"); d.id="linkBar"; d.className="linkbar";
+  var hint= alignPick? "Cliquez maintenant <b>ce même point</b> sur le plan archi : le plan "+esc(k.name)+" vient s'y poser."
+    : alignTwo? "Cliquez un point bien repérable sur <b>"+esc(k.name)+"</b> (angle de poteau, croisement de files…)."
+    : "<b>Tirez le plan</b> pour le poser · <b>Alt</b> : pivoter · flèches : 1 cm.";
   d.innerHTML='<div class="lb1"><svg class="i s"><use href="#i-pin"/></svg><b>Calage · '+esc(k.name)+'</b><span>plan lié de '+esc(lv?lv.name:"")+'</span></div>'+
     '<div class="lb2"><button class="btn sm'+(k.scale?"":" primary")+'" data-a="scale">'+(k.scale?"Échelle "+esc(scaleTxt(k)):"Échelle ?")+'</button>'+
-    '<button class="btn sm'+(k.org||!k.scale?"":" primary")+'" data-a="org">'+(k.org?"Repère ✓":"Repère ?")+'</button>'+
+    '<button class="btn sm'+(hand?" primary":(k.scale&&!k.org?" primary":""))+'" data-a="hand" title="Superposer le plan à la main, une fois les deux plans à l\'échelle">À la main</button>'+
+    '<button class="btn sm" data-a="org" title="Poser le repère 0,0 de ce plan au même endroit que sur l\'archi">'+(k.org?"Repère ✓":"Repère ?")+'</button>'+
     '<button class="btn sm" data-a="copy" title="Même cadrage de feuille que le plan archi : reprendre son échelle et son repère">Même calage que l\'archi</button>'+
-    '<button class="btn sm'+(ready(k)?" primary":"")+'" data-a="end">Terminer</button></div>';
+    '<button class="btn sm'+(ready(k)?" primary":"")+'" data-a="end">Terminer</button></div>'+
+    (hand? '<div class="lb2"><span class="lbh">'+hint+'</span></div>'+
+      '<div class="lb2"><button class="btn sm'+(alignTwo||alignPick?" primary":"")+'" data-a="two" title="Lier les deux plans par un point commun : un clic sur ce point du plan lié, un clic sur le même point du plan archi">'+(alignTwo||alignPick?"Annuler le point commun":"Point commun…")+'</button>'+
+      '<span class="lbr">pivoter <button class="btn sm" data-a="rl" title="Pivoter de 0,2° vers la gauche">↺</button>'+
+      '<input id="lkrot" type="number" step="0.1" value="'+fmt(k.rot||0,1)+'" title="Orientation du plan, en degrés">'+
+      '<button class="btn sm" data-a="rr" title="Pivoter de 0,2° vers la droite">↻</button>°</span></div>' : '');
   if(!old) stage.appendChild(d);
+  var ri=d.querySelector("#lkrot");
+  if(ri) ri.onchange=function(){ var v=parseFloat(this.value); if(isNaN(v)) return; turnLink(k,v); };
   d.onclick=function(e){ var b=e.target.closest("[data-a]"); if(!b) return; var a=b.dataset.a;
-    if(a==="scale") setTool("scale"); else if(a==="org") setTool("org"); else if(a==="copy") copyCal(k); else endLinkCal(); };
+    if(a==="scale") setTool("scale");
+    else if(a==="org"){ alignPick=null; alignTwo=false; setTool("org"); }
+    else if(a==="copy") copyCal(k);
+    else if(a==="hand") startHand(k);
+    else if(a==="two"){ if(alignTwo||alignPick){ alignTwo=false; alignPick=null; } else { alignTwo=true; alignPick=null; } linkBar(); draw(); }
+    else if(a==="rl") turnLink(k,(k.rot||0)-.2);
+    else if(a==="rr") turnLink(k,(k.rot||0)+.2);
+    else endLinkCal(); };
+}
+/* touche U : caler à la main le plan lié en cours, sinon celui du niveau (la structure en premier) */
+function handCal(){
+  var k=editLink(); if(k){ startHand(k); return; }
+  var lv=active(), ls=lv? links(lv) : [];
+  if(!ls.length){ note(lv? "Aucun plan lié à « "+lv.name+" » : menu ⋯ du niveau › Lier un plan à ce niveau." : "Aucun niveau ouvert.",4000); return; }
+  startLinkCal(ls.filter(function(x){ return x.kind==="structure"; })[0]||ls[0], true);
+}
+/* calage à la main : le plan doit être à l'échelle, et prend d'abord le repère de l'archi */
+function startHand(k){
+  if(!k.scale){ note("Réglez d'abord l'échelle de « "+k.name+" » : tracez une cote connue, ou saisissez 1/N.",4500); setTool("scale"); return; }
+  var lv=linkParent(k.id);
+  if(!k.org&&!seedOrg(k)){ note("Calez d'abord le plan archi de ce niveau (échelle + repère)."); return; }
+  alignPick=null; alignTwo=false; setTool("align"); linkBar(); fitBoth(k,lv);
+  note("Tirez « "+k.name+" » pour le superposer au plan archi. Alt + glisser pour le pivoter ; « Point commun » pour le poser sur un point précis.",6000);
+}
+/* la vue montre les deux plans en entier */
+function fitBoth(k,lv){
+  if(!ready(k)||!lv||!ready(lv)) return;
+  var a=lvBounds(lv), b=lvBounds(k), vz=viewSize();
+  var x0=Math.min(a.x0,b.x0), x1=Math.max(a.x1,b.x1), y0=Math.min(a.y0,b.y0), y1=Math.max(a.y1,b.y1);
+  var sc=Math.min((vz.W-80)/Math.max(x1-x0,1e-6),(vz.H-100)/Math.max(y1-y0,1e-6));
+  S.view.s=sc; S.view.tx=vz.W/2-(x0+x1)/2*sc; S.view.ty=vz.H/2-(y0+y1)/2*sc;
+  draw(); scheduleRefine();
+}
+/* pivoter autour du milieu de la vue : ce qu'on regarde ne bouge pas */
+function turnLink(k,deg){
+  if(!ready(k)) return;
+  var vz=viewSize(), P=s2w(vz.W/2,vz.H/2);
+  turnPlan(k,deg,P,w2p(k,P.X,P.Y));
+  renderAll(); save();
 }
 /* plans d'un niveau sur la scène : archi, puis les plans liés calés en transparence teintée ; en calage, le plan lié passe devant */
 function drawLevelPlans(lv){
   var ek=calPlanFor(lv); ek= ek!==lv? ek : null;
-  if(ek){ drawPlan(lv,.28); drawPlan(ek,1); }
+  /* calage à la main : on montre la superposition telle qu'elle sera, pour la juger en la faisant */
+  var hand=!!ek&&S.tool==="align";
+  if(ek&&!hand){ drawPlan(lv,.28); drawPlan(ek,1); }
   else drawPlan(lv,1);
-  links(lv).forEach(function(k){ if(k===ek||k.vis===false||k.bg===false||!ready(k)||!k.img) return; drawPlan(k,k.op,{tint:k.tint?k.col:null,blend:"multiply"}); });
+  links(lv).forEach(function(k){
+    var cur=k===ek;
+    if((cur&&!hand)||k.vis===false||(k.bg===false&&!cur)||!ready(k)||!k.img) return;
+    drawPlan(k,cur?Math.max(k.op,.75):k.op,{tint:k.tint?k.col:null,blend:"multiply"});
+  });
   drawBeams(lv);
+  if(S.tool==="align"&&alignPick&&ek) drawAlignPick(ek);
+}
+/* point commun déjà pris sur le plan lié : il attend son jumeau sur le plan archi */
+function drawAlignPick(k){
+  if(!ready(k)) return;
+  var w=p2w(k,alignPick.x,alignPick.y), p=w2s(w.X,w.Y);
+  ctx.save(); ctx.strokeStyle=k.col; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.arc(p.x,p.y,8,0,6.2832); ctx.moveTo(p.x-13,p.y); ctx.lineTo(p.x+13,p.y);
+  ctx.moveTo(p.x,p.y-13); ctx.lineTo(p.x,p.y+13); ctx.stroke(); ctx.restore();
 }
 /* image teintée : le blanc reste blanc, les traits prennent la couleur (mise en cache) */
 function tinted(src,col,holder){
@@ -2108,6 +2205,7 @@ function linkRow(lv,k){
   el.querySelector("[data-mn]").onclick=function(){ var b=this.getBoundingClientRect();
     openMenu(b.right-250,b.bottom+4,[{h:k.name+" · plan lié de "+lv.name},
       {t:on?"Terminer le calage":"Caler : échelle et repère",i:"scale",fn:function(){ if(on) endLinkCal(); else startLinkCal(k); }},
+      {t:"Caler à la main : superposer sur l'archi",i:"align",k:"U",fn:function(){ if(!on) startLinkCal(k,true); else startHand(k); }},
       {t:"Même calage que le plan archi (même cadrage)",i:"copy",fn:function(){ copyCal(k); }},
       {t:"Teinter dans sa couleur",i:"theme",on:!!k.tint,fn:function(){ k.tint=!k.tint; draw(); save(); }},
       {t:vis?"Masquer":"Afficher",i:"eye",fn:function(){ k.vis=!vis; renderLevels(); draw(); save(); }},
@@ -2434,6 +2532,25 @@ cv.addEventListener("pointerdown",function(e){
     if(Math.hypot(a1.x-a2.x,a1.y-a2.y)<4){ draw(); return; }
     rdraft.pts.push({X:r3(q.X),Y:r3(q.Y)}); routeHint(); draw(); return;
   }
+  /* calage à la main d'un plan lié : on tire le plan, ou on le pose par un point commun aux deux plans */
+  if(S.tool==="align"){
+    if(e.button!==0) return;
+    var ka=editLink();
+    if(!ka){ note("Choisissez le plan lié à caler dans la liste des niveaux (menu ⋯ › Caler à la main)."); setTool("select"); return; }
+    if(!ka.scale){ note("Réglez d'abord l'échelle de « "+ka.name+" »."); setTool("scale"); return; }
+    if(!seedOrg(ka)){ note("Calez d'abord le plan archi de ce niveau (échelle + repère)."); return; }
+    if(alignPick){                      /* 2e clic : le même point sur le plan archi */
+      setPlanAt(ka,alignPick,W); alignPick=null; alignTwo=false;
+      renderAll(); save(); scheduleRefine();
+      note("« "+ka.name+" » posé sur ce point. Ajustez-le en le tirant, Alt + glisser pour le pivoter.",5000);
+      return;
+    }
+    if(alignTwo){                       /* 1er clic : le point sur le plan lié */
+      alignPick=w2p(ka,W.X,W.Y); alignTwo=false; linkBar(); draw(); return;
+    }
+    drag={m:"align",id:ka.id,q:w2p(ka,W.X,W.Y),P:{X:W.X,Y:W.Y},rot0:ka.rot||0,sx:p.x};
+    cv.style.cursor="grabbing"; return;
+  }
   if(S.tool==="org"){
     var P=calPlan(), q=w2p(P,W.X,W.Y);
     keepView(P,q,function(){ P.org={x:q.x,y:q.y}; P.rot=P.rot||0; });
@@ -2626,6 +2743,16 @@ cv.addEventListener("pointermove",function(e){
     if(xm){ moveBeam(xm.p,xm.b,W.X-drag.last.X,W.Y-drag.last.Y); drag.last=W; drag.moved=true; draw(); }
     return;
   }
+  if(drag.m==="align"){
+    var ka=linkById(drag.id); if(!ka) return;
+    if(e.altKey) turnPlan(ka,drag.rot0+(p.x-drag.sx)*.05,drag.P,drag.q);     /* Alt : pivoter autour du point saisi */
+    else{
+      var Wa={X:W.X,Y:W.Y};
+      if(e.shiftKey){ if(Math.abs(W.X-drag.P.X)>Math.abs(W.Y-drag.P.Y)) Wa.Y=drag.P.Y; else Wa.X=drag.P.X; }
+      setPlanAt(ka,drag.q,Wa);
+    }
+    drag.moved=true; draw(); return;
+  }
   if(drag.m==="pan"){ S.view.tx=drag.tx+(p.x-drag.x); S.view.ty=drag.ty+(p.y-drag.y); draw(); return; }
   if(drag.m==="real"){
     var sr=S.shapes.find(function(x){return x.id===drag.id;}), lr=active();
@@ -2731,6 +2858,12 @@ function endPtr(e){
   if(drag.m==="zone"){ var dz=drag; drag=null; setZone(dz.a,dz.b); return; }
   if(drag.m==="mvtx"||drag.m==="mmove"){ var mvd=drag.moved; drag=null; snapAt=null;
     if(mvd){ var mz=selM(); if(mz) mz.pts.forEach(function(pt){ pt.x=Math.round(pt.x*100)/100; pt.y=Math.round(pt.y*100)/100; }); renderAll(); save(); } else draw(); return; }
+  if(drag.m==="align"){
+    var ma=drag.moved, ka=linkById(drag.id); drag=null; cv.style.cursor="crosshair";
+    if(ma){ renderAll(); save(); scheduleRefine(); if(ka) note("« "+ka.name+" » déplacé"+(ka.rot?" · orientation "+fmt(ka.rot,1)+"°":"")+".",1800); }
+    else draw();
+    return;
+  }
   if(drag.m==="beam"){
     var dp=drag; drag=null;
     var Lb=Math.hypot(dp.b.X-dp.a.X,dp.b.Y-dp.a.Y);
@@ -2858,6 +2991,8 @@ function openDock(){
     }
     closeDock();
     var tous=nAll?" (appliquée à "+(nAll+1)+" niveaux)":"";
+    var ek=editLink();
+    if(ek&&ek===lv){ renderAll(); save(); startHand(lv); return; }   /* plan lié : on le pose ensuite à la main sur l'archi */
     if(!lv.org){ setTool("org"); note("Échelle réglée ("+scaleTxt(lv)+")"+tous+". Cliquez maintenant le point de repère."); }
     else { setTool("select"); note(lv.name+" : "+scaleTxt(lv)+tous); }
     renderAll(); save();
@@ -5004,6 +5139,7 @@ document.addEventListener("keydown",function(e){
   if(e.key==="-"||e.key==="_"){ zoomBy(1/1.35); return; }
   var map={v:"select",h:"pan",r:"rect",c:"circle",s:e.shiftKey?"arect":"area",l:"line",n:"count",m:"meas",e:"scale",p:"org",z:"zone",b:"beam"};
   if(map[k]){ e.preventDefault(); setTool(map[k]); return; }
+  if(k==="u"){ handCal(); return; }
   if(k==="f"){ fit(); return; }
   if(k==="g"){ setGrid(!S.grid); return; }
   if(k==="t"){ setMulti(!S.ui.multi); return; }
@@ -5023,6 +5159,7 @@ function levelStep(dir){
 /* décalage au clavier : 1 cm, 10 cm avec Maj */
 function nudge(key,big){
   var d=big?.10:.01, dx=key==="ArrowLeft"?-d:key==="ArrowRight"?d:0, dy=key==="ArrowUp"?-d:key==="ArrowDown"?d:0;
+  if(S.tool==="align"){ var ka=editLink(); if(ka&&ready(ka)){ movePlan(ka,dx,dy); renderAll(); save(); return true; } }
   var bn=selB();
   if(bn){ moveBeam(bn.p,bn.b,dx,dy); renderAll(); save(); return true; }
   var s=sel(), lvn=active();
@@ -5201,9 +5338,12 @@ function openHelp(){
   d.innerHTML='<h3>Raccourcis et gestes</h3>'+
     '<div class="keys">'+
     '<h4>Outils</h4>'+row("Sélection","V")+row("Main (déplacer la vue)","H / Espace")+row("Réservation rectangulaire","R")+row("Réservation ronde","C")+
-      row("Surface (polygone)","S")+row("Surface rectangulaire","Maj+S")+row("Linéaire","L")+row("Comptage","N")+row("Mesurer une distance","M")+row("Échelle du plan","E")+row("Repère 0,0","P")+row("Poutre","B")+row("Zone à exporter","Z")+
+      row("Surface (polygone)","S")+row("Surface rectangulaire","Maj+S")+row("Linéaire","L")+row("Comptage","N")+row("Mesurer une distance","M")+row("Échelle du plan","E")+row("Repère 0,0","P")+row("Superposer un plan lié","U")+row("Poutre","B")+row("Zone à exporter","Z")+
     '<h4>Pendant un tracé de métré</h4>'+row("Poser un point","Clic")+row("Terminer","Double-clic / Entrée")+row("Fermer la surface","Clic sur le 1er point")+row("Enlever le dernier point","Retour arrière")+
       row("Angles droits / 45°","Maj")+row("Terminer (menu)","Clic droit")+row("Abandonner","Échap")+row("Aimantation","sommets existants")+
+    '<h4>Caler un plan lié à la main</h4>'+row("Superposer (plan lié en calage)","U")+row("Poser le plan","Tirer le plan")+row("Pivoter","Alt + glisser")+
+      row("Décaler de 1 cm (10 cm)","Flèches / Maj")+row("Garder l\'axe","Maj")+row("Lier par un point commun","Bouton « Point commun »")+
+      row("Terminer","Échap / Terminer")+
     '<h4>Poutres</h4>'+row("Tracer une poutre (axe)","Tirer")+row("Dans l\'axe horizontal ou vertical","Maj")+row("Choisir une poutre","Clic dessus")+
       row("Changer sa longueur","Tirer un bout")+row("Changer sa largeur","Tirer un côté")+row("La déplacer","Tirer son milieu")+row("La supprimer","Suppr")+
       row("Afficher / masquer les poutres, le fond","Étiquettes du plan lié")+

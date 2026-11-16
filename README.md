@@ -97,11 +97,23 @@ Une seule règle : **chaque réservation est un objet, et chaque objet est rang�
 Chaque niveau peut recevoir d'autres plans que le plan archi : structure, CVC, plomberie,
 électricité… Menu `⋯` d'un niveau (ou clic droit sur le plan) → **Lier un plan à ce niveau**.
 
-- Le plan lié a son propre **calage** : échelle, puis repère au même endroit physique que sur
-  le plan archi (barre de calage en bas à droite ; « Même calage que l'archi » si les deux
-  feuilles ont le même cadrage). Une fois calé, il se **superpose en transparence**, teinté
-  dans sa couleur (bleu pour la structure…), sous les réservations : on y lit les poutres,
-  les gaines, pour poser les réservations au bon endroit.
+- Le plan lié a son propre **calage** : d'abord son **échelle** (tracer une cote connue, ou
+  saisir 1/N), puis sa **position** sur le plan archi. Une fois calé, il se **superpose en
+  transparence**, teinté dans sa couleur (bleu pour la structure…), sous les réservations :
+  on y lit les poutres, les gaines, pour poser les réservations au bon endroit.
+- Trois façons de le poser, dans la barre de calage (en bas à droite) :
+  - **À la main** (`U`) — le plus simple quand les deux plans sont à l'échelle : le plan
+    apparaît superposé tel qu'il sera, et on le **tire** jusqu'à ce qu'il tombe juste.
+    `Alt` + glisser le fait **pivoter**, les flèches le décalent de 1 cm (`Maj` : 10 cm),
+    `Maj` en glissant garde l'axe, et le champ **pivoter** donne l'angle exact.
+    C'est proposé d'office dès que l'échelle est réglée.
+  - **Point commun** — pour le poser d'un coup sur un point précis : cliquez un point bien
+    repérable sur le plan lié (angle de poteau, croisement de files…), puis **le même point**
+    sur le plan archi ; le plan vient s'y poser. On peut zoomer entre les deux clics, et
+    finir à la main.
+  - **Repère** — l'ancienne méthode : poser le 0,0 du plan lié au même endroit physique que
+    sur l'archi. « Même calage que l'archi » reprend tout du plan archi quand les deux
+    feuilles ont le même cadrage.
 - Sous le niveau, dans la liste : œil, couleur, type, curseur de transparence, `⋯`
   (recaler, teinter ou non, retirer). Un plan lié n'est pas un niveau : il n'a ni
   réservations ni métré propres.
@@ -268,7 +280,8 @@ les listes.
 | `S` surface | `Maj+S` surface rect. | `Ctrl+D` dupliquer | `Suppr` supprimer |
 | `L` linéaire | `N` comptage | flèches : 1 cm (`Maj` : 10 cm) | `Échap` désélectionner |
 | `M` mesure | `E` échelle, `P` repère | `F` recadrer, `+` / `−` zoom | `G` trame, `Pg↑` / `Pg↓` niveaux |
-| `B` poutre | `Z` zone à exporter | `A` accrochage aux objets | `Alt` sans accrochage |
+| `B` poutre | `U` superposer un plan lié | `A` accrochage aux objets | `Alt` sans accrochage |
+| `Z` zone à exporter | | | |
 | `T` tous les niveaux / disposition précédente | | | |
 
 `Ctrl+O` projets · `Ctrl+I` importer des plans · `Ctrl+E` exporter · `?` aide (sur Mac,
