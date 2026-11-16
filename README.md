@@ -117,6 +117,16 @@ Chaque niveau peut recevoir d'autres plans que le plan archi : structure, CVC, p
 - Sous le niveau, dans la liste : œil, couleur, type, curseur de transparence, `⋯`
   (recaler, teinter ou non, retirer). Un plan lié n'est pas un niveau : il n'a ni
   réservations ni métré propres.
+- **Masquer le fond du plan archi** (`W`, ou l'étiquette **fond archi** sur la ligne du
+  niveau) : il ne reste que les plans liés, posés sur leur feuille blanche — pratique pour
+  tracer les poutres ou poser les réservations sur la structure sans le dessin de l'archi
+  par-dessus. Pendant un calage, l'archi reste affiché : c'est la référence. Ce réglage ne
+  concerne que l'écran : à l'export, le plan archi reste la page.
+- **Netteté** : à l'écran, un plan lié est affiché à sa pleine résolution, et un PDF est
+  re-calculé à chaque zoom comme le plan archi. À l'export, un plan lié **PDF non teinté**
+  est repris en **vectoriel** (net à tout zoom, comme l'archi) ; teinté, ou importé en
+  image, il sort en image haute résolution (≈ 4000 px). Pour le rendu le plus net sur un
+  plan de structure, décochez « Teinter dans sa couleur » dans son menu `⋯`.
 - Export : case « Dessiner aussi les plans liés » (plans, zone, réservation par réservation).
 
 ### Poutres
@@ -281,6 +291,7 @@ les listes.
 | `L` linéaire | `N` comptage | flèches : 1 cm (`Maj` : 10 cm) | `Échap` désélectionner |
 | `M` mesure | `E` échelle, `P` repère | `F` recadrer, `+` / `−` zoom | `G` trame, `Pg↑` / `Pg↓` niveaux |
 | `B` poutre | `U` superposer un plan lié | `A` accrochage aux objets | `Alt` sans accrochage |
+| `W` masquer / afficher le fond archi | | | |
 | `Z` zone à exporter | | | |
 | `T` tous les niveaux / disposition précédente | | | |
 

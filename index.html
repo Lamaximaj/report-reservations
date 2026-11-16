@@ -973,7 +973,7 @@ var PID=null, PROJS=[];
 function projMeta(id){ return PROJS.find(function(p){ return p.id===id; })||null; }
 function pack(){ return { levels:S.levels.map(function(l){
     return {id:l.id,name:l.name,src:l.src,w:l.w,h:l.h,scale:l.scale,org:l.org,rot:l.rot,pdf:l.pdf,hf:l.hf,
-      bvis:l.bvis,bOn:l.bOn,beams:beams(l),
+      bvis:l.bvis,bOn:l.bOn,pvis:l.pvis,beams:beams(l),
       links:links(l).map(function(k){ return {id:k.id,name:k.name,kind:k.kind,src:k.src,w:k.w,h:k.h,pdf:k.pdf,scale:k.scale,org:k.org,rot:k.rot,vis:k.vis,op:k.op,col:k.col,tint:k.tint,bg:k.bg,bvis:k.bvis,beams:beams(k)}; })}; }),
     shapes:S.shapes, activeId:S.activeId, seq:S.seq, demo:S.demo, asc:S.asc, title:S.title,
     layers:S.layers, activeLayer:S.activeLayer, types:S.types, activeType:S.activeType, items:S.items, meas:S.meas, activeItem:S.activeItem, ui:S.ui, expOff:S.expOff, multiOff:S.multiOff, zone:S.zone||null,
@@ -999,7 +999,7 @@ var H={u:[],r:[],cur:null,t:null,lock:false}, lvPool={};
 function snapState(){
   S.levels.forEach(function(l){ lvPool[l.id]=l; links(l).forEach(function(k){ lkPool[k.id]=k; }); });
   function noOpen(a){ return (a||[]).map(function(x){ var c=Object.assign({},x); delete c.open; return c; }); }
-  return JSON.stringify({lv:S.levels.map(function(l){ return {id:l.id,name:l.name,scale:l.scale,org:l.org,rot:l.rot,hf:l.hf,bvis:l.bvis,bOn:l.bOn,beams:beams(l),
+  return JSON.stringify({lv:S.levels.map(function(l){ return {id:l.id,name:l.name,scale:l.scale,org:l.org,rot:l.rot,hf:l.hf,bvis:l.bvis,bOn:l.bOn,pvis:l.pvis,beams:beams(l),
       links:links(l).map(function(k){ return {id:k.id,name:k.name,kind:k.kind,scale:k.scale,org:k.org,rot:k.rot,vis:k.vis,op:k.op,col:k.col,tint:k.tint,bg:k.bg,bvis:k.bvis,beams:beams(k)}; })}; }),
     shapes:S.shapes, layers:noOpen(S.layers), types:noOpen(S.types), items:noOpen(S.items), meas:S.meas,
     asc:S.asc, seq:S.seq, title:S.title, activeLayer:S.activeLayer, hEt:S.hEt, zRef:S.zRef});
@@ -1016,7 +1016,7 @@ function restoreSnap(js){
   function reopen(a){ (a||[]).forEach(function(x){ if(keep[x.id]!==undefined) x.open=keep[x.id]; }); return a; }
   H.lock=true;
   S.levels=o.lv.map(function(x){ var l=lvPool[x.id]; if(!l) return null; l.name=x.name; l.scale=x.scale; l.org=x.org; l.rot=x.rot; l.hf=x.hf;
-    l.beams=x.beams||[]; l.bvis=x.bvis; l.bOn=x.bOn;
+    l.beams=x.beams||[]; l.bvis=x.bvis; l.bOn=x.bOn; l.pvis=x.pvis;
     l.links=(x.links||[]).map(function(m){ var k=lkPool[m.id]; if(!k) return null; Object.assign(k,m); return k; }).filter(Boolean); return l; }).filter(Boolean);
   fixLinks();
   S.shapes=o.shapes; S.layers=reopen(o.layers); S.types=reopen(o.types); S.items=reopen(o.items||[]); S.meas=o.meas||[];
@@ -2110,11 +2110,14 @@ function drawLevelPlans(lv){
   var ek=calPlanFor(lv); ek= ek!==lv? ek : null;
   /* calage à la main : on montre la superposition telle qu'elle sera, pour la juger en la faisant */
   var hand=!!ek&&S.tool==="align";
-  if(ek&&!hand){ drawPlan(lv,.28); drawPlan(ek,1); }
-  else drawPlan(lv,1);
+  /* fond archi masqué : on travaille sur les plans liés seuls — sauf pendant un calage, où l'archi est la référence */
+  var bg=lv.pvis!==false||!!ek;
+  if(ek&&!hand){ if(bg) drawPlan(lv,.28); drawPlan(ek,1); }
+  else if(bg) drawPlan(lv,1);
   links(lv).forEach(function(k){
     var cur=k===ek;
     if((cur&&!hand)||k.vis===false||(k.bg===false&&!cur)||!ready(k)||!k.img) return;
+    if(!bg) sheet(k);   /* sans l'archi dessous, le plan teinté a besoin de sa feuille blanche */
     drawPlan(k,cur?Math.max(k.op,.75):k.op,{tint:k.tint?k.col:null,blend:"multiply"});
   });
   drawBeams(lv);
@@ -2128,29 +2131,72 @@ function drawAlignPick(k){
   ctx.beginPath(); ctx.arc(p.x,p.y,8,0,6.2832); ctx.moveTo(p.x-13,p.y); ctx.lineTo(p.x+13,p.y);
   ctx.moveTo(p.x,p.y-13); ctx.lineTo(p.x,p.y+13); ctx.stroke(); ctx.restore();
 }
+/* feuille blanche d'un plan : l'emprise de son image, pour poser un plan teinté sans le fond archi */
+function sheet(p){
+  if(!p.w||!p.h) return;
+  var q=[[0,0],[p.w,0],[p.w,p.h],[0,p.h]].map(function(c){ var w=p2w(p,c[0],c[1]); return w2s(w.X,w.Y); });
+  ctx.save(); ctx.fillStyle="#fff"; ctx.beginPath();
+  q.forEach(function(a,i){ i? ctx.lineTo(a.x,a.y) : ctx.moveTo(a.x,a.y); });
+  ctx.closePath(); ctx.fill(); ctx.restore();
+}
 /* image teintée : le blanc reste blanc, les traits prennent la couleur (mise en cache) */
-function tinted(src,col,holder){
-  var c=holder._tc; if(c&&c.col===col&&c.src===src) return c.cv;
-  var w=src.naturalWidth||src.width, h=src.naturalHeight||src.height, f=Math.min(1,2400/Math.max(w,h,1));
+function tinted(src,col,holder,max){
+  var c=holder._tc; if(c&&c.col===col&&c.src===src&&c.max===max) return c.cv;
+  /* on garde la pleine résolution : plafond au grand côté et à l'aire (limite des canevas sur mobile) */
+  var w=src.naturalWidth||src.width, h=src.naturalHeight||src.height;
+  var f=Math.min(1,(max||3400)/Math.max(w,h,1),Math.sqrt(16e6/Math.max(w*h,1)));
   var cv=document.createElement("canvas"); cv.width=Math.max(1,Math.round(w*f)); cv.height=Math.max(1,Math.round(h*f));
   var g=cv.getContext("2d"); g.drawImage(src,0,0,cv.width,cv.height); g.globalCompositeOperation="lighten"; g.fillStyle=col; g.fillRect(0,0,cv.width,cv.height);
-  holder._tc={col:col,src:src,cv:cv}; return cv;
+  holder._tc={col:col,src:src,cv:cv,max:max}; return cv;
 }
 /* ---- export : plans liés posés sur la page du niveau (image, en transparence, fondu « multiplier ») ---- */
+/* un plan lié PDF non teinté est repris en vectoriel : net à tout zoom, comme le plan archi.
+   Teinté (ou importé en image), il est rendu en image haute résolution — le PDF est re-rastérisé pour l'occasion. */
+var LK_PX=4000;
+function linkCanvas(k){
+  if(!k.pdf||!window.pdfjsLib) return Promise.resolve(k.img);
+  var f=Math.min(LK_PX/Math.max(k.w||1,k.h||1),4);
+  if(!(f>1.02)) return Promise.resolve(k.img);
+  return pdfPage(k).then(function(pg){
+    var vp=pg.getViewport({scale:k.pdf.base*f});
+    var cv=document.createElement("canvas"); cv.width=Math.round(vp.width); cv.height=Math.round(vp.height);
+    var g=cv.getContext("2d"); g.fillStyle="#fff"; g.fillRect(0,0,cv.width,cv.height);
+    return pg.render({canvasContext:g,viewport:vp}).promise.then(function(){ return cv; });
+  }).catch(function(){ return k.img; });
+}
+function linkImage(out,k){
+  return linkCanvas(k).then(function(src){
+    var data;
+    if(k.tint) data=tinted(src,k.col,{},LK_PX).toDataURL("image/jpeg",.9);
+    else if(src===k.img) data=k.src;
+    else data=src.toDataURL("image/jpeg",.9);
+    var jpg=/^data:image\/jpe?g/i.test(data);
+    if(!jpg&&!/^data:image\/png/i.test(data)){
+      var c2=document.createElement("canvas"); c2.width=k.w; c2.height=k.h; c2.getContext("2d").drawImage(k.img,0,0);
+      data=c2.toDataURL("image/jpeg",.9); jpg=true;
+    }
+    return (jpg? out.embedJpg(data) : out.embedPng(data)).then(function(im){ return {im:im,k:k}; });
+  });
+}
+function linkVector(out,k,cache){
+  var L=window.PDFLib;
+  return pdfPage(k).then(function(pg){
+    if(((pg.rotate||0)%360+360)%360) throw new Error("page tournée");   /* /Rotate : on repasse par l'image */
+    var view=pg.view, src=cache.get(k.pdf.bytes);
+    if(!src){ src=L.PDFDocument.load(k.pdf.bytes.slice(),{ignoreEncryption:true}); cache.set(k.pdf.bytes,src); }
+    return src.then(function(doc){ return out.embedPage(doc.getPage(k.pdf.page-1),{left:view[0],bottom:view[1],right:view[2],top:view[3]}); });
+  }).then(function(emb){ return {pg:emb,k:k}; });
+}
 function linkImgs(out,l,cache){
   if(!expLinks) return Promise.resolve([]);
   var ks=links(l).filter(function(k){ return k.vis!==false&&ready(k)&&k.img; });
   return Promise.all(ks.map(function(k){
-    var key="lk:"+k.id+":"+(k.tint?k.col:""), p=cache.get(key);
+    var key="lk:"+k.id+":"+(k.tint?k.col:"net"), p=cache.get(key);
     if(!p){
-      var data;
-      if(k.tint){ var cv=tinted(k.img,k.col,k); data=k._tj&&k._tj.col===k.col? k._tj.data : cv.toDataURL("image/jpeg",.85); k._tj={col:k.col,data:data}; }
-      else data=k.src;
-      var jpg=/^data:image\/jpe?g/i.test(data);
-      if(!jpg&&!/^data:image\/png/i.test(data)){ var c2=document.createElement("canvas"); c2.width=k.w; c2.height=k.h; c2.getContext("2d").drawImage(k.img,0,0); data=c2.toDataURL("image/jpeg",.85); jpg=true; }
-      p=jpg? out.embedJpg(data) : out.embedPng(data); cache.set(key,p);
+      p=(k.pdf&&!k.tint)? linkVector(out,k,cache).catch(function(){ return linkImage(out,k); }) : linkImage(out,k);
+      cache.set(key,p);
     }
-    return p.then(function(im){ return {im:im,k:k}; });
+    return p;
   }));
 }
 function drawLinksPdf(page,l,base,items){
@@ -2161,7 +2207,7 @@ function drawLinksPdf(page,l,base,items){
     var P0=pp(0,k.h), P1=pp(k.w,k.h), W=Math.hypot(P1.x-P0.x,P1.y-P0.y), ang=Math.atan2(P1.y-P0.y,P1.x-P0.x);
     var o={x:P0.x,y:P0.y,width:W,height:W*k.h/k.w,rotate:L.degrees(ang*180/Math.PI),opacity:k.op};
     if(L.BlendMode&&L.BlendMode.Multiply) o.blendMode=L.BlendMode.Multiply;
-    page.drawImage(it.im,o);
+    if(it.pg) page.drawPage(it.pg,o); else page.drawImage(it.im,o);
   });
 }
 function withLinks(out,l,cache,base){
@@ -3022,7 +3068,8 @@ function renderLevels(){
       '<div class="nm"><input value="'+esc(l.name)+'" spellcheck="false"><div class="meta">'+
       '<span>'+(i+1)+'/'+S.levels.length+'</span>'+calTag+
       '<button class="tag alt" data-al title="Altitude du niveau (élévation schématique) — cliquer pour régler les hauteurs d\'étage">'+altTxt(Z[l.id])+'</button>'+
-      (beams(l).length?'<button class="tag bm'+(l.bvis===false?" off":"")+'" data-bm title="'+(l.bvis===false?"Afficher":"Masquer")+' les poutres tracées sur ce plan">'+beams(l).length+' poutre'+(beams(l).length>1?"s":"")+'</button>':'')+'</div></div>'+
+      (beams(l).length?'<button class="tag bm'+(l.bvis===false?" off":"")+'" data-bm title="'+(l.bvis===false?"Afficher":"Masquer")+' les poutres tracées sur ce plan">'+beams(l).length+' poutre'+(beams(l).length>1?"s":"")+'</button>':'')+
+      (links(l).length||beams(l).length||l.pvis===false?'<button class="tag bm'+(l.pvis===false?" off":"")+'" data-pv title="'+(l.pvis===false?"Afficher":"Masquer")+' le fond du plan archi — pour travailler sur les plans liés seuls">fond archi</button>':'')+'</div></div>'+
       '<div class="ord"><button data-up>▲</button><button data-dn>▼</button><button data-mn title="Actions : plan lié, retirer…">⋯</button></div>';
     el.onclick=function(e){ if(e.target.closest("button")||e.target.tagName==="INPUT") return;
       S.activeId=l.id; S.selId=null; fit(); renderAll(); save(); };
@@ -3032,6 +3079,8 @@ function renderLevels(){
     el.querySelector("[data-al]").onclick=function(){ openHeights(); };
     var lbm=el.querySelector("[data-bm]");
     if(lbm) lbm.onclick=function(){ l.bvis=l.bvis===false; renderLevels(); draw(); save(); };
+    var lpv=el.querySelector("[data-pv]");
+    if(lpv) lpv.onclick=function(){ togglePlanBg(l); };
     el.querySelector("[data-up]").onclick=function(){ if(i>0){ S.levels.splice(i-1,0,S.levels.splice(i,1)[0]); renderAll(); save(); } };
     el.querySelector("[data-dn]").onclick=function(){ if(i<S.levels.length-1){ S.levels.splice(i+1,0,S.levels.splice(i,1)[0]); renderAll(); save(); } };
     function rmLevel(){
@@ -3046,6 +3095,7 @@ function renderLevels(){
       openMenu(b.right-250,b.bottom+4,[{h:l.name},
         {t:"Lier un plan à ce niveau (structure, technique…)…",i:"layer",fn:function(){ importLinks(l); }},
         {t:"Tracer des poutres",i:"beam",k:"B",fn:function(){ S.activeId=l.id; if(S.editLink) S.editLink=null; renderAll(); setTool("beam"); }},
+        {t:"Afficher le fond du plan archi",i:"eye",k:"W",on:l.pvis!==false,fn:function(){ togglePlanBg(l); }},
         {t:"Hauteurs d'étage…",i:"height",fn:openHeights},
         {t:"Échelle du plan",i:"scale",fn:function(){ S.activeId=l.id; if(S.editLink) S.editLink=null; renderAll(); setTool("scale"); }},
         {t:"Repère 0,0",i:"org",fn:function(){ S.activeId=l.id; if(S.editLink) S.editLink=null; renderAll(); setTool("org"); }},
@@ -3054,6 +3104,18 @@ function renderLevels(){
     box.appendChild(el);
     links(l).forEach(function(k){ box.appendChild(linkRow(l,k)); });
   });
+}
+/* fond du plan archi : masqué, on ne voit plus que les plans liés (et les poutres) du niveau */
+function togglePlanBg(l){
+  l=l||active(); if(!l) return;
+  if(l.pvis===false){ l.pvis=true; note("Fond du plan archi de « "+l.name+" » affiché.",2000); }
+  else{
+    l.pvis=false;
+    var vis=links(l).filter(function(k){ return k.vis!==false&&k.bg!==false&&ready(k); }).length;
+    note(vis? "Fond du plan archi masqué : il ne reste que "+plural(vis,"plan lié","plans liés")+" — pratique pour tracer sur la structure."
+            : "Fond du plan archi masqué — aucun plan lié affiché à la place (W pour le remettre).",4000);
+  }
+  renderLevels(); draw(); save(); scheduleRefine();
 }
 function renderUnder(){
   var sl=document.getElementById("under"), cur=S.under;
@@ -5140,6 +5202,7 @@ document.addEventListener("keydown",function(e){
   var map={v:"select",h:"pan",r:"rect",c:"circle",s:e.shiftKey?"arect":"area",l:"line",n:"count",m:"meas",e:"scale",p:"org",z:"zone",b:"beam"};
   if(map[k]){ e.preventDefault(); setTool(map[k]); return; }
   if(k==="u"){ handCal(); return; }
+  if(k==="w"){ togglePlanBg(); return; }
   if(k==="f"){ fit(); return; }
   if(k==="g"){ setGrid(!S.grid); return; }
   if(k==="t"){ setMulti(!S.ui.multi); return; }
@@ -5338,7 +5401,7 @@ function openHelp(){
   d.innerHTML='<h3>Raccourcis et gestes</h3>'+
     '<div class="keys">'+
     '<h4>Outils</h4>'+row("Sélection","V")+row("Main (déplacer la vue)","H / Espace")+row("Réservation rectangulaire","R")+row("Réservation ronde","C")+
-      row("Surface (polygone)","S")+row("Surface rectangulaire","Maj+S")+row("Linéaire","L")+row("Comptage","N")+row("Mesurer une distance","M")+row("Échelle du plan","E")+row("Repère 0,0","P")+row("Superposer un plan lié","U")+row("Poutre","B")+row("Zone à exporter","Z")+
+      row("Surface (polygone)","S")+row("Surface rectangulaire","Maj+S")+row("Linéaire","L")+row("Comptage","N")+row("Mesurer une distance","M")+row("Échelle du plan","E")+row("Repère 0,0","P")+row("Superposer un plan lié","U")+row("Masquer / afficher le fond archi","W")+row("Poutre","B")+row("Zone à exporter","Z")+
     '<h4>Pendant un tracé de métré</h4>'+row("Poser un point","Clic")+row("Terminer","Double-clic / Entrée")+row("Fermer la surface","Clic sur le 1er point")+row("Enlever le dernier point","Retour arrière")+
       row("Angles droits / 45°","Maj")+row("Terminer (menu)","Clic droit")+row("Abandonner","Échap")+row("Aimantation","sommets existants")+
     '<h4>Caler un plan lié à la main</h4>'+row("Superposer (plan lié en calage)","U")+row("Poser le plan","Tirer le plan")+row("Pivoter","Alt + glisser")+
