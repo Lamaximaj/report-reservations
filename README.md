@@ -67,6 +67,27 @@ déplacer, utiliser **Enregistrer**.
    poteaux, angle de trémie). Le métré n'a besoin que de l'échelle ; les réservations
    ont besoin de l'échelle et du repère.
 
+### Indices : mettre à jour un plan
+
+Quand un nouvel indice sort, on remplace le plan du niveau **sans rien reprendre** : le plan
+précédent est gardé, et on bascule de l'un à l'autre.
+
+- Menu `⋯` du niveau → **Mettre à jour le plan (nouvel indice)…**, et choisir le nouveau PDF
+  (ou l'image). Le plan en place devient l'**indice A**, le nouveau l'**indice B** (puis C…).
+- Le nouveau plan reprend le **calage** du précédent, ajusté si sa résolution diffère : même
+  cadrage de feuille, c'est juste du premier coup. Si le cadrage a changé, `U` pour le poser
+  à la main.
+- **Tout est reporté** : les réservations, repérées en mètres sur le chantier, ne bougent pas ;
+  le métré et les poutres, tracés sur le plan, suivent le nouveau plan au bon endroit ; les
+  plans liés gardent leur propre calage. Rien n'est à refaire.
+- L'étiquette **ind. B** apparaît sur la ligne du niveau : un clic ouvre la liste des indices
+  pour **basculer** de l'un à l'autre, renommer l'indice affiché (A, B, 02, « indice C du
+  12/11 »…), en supprimer un, ou **comparer**.
+- **Comparer avec l'indice A** : l'ancien plan s'affiche en rouge par-dessus le nouveau — ce
+  qui ne se superpose pas a changé. Un second clic l'enlève.
+- L'indice affiché apparaît dans le **cartouche des exports** (« RDC — indice B — contrôle des
+  réservations »), et `Ctrl+Z` revient à l'indice précédent comme pour le reste.
+
 ### Calques, objets, réservations
 
 Une seule règle : **chaque réservation est un objet, et chaque objet est rangé dans un calque**.

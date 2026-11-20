@@ -366,6 +366,7 @@ canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-acti
 .beambar input[type=text]{width:84px}
 .beambar select{max-width:210px}
 .tag.bm{background:var(--panel-2);color:var(--blue);border:1px solid var(--line)}
+.tag.ind{background:var(--blue-soft);color:var(--blue);font-weight:600}
 .tag.bm.off{color:var(--muted);opacity:.7}
 .status{position:absolute;left:10px;right:auto;bottom:10px;display:flex;gap:4px 14px;flex-wrap:wrap;padding:6px 12px;max-width:calc(100% - 20px);border-radius:999px;
   font-family:var(--f-num);font-size:10.5px;color:#aab4c3;background:var(--glass);border:1px solid var(--glass-line);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);font-variant-numeric:tabular-nums;pointer-events:none}
@@ -692,6 +693,7 @@ kbd{font-family:var(--f-num);font-size:10.5px;background:var(--panel-2);border:1
 <input type="file" id="file" accept="image/*,application/pdf" multiple hidden>
 <input type="file" id="projFile" accept=".json,application/json" hidden>
 <input type="file" id="linkFile" accept="image/*,application/pdf" multiple hidden>
+<input type="file" id="revFile" accept="image/*,application/pdf" hidden>
 
 <script>
 (function(){
@@ -971,9 +973,13 @@ function kvDel(k){ return db().then(function(d){ return new Promise(function(res
 
 var PID=null, PROJS=[];
 function projMeta(id){ return PROJS.find(function(p){ return p.id===id; })||null; }
-function pack(){ return { levels:S.levels.map(function(l){
+function pack(){ S.levels.forEach(fixRevs); return { levels:S.levels.map(function(l){
     return {id:l.id,name:l.name,src:l.src,w:l.w,h:l.h,scale:l.scale,org:l.org,rot:l.rot,pdf:l.pdf,hf:l.hf,
       bvis:l.bvis,bOn:l.bOn,pvis:l.pvis,beams:beams(l),
+      revId:l.revId, revs:revsOf(l).map(function(r){
+        var o={id:r.id,ind:r.ind,date:r.date,scale:r.scale,org:r.org,rot:r.rot};
+        if(r.id!==l.revId){ o.src=r.src; o.w=r.w; o.h=r.h; o.pdf=r.pdf; }   /* l'indice affiché, c'est le plan du niveau */
+        return o; }),
       links:links(l).map(function(k){ return {id:k.id,name:k.name,kind:k.kind,src:k.src,w:k.w,h:k.h,pdf:k.pdf,scale:k.scale,org:k.org,rot:k.rot,vis:k.vis,op:k.op,col:k.col,tint:k.tint,bg:k.bg,bvis:k.bvis,beams:beams(k)}; })}; }),
     shapes:S.shapes, activeId:S.activeId, seq:S.seq, demo:S.demo, asc:S.asc, title:S.title,
     layers:S.layers, activeLayer:S.activeLayer, types:S.types, activeType:S.activeType, items:S.items, meas:S.meas, activeItem:S.activeItem, ui:S.ui, expOff:S.expOff, multiOff:S.multiOff, zone:S.zone||null,
@@ -997,9 +1003,10 @@ document.addEventListener("visibilitychange",function(){ if(document.visibilityS
 /* instantanés du projet sans les images ; les niveaux supprimés restent en mémoire pour pouvoir revenir */
 var H={u:[],r:[],cur:null,t:null,lock:false}, lvPool={};
 function snapState(){
-  S.levels.forEach(function(l){ lvPool[l.id]=l; links(l).forEach(function(k){ lkPool[k.id]=k; }); });
+  S.levels.forEach(function(l){ lvPool[l.id]=l; fixRevs(l); links(l).forEach(function(k){ lkPool[k.id]=k; }); });
   function noOpen(a){ return (a||[]).map(function(x){ var c=Object.assign({},x); delete c.open; return c; }); }
-  return JSON.stringify({lv:S.levels.map(function(l){ return {id:l.id,name:l.name,scale:l.scale,org:l.org,rot:l.rot,hf:l.hf,bvis:l.bvis,bOn:l.bOn,pvis:l.pvis,beams:beams(l),
+  return JSON.stringify({lv:S.levels.map(function(l){ return {id:l.id,name:l.name,scale:l.scale,org:l.org,rot:l.rot,hf:l.hf,bvis:l.bvis,bOn:l.bOn,pvis:l.pvis,beams:beams(l),revId:l.revId,
+      revs:revsOf(l).map(function(r){ return {id:r.id,ind:r.ind,date:r.date,scale:r.scale,org:r.org,rot:r.rot}; }),
       links:links(l).map(function(k){ return {id:k.id,name:k.name,kind:k.kind,scale:k.scale,org:k.org,rot:k.rot,vis:k.vis,op:k.op,col:k.col,tint:k.tint,bg:k.bg,bvis:k.bvis,beams:beams(k)}; })}; }),
     shapes:S.shapes, layers:noOpen(S.layers), types:noOpen(S.types), items:noOpen(S.items), meas:S.meas,
     asc:S.asc, seq:S.seq, title:S.title, activeLayer:S.activeLayer, hEt:S.hEt, zRef:S.zRef});
@@ -1017,6 +1024,12 @@ function restoreSnap(js){
   H.lock=true;
   S.levels=o.lv.map(function(x){ var l=lvPool[x.id]; if(!l) return null; l.name=x.name; l.scale=x.scale; l.org=x.org; l.rot=x.rot; l.hf=x.hf;
     l.beams=x.beams||[]; l.bvis=x.bvis; l.bOn=x.bOn; l.pvis=x.pvis;
+    l.revs=(x.revs||[]).map(function(m){ var p=revPool[m.id]; if(!p) return null;
+      return {id:m.id,ind:m.ind,date:m.date,scale:m.scale,org:m.org,rot:m.rot,src:p.src,w:p.w,h:p.h,pdf:p.pdf,img:p.img}; }).filter(Boolean);
+    l.revId=x.revId;
+    var cr=curRev(l);   /* l'indice affiché a pu changer : on remet son plan, le reste de l'instantané est déjà à sa mesure */
+    if(cr&&cr.src&&cr.src!==l.src){ l.src=cr.src; l.w=cr.w; l.h=cr.h; l.pdf=cr.pdf; l.img=cr.img; l.tiles=null; l._rq=null; l._page=null; l._tc=null; }
+    fixRevs(l);
     l.links=(x.links||[]).map(function(m){ var k=lkPool[m.id]; if(!k) return null; Object.assign(k,m); return k; }).filter(Boolean); return l; }).filter(Boolean);
   fixLinks();
   S.shapes=o.shapes; S.layers=reopen(o.layers); S.types=reopen(o.types); S.items=reopen(o.items||[]); S.meas=o.meas||[];
@@ -1055,7 +1068,7 @@ function applyPack(p){
   S.layers=p.layers||[]; S.activeLayer=p.activeLayer||null; S.types=p.types; S.activeType=p.activeType||null; S.items=p.items||[]; S.meas=p.meas||[]; S.activeItem=p.activeItem||null;
   S.hEt=p.hEt>0? +p.hEt : 2.8; S.zRef=p.zRef||null;
   S.beam= p.beam&&p.beam.w>0? {w:+p.beam.w, h:p.beam.h>0?+p.beam.h:0} : {w:.2,h:.5};
-  S.levels.forEach(function(l){ if(!(l.hf>0)) delete l.hf; }); fixLinks();
+  S.levels.forEach(function(l){ if(!(l.hf>0)) delete l.hf; fixRevs(l); }); fixLinks();
   S.expOff=Array.isArray(p.expOff)? p.expOff.filter(function(x){ return typeof x==="string"; }) : [];
   S.multiOff=Array.isArray(p.multiOff)? p.multiOff.filter(function(x){ return S.levels.some(function(l){ return l.id===x; }); }) : [];
   var z=p.zone; S.zone= z&&[z.x0,z.y0,z.x1,z.y1].every(isFinite)&&z.x1>z.x0&&z.y1>z.y0? {x0:z.x0,y0:z.y0,x1:z.x1,y1:z.y1} : null;
@@ -1066,7 +1079,7 @@ function applyPack(p){
   return Promise.all(S.levels.map(loadImg).concat(allLinks().map(loadImg)));
 }
 function projLabel(){ var e=document.getElementById("projName"); if(e) e.textContent=S.title||(projMeta(PID)||{}).name||"Projet"; document.title=(S.title?S.title+" — ":"")+"Superplan"; }
-function afterOpen(){ closeMenu(); var na=document.querySelector(".hint.auto"); if(na) na.remove(); setTool("select"); setListView(S.ui.lst); layout(); fit(); histReset(); renderAll(); projLabel(); }
+function afterOpen(){ S.levels.forEach(fixRevs); closeMenu(); var na=document.querySelector(".hint.auto"); if(na) na.remove(); setTool("select"); setListView(S.ui.lst); layout(); fit(); histReset(); renderAll(); projLabel(); }
 function openProject(id){
   return saveNow().then(function(){ return kvGet("p:"+id); }).then(function(p){
     PID=id; var m=projMeta(id); return applyPack(p||{title:m?m.name:""});
@@ -1124,7 +1137,7 @@ function importFiles(files){
     groups.forEach(function(g){ g.forEach(function(l){ S.levels.push(l); added.push(l); }); });
     if(added.length){ if(!S.activeId) S.activeId=added[0].id; }
     return Promise.all(added.map(loadImg));
-  }).then(function(){ if(S.demo){ S.demo=false; } fit(); renderAll(); save(); });
+  }).then(function(){ if(S.demo){ S.demo=false; } added.forEach(fixRevs); fit(); renderAll(); save(); });
 }
 function fileToLevels(f){
   if(/pdf$/i.test(f.type)||/\.pdf$/i.test(f.name)) return pdfToLevels(f);
@@ -1943,6 +1956,149 @@ function round(s){
   else s.r=Math.round(s.r*1000)/1000;
 }
 
+/* ============ indices d'un plan de niveau ============ */
+/* un niveau garde ses indices successifs : chacun a son image et son calage, et le niveau affiche l'indice
+   courant. Basculer d'un indice à l'autre emmène avec lui le métré et les poutres tracés sur le plan (ils
+   sont enregistrés en pixels du plan) ; les réservations, repérées en mètres sur le chantier, ne bougent pas,
+   et les plans liés non plus — ils ont leur propre calage. */
+var revPool={};
+function revsOf(l){ return Array.isArray(l.revs)? l.revs : []; }
+function revOf(l,id){ return revsOf(l).filter(function(r){ return r.id===id; })[0]||null; }
+function curRev(l){ return l? revOf(l,l.revId) : null; }
+function indTxt(l){ var r=curRev(l); return r? r.ind : ""; }
+function revDate(r){ return r.date? new Date(r.date).toLocaleDateString("fr-FR") : ""; }
+function poolRev(r){ if(r&&r.id) revPool[r.id]={src:r.src,w:r.w,h:r.h,pdf:r.pdf,img:r.img}; }
+/* l'entrée de l'indice courant reflète le plan et le calage du niveau (mêmes objets : rien n'est dupliqué) */
+function syncRev(l){
+  var r=curRev(l); if(!r) return;
+  r.scale=l.scale; r.org=l.org; r.rot=l.rot; r.src=l.src; r.w=l.w; r.h=l.h; r.pdf=l.pdf; r.img=l.img;
+  poolRev(r);
+}
+function fixRevs(l){
+  l.revs=revsOf(l).filter(function(r){ return r&&r.id; });
+  if(!revOf(l,l.revId)){   /* pas encore d'indice (ou indice perdu) : le plan en place en est un, sans repère */
+    var r={id:uid(),ind:"",date:Date.now(),src:l.src,w:l.w,h:l.h,pdf:l.pdf,img:l.img,scale:l.scale,org:l.org,rot:l.rot};
+    l.revs.push(r); l.revId=r.id;
+  }
+  l.revs.forEach(function(r){ r.ind=String(r.ind||"");
+    if(r.id===l.revId){ r.src=l.src; r.w=l.w; r.h=l.h; r.pdf=l.pdf; r.img=l.img; r.scale=l.scale; r.org=l.org; r.rot=l.rot; }
+    poolRev(r); });
+  if(l.cmp&&!revOf(l,l.cmp)) l.cmp=null;
+}
+function hasInd(l){ return revsOf(l).length>1||!!indTxt(l); }
+function ensureRevImg(r){ return r.img? Promise.resolve() : loadImg(r); }
+/* métré et poutres du niveau : pixels de l'ancien plan → pixels du nouveau, par le chantier */
+function movePix(l,A,B){
+  if(!ready(A)||!ready(B)) return false;
+  function conv(p){ var W=p2w(A,p.x,p.y), q=w2p(B,W.X,W.Y); return {x:Math.round(q.x*100)/100, y:Math.round(q.y*100)/100}; }
+  S.meas.forEach(function(m){ if(m.lv!==l.id) return; m.pts=m.pts.map(conv); });
+  beams(l).forEach(function(b){ b.a=conv(b.a); b.b=conv(b.b); });
+  return true;
+}
+/* bascule le niveau sur un autre indice */
+function switchRev(l,id,quiet){
+  if(!l||!id||l.revId===id) return Promise.resolve(false);
+  var to=revOf(l,id); if(!to) return Promise.resolve(false);
+  syncRev(l);
+  var from=curRev(l), A={scale:from.scale,org:from.org,rot:from.rot};
+  return ensureRevImg(to).then(function(){
+    if(!to.img){ note("Le plan de l'indice "+to.ind+" n'a pas pu être relu."); return false; }
+    var B={scale:to.scale,org:to.org,rot:to.rot}, ok=movePix(l,A,B);
+    l.revId=to.id; l.src=to.src; l.w=to.w; l.h=to.h; l.pdf=to.pdf; l.img=to.img;
+    l.scale=to.scale; l.org=to.org; l.rot=to.rot;
+    l.tiles=null; l._rq=null; l._page=null; l._tc=null;
+    if(l.cmp===to.id) l.cmp=null;
+    poolRev(to); renderAll(); save(); scheduleRefine();
+    if(!quiet) note(l.name+" : indice "+to.ind+" affiché"+
+      (ok? " — métré et poutres suivent le plan." : (ready(l)? "." : " — ce plan n'est pas calé (échelle + repère).")),4000);
+    return true;
+  }).catch(function(){ note("Plan de l'indice illisible."); return false; });
+}
+/* indice suivant : B après A, 3 après 2… */
+function nextInd(cur){
+  cur=String(cur||"").trim()||"A";
+  var m=/^(.*?)(\d+)\s*$/.exec(cur);
+  if(m) return m[1]+(parseInt(m[2],10)+1);
+  m=/^(.*?)([A-Ya-y])\s*$/.exec(cur);
+  if(m) return m[1]+String.fromCharCode(m[2].charCodeAt(0)+1);
+  return cur+" bis";
+}
+var revTarget=null;
+document.getElementById("revFile").onchange=function(e){
+  var f=e.target.files&&e.target.files[0]; e.target.value="";
+  var lv=lvById(revTarget)||active(); if(f&&lv) addRev(lv,f);
+};
+function importRev(l){ revTarget=l.id; document.getElementById("revFile").click(); }
+/* nouvel indice : le plan en place est gardé, le nouveau prend sa place avec le même calage (même cadrage) */
+function addRev(l,file){
+  note("Lecture du plan…",2000);
+  fileToLevels(file).then(function(g){
+    if(!g.length){ note("Plan illisible — PDF ou image."); return; }
+    if(g.length>1) note("Le PDF a "+g.length+" pages : la première devient le nouvel indice.",4500);
+    var x=g[0], r={id:uid(), ind:"", date:Date.now(), src:x.src, pdf:x.pdf};
+    return loadImg(r).then(function(){
+      if(!r.w||!r.h){ note("Plan illisible."); return; }
+      fixRevs(l);
+      var prev=curRev(l);
+      if(!prev.ind) prev.ind="A";       /* le plan en place devient l'indice de départ */
+      r.ind=nextInd(prev.ind);
+      /* même cadrage de feuille : on reprend le calage, ajusté si la résolution diffère */
+      var f=(l.w&&r.w)? r.w/l.w : 1;
+      r.scale= l.scale? {s:l.scale.s*f, ratio:l.scale.ratio||null, paper:l.scale.paper||null} : null;
+      r.org= l.org? {x:l.org.x*f, y:l.org.y*f} : null;
+      r.rot=l.rot||0;
+      l.revs.push(r); poolRev(r);
+      return switchRev(l,r.id,true).then(function(){
+        renderAll(); save();
+        note(l.name+" : indice "+r.ind+" en place, l'indice "+prev.ind+" est gardé. Calage repris du précédent — vérifiez (« Comparer avec l'indice "+prev.ind+" »), U pour recaler à la main.",9000);
+      });
+    });
+  }).catch(function(){ note("Lecture du plan impossible."); });
+}
+function renameRev(l){
+  var r=curRev(l); if(!r) return;
+  closeMenu(); var old=document.getElementById("indSheet"); if(old) old.remove();
+  var d=document.createElement("div"); d.className="sheet"; d.id="indSheet";
+  d.innerHTML='<h3>Indice du plan — '+esc(l.name)+'</h3><p>Le repère de la version du plan (A, B, 02, « indice C du 12/11 »…). Il apparaît dans la liste des niveaux et dans le cartouche des exports.</p>'+
+    '<div class="fld"><label>Indice</label><input id="iv" type="text" value="'+esc(r.ind)+'" placeholder="ex. B"></div>'+
+    '<div class="acts"><button class="btn" id="ik">Annuler</button><button class="btn primary" id="io">Renommer</button></div>';
+  openModal(d); var inp=d.querySelector("#iv"); try{ inp.focus(); inp.select(); }catch(e){}
+  function ok(){ var v=inp.value.trim(); if(!v){ inp.focus(); return; } r.ind=v; d.remove(); renderAll(); save(); }
+  d.querySelector("#io").onclick=ok; d.querySelector("#ik").onclick=function(){ d.remove(); };
+  inp.onkeydown=function(e){ if(e.key==="Enter"){ e.preventDefault(); ok(); } };
+}
+function delRev(l,id){
+  var r=revOf(l,id); if(!r||id===l.revId) return;
+  l.revs=revsOf(l).filter(function(x){ return x.id!==id; });
+  if(l.cmp===id) l.cmp=null;
+  renderAll(); save(); note("Indice "+r.ind+" supprimé — Ctrl+Z pour revenir.",3000);
+}
+/* comparer : l'autre indice en rouge, par-dessus le plan courant */
+function toggleCmp(l,id){
+  if(l.cmp===id){ l.cmp=null; draw(); return; }
+  var r=revOf(l,id); if(!r) return;
+  ensureRevImg(r).then(function(){ l.cmp=id; draw();
+    note("Indice "+r.ind+" en rouge par-dessus l'indice "+indTxt(l)+" : ce qui ne se superpose pas a changé.",5000); });
+}
+function revMenu(l,x,y){
+  var items=[{h:"Indices du plan — "+l.name}];
+  revsOf(l).forEach(function(r){
+    items.push({t:(r.ind? "Indice "+r.ind : "Plan d'origine")+(revDate(r)?"  ·  "+revDate(r):""), i:r.id===l.revId?"ok":"file", on:r.id===l.revId,
+      sub:r.id===l.revId?"affiché":"", fn:function(){ switchRev(l,r.id); }});
+  });
+  items.push("-");
+  items.push({t:"Mettre à jour le plan (nouvel indice)…",i:"import",fn:function(){ importRev(l); }});
+  items.push({t:"Renommer l'indice affiché…",i:"edit",fn:function(){ renameRev(l); }});
+  var others=revsOf(l).filter(function(r){ return r.id!==l.revId; });
+  if(others.length){
+    var p=others[others.length-1];
+    items.push({t:"Comparer avec l'indice "+p.ind,i:"layer",on:l.cmp===p.id,fn:function(){ toggleCmp(l,p.id); }});
+    items.push("-");
+    others.forEach(function(r){ items.push({t:"Supprimer l'indice "+r.ind,i:"trash",dg:true,fn:function(){ delRev(l,r.id); }}); });
+  }
+  openMenu(x,y,items);
+}
+
 /* ============ plans liés : structure, techniques… superposés au plan archi d'un niveau ============ */
 /* un plan lié a son propre calage (échelle, repère, orientation) : une fois calé au même repère physique que le plan
    archi, il se superpose en transparence, teinté dans sa couleur ; on y lit les poutres, les gaines… pour poser les
@@ -2114,6 +2270,8 @@ function drawLevelPlans(lv){
   var bg=lv.pvis!==false||!!ek;
   if(ek&&!hand){ if(bg) drawPlan(lv,.28); drawPlan(ek,1); }
   else if(bg) drawPlan(lv,1);
+  /* comparaison d'indices : l'autre version en rouge par-dessus */
+  if(lv.cmp){ var rc=revOf(lv,lv.cmp); if(rc&&rc.img&&ready(rc)) drawPlan(rc,.85,{tint:"#e11d2e",blend:"multiply"}); }
   links(lv).forEach(function(k){
     var cur=k===ek;
     if((cur&&!hand)||k.vis===false||(k.bg===false&&!cur)||!ready(k)||!k.img) return;
@@ -2274,7 +2432,6 @@ function beams(p){ return (p&&Array.isArray(p.beams))? p.beams : []; }
 function fixBeams(p){
   p.beams=beams(p).filter(function(b){ return b&&b.a&&b.b&&isFinite(b.a.x)&&isFinite(b.a.y)&&isFinite(b.b.x)&&isFinite(b.b.y); });
   p.beams.forEach(function(b){ if(!b.id) b.id=uid(); if(!(b.w>0)) b.w=.2; if(!(b.hh>0)) b.hh=0; b.n=String(b.n||""); });
-  if(p.bvis===undefined) p.bvis=true;
 }
 /* plans d'un niveau qui peuvent porter des poutres : son plan archi, puis ses plans liés */
 function beamHosts(lv){ return lv? [lv].concat(links(lv)) : []; }
@@ -2329,7 +2486,7 @@ function addBeam(p,A,B){
   var bm={id:uid(),a:{x:px2(a.x),y:px2(a.y)},b:{x:px2(b.x),y:px2(b.y)},
           w:(S.beam&&S.beam.w>0)?S.beam.w:.2, hh:(S.beam&&S.beam.h>0)?S.beam.h:0, n:""};
   if(!Array.isArray(p.beams)) p.beams=[];
-  p.beams.push(bm); p.bvis=true; return bm;
+  p.beams.push(bm); if(p.bvis===false) p.bvis=true; return bm;
 }
 function delBeam(id){
   var x=beamById(id); if(!x) return false;
@@ -2435,7 +2592,7 @@ function beamToHost(x,p){
   x.p.beams=beams(x.p).filter(function(b){ return b!==x.b; });
   x.b.a={x:px2(q1.x),y:px2(q1.y)}; x.b.b={x:px2(q2.x),y:px2(q2.y)};
   if(!Array.isArray(p.beams)) p.beams=[];
-  p.beams.push(x.b); p.bvis=true;
+  p.beams.push(x.b); if(p.bvis===false) p.bvis=true;
 }
 
 /* ============ accrochage aux objets ============ */
@@ -3068,6 +3225,7 @@ function renderLevels(){
       '<div class="nm"><input value="'+esc(l.name)+'" spellcheck="false"><div class="meta">'+
       '<span>'+(i+1)+'/'+S.levels.length+'</span>'+calTag+
       '<button class="tag alt" data-al title="Altitude du niveau (élévation schématique) — cliquer pour régler les hauteurs d\'étage">'+altTxt(Z[l.id])+'</button>'+
+      (hasInd(l)?'<button class="tag ind" data-ri title="Indice du plan — basculer d\'un indice à l\'autre, mettre à jour, comparer">ind. '+esc(indTxt(l))+'</button>':'')+
       (beams(l).length?'<button class="tag bm'+(l.bvis===false?" off":"")+'" data-bm title="'+(l.bvis===false?"Afficher":"Masquer")+' les poutres tracées sur ce plan">'+beams(l).length+' poutre'+(beams(l).length>1?"s":"")+'</button>':'')+
       (links(l).length||beams(l).length||l.pvis===false?'<button class="tag bm'+(l.pvis===false?" off":"")+'" data-pv title="'+(l.pvis===false?"Afficher":"Masquer")+' le fond du plan archi — pour travailler sur les plans liés seuls">fond archi</button>':'')+'</div></div>'+
       '<div class="ord"><button data-up>▲</button><button data-dn>▼</button><button data-mn title="Actions : plan lié, retirer…">⋯</button></div>';
@@ -3081,6 +3239,8 @@ function renderLevels(){
     if(lbm) lbm.onclick=function(){ l.bvis=l.bvis===false; renderLevels(); draw(); save(); };
     var lpv=el.querySelector("[data-pv]");
     if(lpv) lpv.onclick=function(){ togglePlanBg(l); };
+    var lri=el.querySelector("[data-ri]");
+    if(lri) lri.onclick=function(){ var b=this.getBoundingClientRect(); S.activeId=l.id; renderAll(); revMenu(l,b.left,b.bottom+4); };
     el.querySelector("[data-up]").onclick=function(){ if(i>0){ S.levels.splice(i-1,0,S.levels.splice(i,1)[0]); renderAll(); save(); } };
     el.querySelector("[data-dn]").onclick=function(){ if(i<S.levels.length-1){ S.levels.splice(i+1,0,S.levels.splice(i,1)[0]); renderAll(); save(); } };
     function rmLevel(){
@@ -3093,6 +3253,8 @@ function renderLevels(){
     }
     el.querySelector("[data-mn]").onclick=function(){ var b=this.getBoundingClientRect(); var nk=links(l).length;
       openMenu(b.right-250,b.bottom+4,[{h:l.name},
+        {t:hasInd(l)? "Indices du plan (affiché : "+indTxt(l)+")…" : "Mettre à jour le plan (nouvel indice)…",
+         i:"import",fn:function(){ if(hasInd(l)) revMenu(l,b.right-250,b.bottom+4); else importRev(l); }},
         {t:"Lier un plan à ce niveau (structure, technique…)…",i:"layer",fn:function(){ importLinks(l); }},
         {t:"Tracer des poutres",i:"beam",k:"B",fn:function(){ S.activeId=l.id; if(S.editLink) S.editLink=null; renderAll(); setTool("beam"); }},
         {t:"Afficher le fond du plan archi",i:"eye",k:"W",on:l.pvis!==false,fn:function(){ togglePlanBg(l); }},
@@ -3948,7 +4110,7 @@ function annotate(info,l,rows,F,title,Tz,scaleLine,opt){
 
   /* cartouche */
   var kos=rows.filter(function(r){ return r.ko; }).length, devs=rows.filter(function(r){ return r.sh.devAt; }).length;
-  var head=[{t:win(l.name+" — contrôle des réservations"),b:1,s:Tz*HEAD_S[0]},
+  var head=[{t:win(l.name+(indTxt(l)?" — indice "+indTxt(l):"")+" — contrôle des réservations"),b:1,s:Tz*HEAD_S[0]},
     {t:win([title,today()].filter(Boolean).join("  ·  ")),s:Tz*HEAD_S[1],c:GREY},
     {t:win(scaleLine),b:1,s:Tz*HEAD_S[2]},
     {t:win(rows.length+" réservation(s)  ·  "+kos+" anomalie(s)"+(devs?"  ·  "+devs+" dévoiement(s)":"")),b:1,s:Tz*HEAD_S[3],c:kos?RED:L.rgb(0,0,0)},
@@ -5418,7 +5580,7 @@ function openHelp(){
       row("Dupliquer","Ctrl+D")+row("Supprimer","Suppr")+row("Décaler de 1 cm (10 cm)","Flèches / Maj")+row("Désélectionner, quitter l'outil","Échap")+
       row("Accrochage aux objets","A")+row("Sans accrochage, le temps d'un geste","Alt")+row("Renommer le projet","F2")+
     '<h4>Vue et niveaux</h4>'+row("Recadrer","F / Ctrl+0")+row("Zoom","+ / − / molette")+row("Trame 1 m","G")+row("Niveau au-dessus / en dessous","Pg↑ / Pg↓")+
-      row("Tous les niveaux côte à côte / disposition précédente","T")+row("Plusieurs vues : réservation précédente / suivante","Pg↑ / Pg↓")+
+      row("Tous les niveaux côte à côte / disposition précédente","T")+row("Indices d'un plan : basculer, mettre à jour, comparer","Étiquette « ind. »")+row("Plusieurs vues : réservation précédente / suivante","Pg↑ / Pg↓")+
     '<h4>Plusieurs vues</h4>'+row("Rendre une vue active","Clic dans la vue")+row("Changer le contenu (niveau, élévation)","Liste en haut de la vue")+
       row("Vue liée / vue libre (zoom à part)","Bouton chaîne")+row("Changer la taille des vues","Tirer le séparateur")+row("Tailles égales","Double-clic séparateur")+
       row("Élévation : sélectionner une réservation","Clic sur son réseau")+
@@ -5621,6 +5783,7 @@ function projectJSON(id){
       var c=Object.assign({},l);
       function ref(pdf){ var k=seen.get(pdf.bytes); if(k===undefined){ k=files.length; files.push(b64(pdf.bytes)); seen.set(pdf.bytes,k); } return {file:k,page:pdf.page,base:pdf.base}; }
       if(l.pdf&&l.pdf.bytes) c.pdf=ref(l.pdf);
+      c.revs=(l.revs||[]).map(function(x){ var y=Object.assign({},x); if(x.pdf&&x.pdf.bytes) y.pdf=ref(x.pdf); return y; });
       c.links=(l.links||[]).map(function(x){ var y=Object.assign({},x); if(x.pdf&&x.pdf.bytes) y.pdf=ref(x.pdf); return y; });
       return c; })});
     delete out.ui;
@@ -5658,6 +5821,7 @@ document.getElementById("projFile").onchange=function(e){
     var o=JSON.parse(t); if(!o||o.format!=="report-reservations"||!o.project) throw new Error("format");
     var bins=(o.pdfs||[]).map(unb64), pk=o.project;
     (pk.levels||[]).forEach(function(l){ if(l.pdf&&typeof l.pdf.file==="number") l.pdf={bytes:bins[l.pdf.file],page:l.pdf.page,base:l.pdf.base};
+      (l.revs||[]).forEach(function(x){ if(x.pdf&&typeof x.pdf.file==="number") x.pdf={bytes:bins[x.pdf.file],page:x.pdf.page,base:x.pdf.base}; });
       (l.links||[]).forEach(function(x){ if(x.pdf&&typeof x.pdf.file==="number") x.pdf={bytes:bins[x.pdf.file],page:x.pdf.page,base:x.pdf.base}; }); });
     var id=uid(), nm=pk.title||f.name.replace(/\.json$/i,""); if(PROJS.some(function(p){ return p.name===nm; })) nm+=" (importé)"; pk.title=nm;
     PROJS.push(Object.assign({id:id,name:nm,upd:Date.now()},counts(pk)));
