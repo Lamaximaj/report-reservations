@@ -367,6 +367,10 @@ canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-acti
 .beambar select{max-width:210px}
 .tag.bm{background:var(--panel-2);color:var(--blue);border:1px solid var(--line)}
 .tag.ind{background:var(--blue-soft);color:var(--blue);font-weight:600}
+.picks .dr{display:flex;align-items:center;gap:8px;padding:4px 8px;border-bottom:1px solid var(--line-soft)}
+.picks .dr:last-child{border-bottom:0}
+.picks .dr .dn{flex:1 1 auto;min-width:0;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.picks .dr select{flex:0 0 auto;max-width:190px;background:var(--panel);border:1px solid var(--line);border-radius:7px;padding:3px 6px;font-size:12px;color:var(--ink)}
 .tag.bm.off{color:var(--muted);opacity:.7}
 .status{position:absolute;left:10px;right:auto;bottom:10px;display:flex;gap:4px 14px;flex-wrap:wrap;padding:6px 12px;max-width:calc(100% - 20px);border-radius:999px;
   font-family:var(--f-num);font-size:10.5px;color:#aab4c3;background:var(--glass);border:1px solid var(--glass-line);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);font-variant-numeric:tabular-nums;pointer-events:none}
@@ -890,6 +894,19 @@ function fixLayers(){
 /* ============ géométrie ============ */
 /* calage d'un plan : 2 points en pixels + distance réelle → origine, rotation, échelle */
 function ready(lv){ return !!(lv&&lv.scale&&lv.scale.s>0&&lv.org); }
+/* emprise utile d'un plan, en pixels de son image : sa découpe, sinon toute la feuille
+   (une feuille qui porte plusieurs niveaux se découpe en autant de plans liés) */
+function planBox(p){
+  var c=p&&p.crop;
+  return (c&&c.w>0&&c.h>0)? {x:c.x,y:c.y,w:c.w,h:c.h} : {x:0,y:0,w:(p&&p.w)||0,h:(p&&p.h)||0};
+}
+function fixCrop(p){
+  var c=p.crop;
+  if(!c||!(c.w>0)||!(c.h>0)||!p.w||!p.h){ p.crop=null; return; }
+  var x=Math.max(0,Math.min(c.x,p.w-1)), y=Math.max(0,Math.min(c.y,p.h-1));
+  var w=Math.min(c.w,p.w-x), h=Math.min(c.h,p.h-y);
+  p.crop= (w>=8&&h>=8&&(x>0||y>0||w<p.w-.5||h<p.h-.5))? {x:Math.round(x),y:Math.round(y),w:Math.round(w),h:Math.round(h)} : null;
+}
 function cal(lv){
   if(!ready(lv)) return {ax:0,ay:0,s:1,co:1,si:0,raw:true};
   var th=(lv.rot||0)*Math.PI/180;
@@ -980,7 +997,7 @@ function pack(){ S.levels.forEach(fixRevs); return { levels:S.levels.map(functio
         var o={id:r.id,ind:r.ind,date:r.date,scale:r.scale,org:r.org,rot:r.rot};
         if(r.id!==l.revId){ o.src=r.src; o.w=r.w; o.h=r.h; o.pdf=r.pdf; }   /* l'indice affiché, c'est le plan du niveau */
         return o; }),
-      links:links(l).map(function(k){ return {id:k.id,name:k.name,kind:k.kind,src:k.src,w:k.w,h:k.h,pdf:k.pdf,scale:k.scale,org:k.org,rot:k.rot,vis:k.vis,op:k.op,col:k.col,tint:k.tint,bg:k.bg,bvis:k.bvis,beams:beams(k)}; })}; }),
+      links:links(l).map(function(k){ return {id:k.id,name:k.name,kind:k.kind,src:k.src,w:k.w,h:k.h,pdf:k.pdf,scale:k.scale,org:k.org,rot:k.rot,vis:k.vis,op:k.op,col:k.col,tint:k.tint,bg:k.bg,bvis:k.bvis,crop:k.crop,ref:k.ref,beams:beams(k)}; })}; }),
     shapes:S.shapes, activeId:S.activeId, seq:S.seq, demo:S.demo, asc:S.asc, title:S.title,
     layers:S.layers, activeLayer:S.activeLayer, types:S.types, activeType:S.activeType, items:S.items, meas:S.meas, activeItem:S.activeItem, ui:S.ui, expOff:S.expOff, multiOff:S.multiOff, zone:S.zone||null,
     hEt:S.hEt, zRef:S.zRef, beam:S.beam }; }
@@ -1007,7 +1024,7 @@ function snapState(){
   function noOpen(a){ return (a||[]).map(function(x){ var c=Object.assign({},x); delete c.open; return c; }); }
   return JSON.stringify({lv:S.levels.map(function(l){ return {id:l.id,name:l.name,scale:l.scale,org:l.org,rot:l.rot,hf:l.hf,bvis:l.bvis,bOn:l.bOn,pvis:l.pvis,beams:beams(l),revId:l.revId,
       revs:revsOf(l).map(function(r){ return {id:r.id,ind:r.ind,date:r.date,scale:r.scale,org:r.org,rot:r.rot}; }),
-      links:links(l).map(function(k){ return {id:k.id,name:k.name,kind:k.kind,scale:k.scale,org:k.org,rot:k.rot,vis:k.vis,op:k.op,col:k.col,tint:k.tint,bg:k.bg,bvis:k.bvis,beams:beams(k)}; })}; }),
+      links:links(l).map(function(k){ return {id:k.id,name:k.name,kind:k.kind,scale:k.scale,org:k.org,rot:k.rot,vis:k.vis,op:k.op,col:k.col,tint:k.tint,bg:k.bg,bvis:k.bvis,crop:k.crop,beams:beams(k)}; })}; }),
     shapes:S.shapes, layers:noOpen(S.layers), types:noOpen(S.types), items:noOpen(S.items), meas:S.meas,
     asc:S.asc, seq:S.seq, title:S.title, activeLayer:S.activeLayer, hEt:S.hEt, zRef:S.zRef});
 }
@@ -1163,8 +1180,12 @@ function pdfToLevels(f){
         var c=document.createElement("canvas"); c.width=Math.round(v.width); c.height=Math.round(v.height);
         var g=c.getContext("2d"); g.fillStyle="#fff"; g.fillRect(0,0,c.width,c.height);
         return page.render({canvasContext:g,viewport:v}).promise.then(function(){
+          return page.getTextContent().then(function(tc){
+            return tc.items.map(function(it){ return it.str; }).join(" ").slice(0,600);
+          }).catch(function(){ return ""; });
+        }).then(function(txt){
           out.push({id:uid(), name:(pdf.numPages>1? guessName(f.name)+" p."+p : guessName(f.name)),
-                    src:c.toDataURL("image/jpeg",.92), cal:null,
+                    src:c.toDataURL("image/jpeg",.92), cal:null, txt:txt,
                     pdf:{bytes:bytes, page:p, base:sc}});
         });
       });
@@ -1316,7 +1337,8 @@ document.getElementById("laySeg").addEventListener("click",function(e){ var b=e.
 /* ============ vue ============ */
 /* emprise d'un niveau en mètres */
 function lvBounds(lv){
-  var cs=[[0,0],[lv.w,0],[lv.w,lv.h],[0,lv.h]].map(function(p){ return p2w(lv,p[0],p[1]); });
+  var b=planBox(lv);
+  var cs=[[b.x,b.y],[b.x+b.w,b.y],[b.x+b.w,b.y+b.h],[b.x,b.y+b.h]].map(function(p){ return p2w(lv,p[0],p[1]); });
   var xs=cs.map(function(p){return p.X;}), ys=cs.map(function(p){return p.Y;});
   return {x0:Math.min.apply(null,xs), x1:Math.max.apply(null,xs), y0:Math.min.apply(null,ys), y1:Math.max.apply(null,ys)};
 }
@@ -1503,6 +1525,7 @@ function drawPlan(lv,alpha,o){
   ctx.save(); ctx.globalAlpha=alpha; if(o&&o.blend) ctx.globalCompositeOperation=o.blend;
   ctx.setTransform(dpr*a,dpr*b,dpr*cc,dpr*d,dpr*(e+OFF.x),dpr*(f+OFF.y));
   ctx.imageSmoothingQuality="high";
+  if(lv.crop&&!(o&&o.nocrop)){ ctx.beginPath(); ctx.rect(lv.crop.x,lv.crop.y,lv.crop.w,lv.crop.h); ctx.clip(); }
   var tl=lv.tiles&&lv.tiles[RK], tint=o&&o.tint;
   try{ if(tint) ctx.drawImage(tinted(lv.img,tint,lv),0,0,lv.w,lv.h); else ctx.drawImage(lv.img,0,0);
        if(tl){ if(tint) ctx.drawImage(tinted(tl.cv,tint,tl),tl.x0,tl.y0,tl.w,tl.h); else ctx.drawImage(tl.cv, tl.x0, tl.y0, tl.w, tl.h); }
@@ -1871,6 +1894,7 @@ function drawScene(tile){
     var rs=pxm(lv); if(rs){ var wq=Math.abs(drag.b.X-drag.a.X), hq=Math.abs(drag.b.Y-drag.a.Y), k=ready(lv)?1:1/rs;
       pill(nf(wq*k,2)+" × "+nf(hq*k,2)+" m  ·  "+qTxt(wq*hq*k*k,"m²"),rb.x,rb.y-20,ri.c); }
     ctx.restore(); }
+  if(drag&&drag.m==="crop") drawCropDraft();
   if(drag&&drag.m==="beam"&&drag.lv===lv.id&&ready(lv)) drawBeamDraft(lv);
   drawDraft(lv);
   drawRouteDraft(lv);
@@ -1935,7 +1959,7 @@ function setTool(t){
   else if(isMtTool(t)) draftHint();
   else if(t==="route") routeHint();
   else if(t==="beam") hint("");
-  else if(t==="align") hint("");
+  else if(t==="align"||t==="crop") hint("");
   else hint(t==="zone"?"Zone à exporter : tracez le cadre — le même cadre vaut pour tous les niveaux côte à côte. Échap pour annuler.":
        t==="dev"?"Dévoiement : faites glisser la réservation jusqu'à sa nouvelle position (Maj : dans l'axe). Échap pour annuler.":
        t==="rect"?"Tracez le rectangle de la réservation — objet « "+activeObj().code+" » ("+(layerById(activeObj().ly)||{}).name+").":
@@ -2127,7 +2151,7 @@ function fixLinks(){
       if(!/^#[0-9a-f]{6}$/i.test(k.col||"")) k.col=LKIND[k.kind].c;
       if(!(k.op>0&&k.op<=1)) k.op=.65; if(k.tint===undefined) k.tint=true; if(k.vis===undefined) k.vis=true; if(!(k.rot>=0||k.rot<0)) k.rot=0;
       if(k.bg===undefined) k.bg=true;
-      fixBeams(k);
+      fixCrop(k); fixBeams(k);
       lkPool[k.id]=k;
     });
     if(l.bOn&&l.bOn!==l.id&&!links(l).some(function(k){ return k.id===l.bOn; })) l.bOn=null;
@@ -2143,23 +2167,93 @@ document.getElementById("linkFile").onchange=function(e){
   var lv=lvById(linkTarget)||active(); if(f.length&&lv) addLinks(lv,f);
 };
 function importLinks(lv){ linkTarget=lv.id; document.getElementById("linkFile").click(); }
+function attachLink(lv,x,kind){
+  var kd=LKIND[kind]? kind : (LKIND[x.kind]? x.kind : "autre");
+  var k={id:uid(), name:x.name, kind:kd, src:x.src, pdf:x.pdf, img:x.img, w:x.w, h:x.h,
+         scale:null, org:null, rot:0, vis:true, op:.65, col:LKIND[kd].c, tint:true, bg:true, crop:null};
+  if(!lv.links) lv.links=[]; lv.links.push(k); lkPool[k.id]=k; return k;
+}
+/* même cadrage de feuille que le plan archi : on reprend son calage, ajusté à la résolution */
+function takeArchiCal(k){
+  var lv=linkParent(k.id);
+  if(!lv||!ready(lv)||!k.w||!lv.w) return false;
+  var f=k.w/lv.w;
+  k.scale={s:lv.scale.s*f, ratio:lv.scale.ratio||null, paper:lv.scale.paper||null};
+  k.org={x:lv.org.x*f, y:lv.org.y*f}; k.rot=lv.rot||0;
+  return true;
+}
 function addLinks(lv,files){
   files.sort(function(a,b){ return a.name.localeCompare(b.name,"fr",{numeric:true}); });
+  note(files.length>1? "Lecture des plans…" : "Lecture du plan…",3000);
   Promise.all(files.map(function(f){ return fileToLevels(f); })).then(function(groups){
-    var added=[];
+    var items=[];
     groups.forEach(function(g,i){
       var base=files[i].name.replace(/\.[^.]+$/,"").slice(0,40), kind=guessKind(files[i].name);
-      g.forEach(function(x,j){
-        var k={id:uid(), name:base+(g.length>1?" p."+(j+1):""), kind:kind, src:x.src, pdf:x.pdf, scale:null, org:null, rot:0, vis:true, op:.65, col:LKIND[kind].c, tint:true};
-        if(!lv.links) lv.links=[]; lv.links.push(k); lkPool[k.id]=k; added.push(k);
-      });
+      g.forEach(function(x,j){ items.push({src:x.src, pdf:x.pdf, kind:kind, txt:x.txt||"",
+        name:base+(g.length>1?" p."+(j+1):""), page:g.length>1? j+1 : 0}); });
     });
-    return Promise.all(added.map(loadImg)).then(function(){ return added; });
-  }).then(function(added){
-    if(!added.length){ note("Aucun plan lisible."); return; }
-    S.demo=false; renderAll(); save();
-    startLinkCal(added[0]);
+    return Promise.all(items.map(loadImg)).then(function(){ return items.filter(function(x){ return x.w&&x.h; }); });
+  }).then(function(items){
+    if(!items.length){ note("Aucun plan lisible."); return; }
+    S.demo=false;
+    /* un plan combiné (un niveau par page) se répartit sur les niveaux */
+    if(items.length>1&&S.levels.length>1){ openDispatch(lv,items); return; }
+    var ks=items.map(function(x){ return attachLink(lv,x); });
+    renderAll(); save(); startLinkCal(ks[0]);
+  }).catch(function(){ note("Lecture des plans impossible."); });
+}
+/* niveau deviné pour un plan : son nom de fichier, et le texte de la page (« NIVEAU R+1 » du cartouche) */
+function guessLevel(name,txt){
+  var t=" "+String(name||"").toLowerCase().replace(/[_\-.]+/g," ")+" "+String(txt||"").toLowerCase().replace(/[_\-.]+/g," ")+" ";
+  var best=null, bl=0;
+  S.levels.forEach(function(l){
+    var nm=String(l.name||"").toLowerCase().trim(); if(!nm) return;
+    var re=new RegExp("(^|[^a-z0-9])"+escRe(nm).replace(/\s+/g,"\\s*")+"([^a-z0-9]|$)");
+    if(re.test(t)&&nm.length>bl){ best=l; bl=nm.length; }
   });
+  return best;
+}
+/* fenêtre de répartition : un plan par ligne, le niveau de chacun */
+function openDispatch(lv,items){
+  closeMenu();
+  var d=document.createElement("div"); d.className="sheet wide"; d.id="dispSheet";
+  var up=upLevels(), i0=Math.max(0,up.indexOf(lv)), kind=items[0].kind;
+  /* un nom reconnu par page ; si deux plans tombent sur le même niveau, le nom ne dit rien de fiable
+     (« RESEAUX RDC à R+4.pdf » contient tous les noms) : on répartit alors dans l'ordre, en montant */
+  var named=items.map(function(x){ return guessLevel(x.name,x.txt); });
+  var dup=named.some(function(g,i){ return g&&named.some(function(h,j){ return j!==i&&h===g; }); });
+  var guess=items.map(function(x,i){
+    var g=(!dup&&named[i])||up[Math.min(i0+i,up.length-1)];
+    return g? g.id : "";
+  });
+  function opts(cur){ return '<option value="">— aucun —</option>'+up.slice().reverse().map(function(l){
+      return '<option value="'+l.id+'"'+(l.id===cur?" selected":"")+'>'+esc(l.name)+(ready(l)?"":" (non calé)")+'</option>'; }).join(""); }
+  d.innerHTML='<h3>Plans liés — répartir sur les niveaux</h3>'+
+    '<p>'+plural(items.length,"plan trouvé","plans trouvés")+'. Choisissez le niveau de chacun : il devient un plan lié de ce niveau, avec son propre calage, superposable au plan archi.</p>'+
+    '<div class="fld"><label>Type de ces plans</label><select id="dk">'+Object.keys(LKIND).map(function(kd){
+      return '<option value="'+kd+'"'+(kd===kind?" selected":"")+'>'+LKIND[kd].t+'</option>'; }).join("")+'</select></div>'+
+    '<div class="fld"><label>Répartition</label><div class="picks" id="dl" style="max-height:260px">'+
+      items.map(function(x,i){ return '<div class="dr"><span class="dn">'+esc(x.name)+'</span><select data-i="'+i+'">'+opts(guess[i])+'</select></div>'; }).join("")+
+    '</div></div>'+
+    '<label class="ck"><input type="checkbox" id="dc" checked> Reprendre le calage du plan archi de chaque niveau (même cadrage de feuille)</label>'+
+    '<p class="mut" style="margin-top:7px;text-transform:none;letter-spacing:0">Une feuille qui porte plusieurs niveaux côte à côte se lie plutôt à un seul niveau, puis « Lier aussi à un autre niveau » et « Découper » pour chacun.</p>'+
+    '<div class="acts"><button class="btn" id="dx">Annuler</button><button class="btn primary" id="do">Lier les plans</button></div>';
+  openModal(d);
+  d.querySelector("#dx").onclick=function(){ d.remove(); };
+  d.querySelector("#do").onclick=function(){
+    var kd=d.querySelector("#dk").value, cal=d.querySelector("#dc").checked, first=null, nb=0, noCal=0;
+    Array.prototype.forEach.call(d.querySelectorAll("#dl select"),function(sel){
+      var x=items[+sel.dataset.i], l=lvById(sel.value); if(!x||!l) return;
+      var k=attachLink(l,x,kd); nb++;
+      if(cal&&takeArchiCal(k)){ /* calé d'office */ } else noCal++;
+      if(!first) first=k;
+    });
+    d.remove();
+    if(!nb){ note("Aucun plan n'a été lié : choisissez un niveau."); return; }
+    fixLinks(); renderAll(); save(); scheduleRefine();
+    if(noCal&&first) startLinkCal(first);
+    else note(plural(nb,"plan lié","plans liés")+" — calage repris de l'archi. Vérifiez la superposition de chaque niveau ; U pour recaler à la main.",8000);
+  };
 }
 function startLinkCal(k,hand){
   var lv=linkParent(k.id); if(!lv) return;
@@ -2176,12 +2270,37 @@ function endLinkCal(){
   renderAll(); save();
   if(k) note(ready(k)? "« "+k.name+" » calé : il reste superposé en transparence (œil et curseur dans la liste des niveaux)." : "« "+k.name+" » n'est pas calé : il n'est pas affiché tant que son échelle et son repère manquent.",4500);
 }
-/* même cadrage de feuille que le plan archi : on reprend son calage (ajusté si la résolution diffère) */
 function copyCal(k){
-  var lv=linkParent(k.id); if(!lv||!ready(lv)){ note("Calez d'abord le plan archi de ce niveau."); return; }
-  var f=(k.w&&lv.w)? k.w/lv.w : 1;
-  k.scale={s:lv.scale.s*f, ratio:lv.scale.ratio||null, paper:lv.scale.paper||null}; k.org={x:lv.org.x*f,y:lv.org.y*f}; k.rot=lv.rot||0;
-  renderAll(); save(); note("Calage du plan archi repris pour « "+k.name+" » — vérifiez la superposition.",3500);
+  if(!takeArchiCal(k)){ note("Calez d'abord le plan archi de ce niveau."); return; }
+  renderAll(); save(); scheduleRefine(); note("Calage du plan archi repris pour « "+k.name+" » — vérifiez la superposition.",3500);
+}
+/* le même plan lié sur un autre niveau : une feuille qui porte plusieurs niveaux se lie à chacun d'eux,
+   avec sa propre découpe et son propre calage. L'image n'est pas dupliquée : les copies partagent la source. */
+function dupLink(k,lv){
+  var c={id:uid(), ref:k.ref||k.id, name:k.name, kind:k.kind, src:k.src, pdf:k.pdf, img:k.img, w:k.w, h:k.h,
+    scale:k.scale? {s:k.scale.s,ratio:k.scale.ratio||null,paper:k.scale.paper||null} : null,
+    org:k.org? {x:k.org.x,y:k.org.y} : null, rot:k.rot||0,
+    vis:true, op:k.op, col:k.col, tint:k.tint, bg:true,
+    crop:k.crop? {x:k.crop.x,y:k.crop.y,w:k.crop.w,h:k.crop.h} : null};
+  if(!lv.links) lv.links=[]; lv.links.push(c); lkPool[c.id]=c;
+  if(!takeArchiCal(c)&&!c.scale) c.scale=k.scale? {s:k.scale.s,ratio:k.scale.ratio||null,paper:k.scale.paper||null} : null;
+  return c;
+}
+function dupLinkMenu(k,x,y){
+  var cur=linkParent(k.id), others=S.levels.filter(function(l){ return l!==cur; });
+  if(!others.length){ note("Il n'y a qu'un niveau dans ce projet."); return; }
+  var items=[{h:"Lier « "+k.name+" » aussi à…"}];
+  others.forEach(function(l){ items.push({t:l.name+(ready(l)?"":" (non calé)"),i:"layer",fn:function(){
+    var c=dupLink(k,l); renderAll(); save();
+    note("« "+c.name+" » lié aussi à "+l.name+" — découpez la partie de ce niveau, puis posez-le sur son plan archi.",7000);
+    startLinkCal(c); setTool("crop");
+  }}); });
+  if(others.length>1) items.push({t:"Tous les autres niveaux ("+others.length+")",i:"tiles",fn:function(){
+    var made=others.map(function(l){ return dupLink(k,l); });
+    renderAll(); save(); scheduleRefine();
+    note("« "+k.name+" » lié à "+plural(others.length+1,"niveau","niveaux")+" — découpez la partie de chaque niveau (menu ⋯ du plan lié › Découper).",9000);
+  }});
+  openMenu(x,y,items);
 }
 /* premier repère d'un plan lié qu'on va poser à la main : celui de l'archi, ajusté à la résolution du plan */
 function seedOrg(k){
@@ -2202,7 +2321,7 @@ var alignPick=null, alignTwo=false;   /* point commun : pixel pris sur le plan l
 function linkBar(){
   var old=document.getElementById("linkBar"), k=editLink();
   if(!k){ if(old) old.remove(); alignPick=null; alignTwo=false; return; }
-  var lv=linkParent(k.id), hand=S.tool==="align", d=old||document.createElement("div"); d.id="linkBar"; d.className="linkbar";
+  var lv=linkParent(k.id), hand=S.tool==="align", crp=S.tool==="crop", d=old||document.createElement("div"); d.id="linkBar"; d.className="linkbar";
   var hint= alignPick? "Cliquez maintenant <b>ce même point</b> sur le plan archi : le plan "+esc(k.name)+" vient s'y poser."
     : alignTwo? "Cliquez un point bien repérable sur <b>"+esc(k.name)+"</b> (angle de poteau, croisement de files…)."
     : "<b>Tirez le plan</b> pour le poser · <b>Alt</b> : pivoter · flèches : 1 cm.";
@@ -2211,7 +2330,10 @@ function linkBar(){
     '<button class="btn sm'+(hand?" primary":(k.scale&&!k.org?" primary":""))+'" data-a="hand" title="Superposer le plan à la main, une fois les deux plans à l\'échelle">À la main</button>'+
     '<button class="btn sm" data-a="org" title="Poser le repère 0,0 de ce plan au même endroit que sur l\'archi">'+(k.org?"Repère ✓":"Repère ?")+'</button>'+
     '<button class="btn sm" data-a="copy" title="Même cadrage de feuille que le plan archi : reprendre son échelle et son repère">Même calage que l\'archi</button>'+
+    '<button class="btn sm'+(crp?" primary":"")+'" data-a="crop" title="Découper : ne garder qu\'une partie de la feuille — un plan qui porte plusieurs niveaux se découpe pour chacun">'+(k.crop?"Redécouper":"Découper")+'</button>'+
+    (k.crop?'<button class="btn sm" data-a="nocrop" title="Garder toute la feuille">Toute la feuille</button>':'')+
     '<button class="btn sm'+(ready(k)?" primary":"")+'" data-a="end">Terminer</button></div>'+
+    (crp? '<div class="lb2"><span class="lbh">Tracez le <b>cadre de la partie à garder</b> : le niveau que ce plan concerne. Échap pour renoncer.</span></div>' : '')+
     (hand? '<div class="lb2"><span class="lbh">'+hint+'</span></div>'+
       '<div class="lb2"><button class="btn sm'+(alignTwo||alignPick?" primary":"")+'" data-a="two" title="Lier les deux plans par un point commun : un clic sur ce point du plan lié, un clic sur le même point du plan archi">'+(alignTwo||alignPick?"Annuler le point commun":"Point commun…")+'</button>'+
       '<span class="lbr">pivoter <button class="btn sm" data-a="rl" title="Pivoter de 0,2° vers la gauche">↺</button>'+
@@ -2225,6 +2347,8 @@ function linkBar(){
     else if(a==="org"){ alignPick=null; alignTwo=false; setTool("org"); }
     else if(a==="copy") copyCal(k);
     else if(a==="hand") startHand(k);
+    else if(a==="crop") setTool("crop");
+    else if(a==="nocrop"){ k.crop=null; renderAll(); save(); scheduleRefine(); note("Toute la feuille est gardée pour « "+k.name+" ».",2600); }
     else if(a==="two"){ if(alignTwo||alignPick){ alignTwo=false; alignPick=null; } else { alignTwo=true; alignPick=null; } linkBar(); draw(); }
     else if(a==="rl") turnLink(k,(k.rot||0)-.2);
     else if(a==="rr") turnLink(k,(k.rot||0)+.2);
@@ -2268,7 +2392,8 @@ function drawLevelPlans(lv){
   var hand=!!ek&&S.tool==="align";
   /* fond archi masqué : on travaille sur les plans liés seuls — sauf pendant un calage, où l'archi est la référence */
   var bg=lv.pvis!==false||!!ek;
-  if(ek&&!hand){ if(bg) drawPlan(lv,.28); drawPlan(ek,1); }
+  var cropping=!!ek&&S.tool==="crop";
+  if(ek&&!hand){ if(bg) drawPlan(lv,.28); drawPlan(ek,1,cropping?{nocrop:true}:null); }
   else if(bg) drawPlan(lv,1);
   /* comparaison d'indices : l'autre version en rouge par-dessus */
   if(lv.cmp){ var rc=revOf(lv,lv.cmp); if(rc&&rc.img&&ready(rc)) drawPlan(rc,.85,{tint:"#e11d2e",blend:"multiply"}); }
@@ -2279,6 +2404,7 @@ function drawLevelPlans(lv){
     drawPlan(k,cur?Math.max(k.op,.75):k.op,{tint:k.tint?k.col:null,blend:"multiply"});
   });
   drawBeams(lv);
+  if(cropping&&ek.crop&&!drag) drawCropRect(ek);
   if(S.tool==="align"&&alignPick&&ek) drawAlignPick(ek);
 }
 /* point commun déjà pris sur le plan lié : il attend son jumeau sur le plan archi */
@@ -2292,7 +2418,8 @@ function drawAlignPick(k){
 /* feuille blanche d'un plan : l'emprise de son image, pour poser un plan teinté sans le fond archi */
 function sheet(p){
   if(!p.w||!p.h) return;
-  var q=[[0,0],[p.w,0],[p.w,p.h],[0,p.h]].map(function(c){ var w=p2w(p,c[0],c[1]); return w2s(w.X,w.Y); });
+  var b=planBox(p);
+  var q=[[b.x,b.y],[b.x+b.w,b.y],[b.x+b.w,b.y+b.h],[b.x,b.y+b.h]].map(function(c){ var w=p2w(p,c[0],c[1]); return w2s(w.X,w.Y); });
   ctx.save(); ctx.fillStyle="#fff"; ctx.beginPath();
   q.forEach(function(a,i){ i? ctx.lineTo(a.x,a.y) : ctx.moveTo(a.x,a.y); });
   ctx.closePath(); ctx.fill(); ctx.restore();
@@ -2322,9 +2449,17 @@ function linkCanvas(k){
     return pg.render({canvasContext:g,viewport:vp}).promise.then(function(){ return cv; });
   }).catch(function(){ return k.img; });
 }
+function cropKey(k){ var c=k.crop; return c? c.x+","+c.y+","+c.w+","+c.h : "all"; }
 function linkImage(out,k){
   return linkCanvas(k).then(function(src){
     var data;
+    if(k.crop){   /* on n'embarque que la partie gardée */
+      var f=(src.naturalWidth||src.width)/(k.w||1), b=planBox(k);
+      var cv=document.createElement("canvas");
+      cv.width=Math.max(1,Math.round(b.w*f)); cv.height=Math.max(1,Math.round(b.h*f));
+      cv.getContext("2d").drawImage(src,Math.round(b.x*f),Math.round(b.y*f),cv.width,cv.height,0,0,cv.width,cv.height);
+      src=cv;
+    }
     if(k.tint) data=tinted(src,k.col,{},LK_PX).toDataURL("image/jpeg",.9);
     else if(src===k.img) data=k.src;
     else data=src.toDataURL("image/jpeg",.9);
@@ -2340,16 +2475,19 @@ function linkVector(out,k,cache){
   var L=window.PDFLib;
   return pdfPage(k).then(function(pg){
     if(((pg.rotate||0)%360+360)%360) throw new Error("page tournée");   /* /Rotate : on repasse par l'image */
-    var view=pg.view, src=cache.get(k.pdf.bytes);
+    var view=pg.view, src=cache.get(k.pdf.bytes), bs=k.pdf.base||1, b=planBox(k);
+    /* la découpe se transpose en points sur la page source : l'indice reste vectoriel */
+    var box= k.crop? {left:view[0]+b.x/bs, right:view[0]+(b.x+b.w)/bs, top:view[3]-b.y/bs, bottom:view[3]-(b.y+b.h)/bs}
+                   : {left:view[0],bottom:view[1],right:view[2],top:view[3]};
     if(!src){ src=L.PDFDocument.load(k.pdf.bytes.slice(),{ignoreEncryption:true}); cache.set(k.pdf.bytes,src); }
-    return src.then(function(doc){ return out.embedPage(doc.getPage(k.pdf.page-1),{left:view[0],bottom:view[1],right:view[2],top:view[3]}); });
+    return src.then(function(doc){ return out.embedPage(doc.getPage(k.pdf.page-1),box); });
   }).then(function(emb){ return {pg:emb,k:k}; });
 }
 function linkImgs(out,l,cache){
   if(!expLinks) return Promise.resolve([]);
   var ks=links(l).filter(function(k){ return k.vis!==false&&ready(k)&&k.img; });
   return Promise.all(ks.map(function(k){
-    var key="lk:"+k.id+":"+(k.tint?k.col:"net"), p=cache.get(key);
+    var key="lk:"+(k.ref||k.id)+":"+(k.tint?k.col:"net")+":"+cropKey(k), p=cache.get(key);
     if(!p){
       p=(k.pdf&&!k.tint)? linkVector(out,k,cache).catch(function(){ return linkImage(out,k); }) : linkImage(out,k);
       cache.set(key,p);
@@ -2362,8 +2500,9 @@ function drawLinksPdf(page,l,base,items){
   items.forEach(function(it){
     var k=it.k;
     function pp(u,v){ var w=p2w(k,u,v), p=w2p(l,w.X,w.Y); return {x:p.x*base.k, y:base.Hd-p.y*base.k}; }
-    var P0=pp(0,k.h), P1=pp(k.w,k.h), W=Math.hypot(P1.x-P0.x,P1.y-P0.y), ang=Math.atan2(P1.y-P0.y,P1.x-P0.x);
-    var o={x:P0.x,y:P0.y,width:W,height:W*k.h/k.w,rotate:L.degrees(ang*180/Math.PI),opacity:k.op};
+    var bx=planBox(k);
+    var P0=pp(bx.x,bx.y+bx.h), P1=pp(bx.x+bx.w,bx.y+bx.h), W=Math.hypot(P1.x-P0.x,P1.y-P0.y), ang=Math.atan2(P1.y-P0.y,P1.x-P0.x);
+    var o={x:P0.x,y:P0.y,width:W,height:W*bx.h/bx.w,rotate:L.degrees(ang*180/Math.PI),opacity:k.op};
     if(L.BlendMode&&L.BlendMode.Multiply) o.blendMode=L.BlendMode.Multiply;
     if(it.pg) page.drawPage(it.pg,o); else page.drawImage(it.im,o);
   });
@@ -2410,6 +2549,10 @@ function linkRow(lv,k){
     openMenu(b.right-250,b.bottom+4,[{h:k.name+" · plan lié de "+lv.name},
       {t:on?"Terminer le calage":"Caler : échelle et repère",i:"scale",fn:function(){ if(on) endLinkCal(); else startLinkCal(k); }},
       {t:"Caler à la main : superposer sur l'archi",i:"align",k:"U",fn:function(){ if(!on) startLinkCal(k,true); else startHand(k); }},
+      {t:k.crop? "Redécouper la partie à garder…" : "Découper : ne garder qu'une partie de la feuille…",i:"zone",
+       fn:function(){ if(!on) startLinkCal(k); S.activeId=lv.id; renderAll(); setTool("crop"); }},
+      k.crop?{t:"Garder toute la feuille",i:"neg",fn:function(){ k.crop=null; renderAll(); save(); scheduleRefine(); }}:null,
+      {t:"Lier aussi ce plan à un autre niveau…",i:"copy",fn:function(){ dupLinkMenu(k,b.right-250,b.bottom+4); }},
       {t:"Même calage que le plan archi (même cadrage)",i:"copy",fn:function(){ copyCal(k); }},
       {t:"Teinter dans sa couleur",i:"theme",on:!!k.tint,fn:function(){ k.tint=!k.tint; draw(); save(); }},
       {t:vis?"Masquer":"Afficher",i:"eye",fn:function(){ k.vis=!vis; renderLevels(); draw(); save(); }},
@@ -2536,6 +2679,21 @@ function drawBeams(lv){
       beamHandles(x.p,b).forEach(function(h){ var p=w2s(h.X,h.Y);
         ctx.beginPath(); ctx.arc(p.x,p.y,5,0,6.2832); ctx.fill(); ctx.stroke(); }); }
   });
+  ctx.restore();
+}
+/* découpe déjà posée, pendant qu'on la retrace */
+function drawCropRect(k){
+  var b=planBox(k), q=[[b.x,b.y],[b.x+b.w,b.y],[b.x+b.w,b.y+b.h],[b.x,b.y+b.h]].map(function(c){ var w=p2w(k,c[0],c[1]); return w2s(w.X,w.Y); });
+  ctx.save(); ctx.strokeStyle=k.col; ctx.lineWidth=1.6; ctx.setLineDash([5,4]);
+  ctx.beginPath(); q.forEach(function(p,i){ i? ctx.lineTo(p.x,p.y) : ctx.moveTo(p.x,p.y); }); ctx.closePath(); ctx.stroke();
+  ctx.setLineDash([]); ctx.restore();
+}
+/* cadre de découpe en cours de tracé */
+function drawCropDraft(){
+  var a=w2s(drag.a.X,drag.a.Y), b=w2s(drag.b.X,drag.b.Y), k=linkById(drag.id);
+  var x=Math.min(a.x,b.x), y=Math.min(a.y,b.y), w=Math.abs(b.x-a.x), h=Math.abs(b.y-a.y), c=(k&&k.col)||"#2458d6";
+  ctx.save(); ctx.globalAlpha=.12; ctx.fillStyle=c; ctx.fillRect(x,y,w,h);
+  ctx.globalAlpha=1; ctx.strokeStyle=c; ctx.lineWidth=2; ctx.setLineDash([7,5]); ctx.strokeRect(x,y,w,h); ctx.setLineDash([]);
   ctx.restore();
 }
 /* poutre en cours de tracé */
@@ -2734,6 +2892,13 @@ cv.addEventListener("pointerdown",function(e){
     var pv=rdraft.pts.length? rdraft.pts[rdraft.pts.length-1] : rp[0], q=alignPt(W,pv,en,e.shiftKey), a1=w2s(pv.X,pv.Y), a2=w2s(q.X,q.Y);
     if(Math.hypot(a1.x-a2.x,a1.y-a2.y)<4){ draw(); return; }
     rdraft.pts.push({X:r3(q.X),Y:r3(q.Y)}); routeHint(); draw(); return;
+  }
+  /* découpe d'un plan lié : on trace le cadre de la partie à garder */
+  if(S.tool==="crop"){
+    if(e.button!==0) return;
+    var kp=editLink();
+    if(!kp){ note("Choisissez le plan lié à découper (menu ⋯ du plan lié › Découper)."); setTool("select"); return; }
+    drag={m:"crop",id:kp.id,a:W,b:W}; return;
   }
   /* calage à la main d'un plan lié : on tire le plan, ou on le pose par un point commun aux deux plans */
   if(S.tool==="align"){
@@ -2946,6 +3111,7 @@ cv.addEventListener("pointermove",function(e){
     if(xm){ moveBeam(xm.p,xm.b,W.X-drag.last.X,W.Y-drag.last.Y); drag.last=W; drag.moved=true; draw(); }
     return;
   }
+  if(drag.m==="crop"){ drag.b=W; draw(); return; }
   if(drag.m==="align"){
     var ka=linkById(drag.id); if(!ka) return;
     if(e.altKey) turnPlan(ka,drag.rot0+(p.x-drag.sx)*.05,drag.P,drag.q);     /* Alt : pivoter autour du point saisi */
@@ -3061,6 +3227,22 @@ function endPtr(e){
   if(drag.m==="zone"){ var dz=drag; drag=null; setZone(dz.a,dz.b); return; }
   if(drag.m==="mvtx"||drag.m==="mmove"){ var mvd=drag.moved; drag=null; snapAt=null;
     if(mvd){ var mz=selM(); if(mz) mz.pts.forEach(function(pt){ pt.x=Math.round(pt.x*100)/100; pt.y=Math.round(pt.y*100)/100; }); renderAll(); save(); } else draw(); return; }
+  if(drag.m==="crop"){
+    var dc=drag, kp=linkById(drag.id); drag=null;
+    if(kp){
+      var qs=[[dc.a.X,dc.a.Y],[dc.b.X,dc.a.Y],[dc.b.X,dc.b.Y],[dc.a.X,dc.b.Y]].map(function(q){ return w2p(kp,q[0],q[1]); });
+      var xs=qs.map(function(q){ return q.x; }), ys=qs.map(function(q){ return q.y; });
+      var x0=Math.max(0,Math.min.apply(null,xs)), x1=Math.min(kp.w,Math.max.apply(null,xs));
+      var y0=Math.max(0,Math.min.apply(null,ys)), y1=Math.min(kp.h,Math.max.apply(null,ys));
+      if(x1-x0>=8&&y1-y0>=8){
+        kp.crop={x:x0,y:y0,w:x1-x0,h:y1-y0}; fixCrop(kp);
+        setTool("select"); renderAll(); save(); scheduleRefine();
+        note(kp.crop? "« "+kp.name+" » découpé : seule cette partie se superpose"+(ready(kp)?"":" — réglez son échelle, puis posez-le sur l'archi")+"."
+                    : "Cadre égal à la feuille : rien n'est découpé.",5500);
+      } else { draw(); note("Cadre trop petit — tracez le cadre de la partie à garder.",2600); }
+    } else draw();
+    return;
+  }
   if(drag.m==="align"){
     var ma=drag.moved, ka=linkById(drag.id); drag=null; cv.style.cursor="crosshair";
     if(ma){ renderAll(); save(); scheduleRefine(); if(ka) note("« "+ka.name+" » déplacé"+(ka.rot?" · orientation "+fmt(ka.rot,1)+"°":"")+".",1800); }
@@ -5567,7 +5749,7 @@ function openHelp(){
     '<h4>Pendant un tracé de métré</h4>'+row("Poser un point","Clic")+row("Terminer","Double-clic / Entrée")+row("Fermer la surface","Clic sur le 1er point")+row("Enlever le dernier point","Retour arrière")+
       row("Angles droits / 45°","Maj")+row("Terminer (menu)","Clic droit")+row("Abandonner","Échap")+row("Aimantation","sommets existants")+
     '<h4>Caler un plan lié à la main</h4>'+row("Superposer (plan lié en calage)","U")+row("Poser le plan","Tirer le plan")+row("Pivoter","Alt + glisser")+
-      row("Décaler de 1 cm (10 cm)","Flèches / Maj")+row("Garder l\'axe","Maj")+row("Lier par un point commun","Bouton « Point commun »")+
+      row("Décaler de 1 cm (10 cm)","Flèches / Maj")+row("Garder l\'axe","Maj")+row("Lier par un point commun","Bouton « Point commun »")+row("Découper la partie à garder","Bouton « Découper » puis tracer")+
       row("Terminer","Échap / Terminer")+
     '<h4>Poutres</h4>'+row("Tracer une poutre (axe)","Tirer")+row("Dans l\'axe horizontal ou vertical","Maj")+row("Choisir une poutre","Clic dessus")+
       row("Changer sa longueur","Tirer un bout")+row("Changer sa largeur","Tirer un côté")+row("La déplacer","Tirer son milieu")+row("La supprimer","Suppr")+

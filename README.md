@@ -118,6 +118,23 @@ Une seule règle : **chaque réservation est un objet, et chaque objet est rang�
 Chaque niveau peut recevoir d'autres plans que le plan archi : structure, CVC, plomberie,
 électricité… Menu `⋯` d'un niveau (ou clic droit sur le plan) → **Lier un plan à ce niveau**.
 
+**Un plan combiné (du RDC au R+4) se répartit sur les niveaux.** Si le fichier contient
+plusieurs plans (un PDF de plusieurs pages, ou plusieurs fichiers d'un coup), une fenêtre
+s'ouvre : une ligne par plan, avec le niveau de chacun. Le niveau est deviné du nom du
+fichier et du **texte de la page** (le « NIVEAU R+1 » du cartouche) ; sinon les plans sont
+répartis dans l'ordre, en montant. On choisit aussi le **type** (CVC, plomberie…) pour tous,
+et « reprendre le calage du plan archi » les pose d'office — il ne reste qu'à vérifier.
+
+**Une seule feuille qui porte plusieurs niveaux côte à côte** se traite autrement :
+1. la lier à un niveau, puis **Découper** (barre de calage, ou menu `⋯` du plan lié) : tracez
+   le cadre de la partie qui concerne ce niveau — seule cette partie se superpose, le reste
+   de la feuille ne déborde plus ;
+2. menu `⋯` du plan lié → **Lier aussi ce plan à un autre niveau…** (ou « tous les autres
+   niveaux ») : la copie partage la même feuille, sans peser plus lourd, et reçoit sa propre
+   découpe et son propre calage.
+
+La découpe vaut aussi pour écarter un cartouche ou une légende qui débordent sur le plan.
+
 - Le plan lié a son propre **calage** : d'abord son **échelle** (tracer une cote connue, ou
   saisir 1/N), puis sa **position** sur le plan archi. Une fois calé, il se **superpose en
   transparence**, teinté dans sa couleur (bleu pour la structure…), sous les réservations :
